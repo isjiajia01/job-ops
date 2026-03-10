@@ -122,4 +122,6 @@ See [post-application tracking docs](https://jobops.dakheera47.com/docs/features
 
 ## License
 
-**AGPLv3** - Free to use and modify.
+**AGPLv3 + Commons Clause** - You can self-host, use, and modify JobOps, but
+you cannot sell the software itself or offer paid hosted/support services whose
+value substantially comes from JobOps. See [LICENSE](LICENSE).
