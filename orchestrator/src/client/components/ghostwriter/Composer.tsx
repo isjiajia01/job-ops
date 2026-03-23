@@ -9,6 +9,7 @@ type ComposerProps = {
   disabled?: boolean;
   isStreaming: boolean;
   canRegenerate: boolean;
+  placeholder?: string;
   onRegenerate: () => Promise<void>;
   onStop: () => Promise<void>;
   onSend: (content: string) => Promise<void>;
@@ -18,6 +19,7 @@ export const Composer: React.FC<ComposerProps> = ({
   disabled,
   isStreaming,
   canRegenerate,
+  placeholder,
   onRegenerate,
   onStop,
   onSend,
@@ -34,7 +36,7 @@ export const Composer: React.FC<ComposerProps> = ({
   return (
     <div className="space-y-2">
       <Textarea
-        placeholder="Ask anything about this job..."
+        placeholder={placeholder || "Ask anything about this job..."}
         value={value}
         onChange={(event) => setValue(event.target.value)}
         disabled={disabled}

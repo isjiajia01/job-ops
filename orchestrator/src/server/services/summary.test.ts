@@ -112,6 +112,7 @@ describe("generateTailoring", () => {
     expect(request?.messages?.[0]?.content).toContain(
       'Keep "headline" in the exact original job-title wording from the JD.',
     );
+    expect(request?.messages?.[0]?.content).not.toContain("Test User");
     expect(request?.messages?.[0]?.content).toContain(
       '"id": "project-1"',
     );
@@ -120,6 +121,46 @@ describe("generateTailoring", () => {
     );
     expect(request?.messages?.[0]?.content).toContain(
       "TRUTH AND EVIDENCE RULES:",
+    );
+    expect(request?.messages?.[0]?.content).toContain(
+      "Every line should feel defensible in an interview.",
+    );
+    expect(request?.messages?.[0]?.content).toContain(
+      "strong action verb + concrete task/scope/problem + outcome or business effect",
+    );
+    expect(request?.messages?.[0]?.content).toContain(
+      "The final wording should sound like a polished human-edited CV, not an AI-generated essay.",
+    );
+    expect(request?.messages?.[0]?.content).toContain(
+      "Include at least one concrete evidence anchor from the profile",
+    );
+    expect(request?.messages?.[0]?.content).toContain(
+      'Avoid template openings such as "Analytical ... profile"',
+    );
+    expect(request?.messages?.[0]?.content).toContain(
+      'Do NOT use the candidate\'s full name or first-person wording such as "I", "me", "my", or "we".',
+    );
+  });
+
+  it("pins the exact target job title when one is provided", async () => {
+    await generateTailoring(
+      {
+        jobTitle: "Disponent",
+        jobDescription: "Brøndby-based disponent role responsible for dispatch planning.",
+      },
+      {
+        basics: {
+          name: "Test User",
+          label: "Engineer",
+        },
+      },
+    );
+
+    const request = callJsonMock.mock.calls.at(-1)?.[0];
+    expect(request?.messages?.[0]?.content).toContain("TARGET JOB TITLE:");
+    expect(request?.messages?.[0]?.content).toContain("Disponent");
+    expect(request?.messages?.[0]?.content).toContain(
+      'It must be exactly "Disponent".',
     );
   });
 

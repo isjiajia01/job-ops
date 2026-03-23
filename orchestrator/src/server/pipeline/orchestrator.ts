@@ -257,7 +257,10 @@ export async function summarizeJob(
       if (!tailoredSummary || !tailoredHeadline || options?.force) {
         jobLogger.info("Generating tailoring content");
         const tailoringResult = await generateTailoring(
-          job.jobDescription || "",
+          {
+            jobDescription: job.jobDescription || "",
+            jobTitle: job.title || "",
+          },
           profile,
         );
         if (tailoringResult.success && tailoringResult.data) {

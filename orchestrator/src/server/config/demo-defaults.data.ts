@@ -249,6 +249,7 @@ export const COMPANY_SUFFIXES = [
 export const DEMO_SOURCE_BASE_URLS: Record<JobSource, string> = {
   linkedin: "https://www.linkedin.com",
   indeed: "https://www.indeed.com",
+  jobindex: "https://www.jobindex.dk",
   glassdoor: "https://www.glassdoor.com",
   gradcracker: "https://www.gradcracker.com",
   ukvisajobs: "https://www.ukvisajobs.com",

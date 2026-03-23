@@ -107,7 +107,13 @@ async function main(): Promise<void> {
   const profile = await getProfile();
 
   for (const fixture of fixtures) {
-    const result = await generateTailoring(fixture.jobDescription, profile);
+    const result = await generateTailoring(
+      {
+        jobTitle: fixture.jobTitle,
+        jobDescription: fixture.jobDescription,
+      },
+      profile,
+    );
     console.log("---");
     console.log(fixture.id);
     if (!result.success || !result.data) {

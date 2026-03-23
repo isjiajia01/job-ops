@@ -98,7 +98,19 @@ describe("buildJobChatPromptContext", () => {
       "When the user does not request a language, default to writing user-visible resume or application content in German.",
     );
     expect(context.systemPrompt).toContain(
+      'Always return valid JSON in the shape {"response":"..."} and put all user-visible output inside the "response" string.',
+    );
+    expect(context.systemPrompt).toContain(
       "When suggesting a headline or job title, preserve the original wording instead of translating it.",
+    );
+    expect(context.systemPrompt).toContain(
+      "When writing a cover letter, use natural first-person cover-letter voice.",
+    );
+    expect(context.systemPrompt).toContain(
+      "For cover letters, keep the draft targeted to the specific role and employer, usually within one page and 3-5 short paragraphs.",
+    );
+    expect(context.systemPrompt).toContain(
+      "For cover letters, explain why this role and employer are a fit and support that case with 2-3 concrete examples from the provided profile.",
     );
     expect(context.systemPrompt).toContain(
       "Writing constraints: Keep responses under 120 words",

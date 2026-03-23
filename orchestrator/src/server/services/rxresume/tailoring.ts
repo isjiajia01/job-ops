@@ -630,7 +630,7 @@ function applySectionLayoutDirectives(args: {
   const firstPage = layout && layout.length > 0 ? asArray(layout[0]) : null;
   const main = firstPage && firstPage.length > 0 ? asArray(firstPage[0]) : null;
   const sidebar = firstPage && firstPage.length > 1 ? asArray(firstPage[1]) : null;
-  if (!main || !sidebar) return;
+  if (!firstPage || !main || !sidebar) return;
   const currentMain = main.filter((value): value is string => typeof value === "string");
   const currentSidebar = sidebar.filter((value): value is string => typeof value === "string");
   const next = reorderSections(currentMain, currentSidebar, directives.sectionOrder);

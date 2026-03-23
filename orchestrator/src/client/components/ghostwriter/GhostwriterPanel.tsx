@@ -3,14 +3,23 @@ import type { Job, JobChatMessage, JobChatStreamEvent } from "@shared/types";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
+import { COVER_LETTER_PROMPTS } from "./prompt-presets";
 
 type GhostwriterPanelProps = {
   job: Job;
 };
 
 export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
+  const [activeTab, setActiveTab] = useState("chat");
   const [messages, setMessages] = useState<JobChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -203,6 +212,18 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
     return last.role === "assistant";
   }, [isStreaming, messages]);
 
+  const triggerQuickPrompt = useCallback(
+    async (prompt: string) => {
+      await sendMessage(prompt);
+    },
+    [sendMessage],
+  );
+
+  const composerPlaceholder =
+    activeTab === "cover-letter"
+      ? "Ask for a cover letter, email version, or a rewrite..."
+      : "Ask anything about this job...";
+
   const regenerate = useCallback(async () => {
     if (isStreaming || messages.length === 0) return;
     const last = messages[messages.length - 1];
@@ -237,40 +258,115 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
-      <div
-        ref={messageListRef}
-        className="min-h-0 flex-1 overflow-y-auto border-b border-border/50 pb-3 pr-1"
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="flex min-h-0 flex-1 flex-col"
       >
-        {messages.length === 0 && !isLoading ? (
-          <div className="flex h-full min-h-[260px] justify-center px-3 flex-col text-left">
-            <h4 className="font-medium">
-              {job.title} at {job.employer}
-            </h4>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              Ghostwriter already has this job description, your resume and your
-              writing style preferences. Ask for tailored response drafts, or
-              concise role-fit talking points.
-            </p>
-          </div>
-        ) : (
-          <MessageList
-            messages={messages}
-            isStreaming={isStreaming}
-            streamingMessageId={streamingMessageId}
-          />
-        )}
-      </div>
+        <TabsList className="mb-3 h-auto w-full justify-start gap-1">
+          <TabsTrigger value="chat" className="text-xs">
+            Chat
+          </TabsTrigger>
+          <TabsTrigger value="cover-letter" className="text-xs">
+            Cover Letter
+          </TabsTrigger>
+        </TabsList>
 
-      <div className="mt-4">
-        <Composer
-          disabled={isLoading || isStreaming}
-          isStreaming={isStreaming}
-          canRegenerate={canRegenerate}
-          onRegenerate={regenerate}
-          onStop={stopStreaming}
-          onSend={sendMessage}
-        />
-      </div>
+        <TabsContent value="chat" className="mt-0 flex min-h-0 flex-1 flex-col">
+          <div
+            ref={messageListRef}
+            className="min-h-0 flex-1 overflow-y-auto border-b border-border/50 pb-3 pr-1"
+          >
+            {messages.length === 0 && !isLoading ? (
+              <div className="flex h-full min-h-[260px] justify-center px-3 flex-col text-left">
+                <h4 className="font-medium">
+                  {job.title} at {job.employer}
+                </h4>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  Ghostwriter already has this job description, your resume and your
+                  writing style preferences. Ask for tailored response drafts,
+                  concise role-fit talking points, or specific rewrite help.
+                </p>
+              </div>
+            ) : (
+              <MessageList
+                messages={messages}
+                isStreaming={isStreaming}
+                streamingMessageId={streamingMessageId}
+              />
+            )}
+          </div>
+
+          <div className="mt-4">
+            <Composer
+              disabled={isLoading || isStreaming}
+              isStreaming={isStreaming}
+              canRegenerate={canRegenerate}
+              placeholder={composerPlaceholder}
+              onRegenerate={regenerate}
+              onStop={stopStreaming}
+              onSend={sendMessage}
+            />
+          </div>
+        </TabsContent>
+
+        <TabsContent
+          value="cover-letter"
+          className="mt-0 flex min-h-0 flex-1 flex-col"
+        >
+          <div
+            ref={messageListRef}
+            className="min-h-0 flex-1 overflow-y-auto border-b border-border/50 pb-3 pr-1"
+          >
+            {messages.length === 0 && !isLoading ? (
+              <div className="flex h-full min-h-[260px] justify-center px-3 flex-col text-left">
+                <h4 className="font-medium">Cover Letter Drafting</h4>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  Generate a tailored cover letter, a concise Denmark-style version,
+                  or a short application email based on this job and your profile.
+                </p>
+              </div>
+            ) : (
+              <MessageList
+                messages={messages}
+                isStreaming={isStreaming}
+                streamingMessageId={streamingMessageId}
+              />
+            )}
+          </div>
+
+          <div className="mt-4">
+            <div className="mb-3 grid gap-2">
+              {COVER_LETTER_PROMPTS.map((item) => (
+                <Button
+                  key={item.id}
+                  variant="outline"
+                  className="h-auto items-start justify-start px-3 py-3 text-left"
+                  disabled={isLoading || isStreaming}
+                  onClick={() => void triggerQuickPrompt(item.prompt)}
+                >
+                  <span className="block">
+                    <span className="block text-sm font-medium">{item.label}</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      {item.description}
+                    </span>
+                  </span>
+                </Button>
+              ))}
+            </div>
+
+            <Composer
+              disabled={isLoading || isStreaming}
+              isStreaming={isStreaming}
+              canRegenerate={canRegenerate}
+              placeholder={composerPlaceholder}
+              onRegenerate={regenerate}
+              onStop={stopStreaming}
+              onSend={sendMessage}
+            />
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
