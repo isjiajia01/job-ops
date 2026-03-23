@@ -1,0 +1,76 @@
+[
+  {
+    "id": "denmark-commercial-supply-chain-planner",
+    "jobTitle": "Commercial Supply Chain Planner",
+    "jobDescription": "We are looking for a Commercial Supply Chain Planner in Copenhagen to support forecasting, inventory planning, supply planning, KPI reporting, and cross-functional coordination across supply chain and commercial teams. The role requires strong analytical skills, stakeholder communication, Excel, and planning-oriented decision support.",
+    "expected": {
+      "headline": "Commercial Supply Chain Planner",
+      "requiredKeywords": [
+        "forecast",
+        "inventory",
+        "planning",
+        "supply chain",
+        "Excel"
+      ],
+      "forbiddenKeywords": [
+        "GMP ownership",
+        "SAP IBP expert",
+        "team leadership"
+      ],
+      "shouldRewriteExperience": true,
+      "preferredSectionOrderPrefix": [
+        "summary",
+        "skills",
+        "experience"
+      ]
+    }
+  },
+  {
+    "id": "denmark-logistics-specialist",
+    "jobTitle": "Logistics Specialist",
+    "jobDescription": "Copenhagen-based logistics specialist role focused on order management, transport coordination, reporting, process improvement, and collaboration with planning and warehouse stakeholders. The role values structured problem solving, data analysis, and operational follow-through.",
+    "expected": {
+      "headline": "Logistics Specialist",
+      "requiredKeywords": [
+        "logistics",
+        "order management",
+        "transport",
+        "reporting"
+      ],
+      "forbiddenKeywords": [
+        "software architecture",
+        "clinical operations"
+      ],
+      "shouldRewriteExperience": true,
+      "preferredSectionOrderPrefix": [
+        "summary",
+        "skills",
+        "experience"
+      ]
+    }
+  },
+  {
+    "id": "denmark-disponent",
+    "jobTitle": "Disponent",
+    "jobDescription": "Brøndby-based disponent role responsible for dispatch planning, route coordination, customer follow-up, transport operations, and day-to-day logistics planning. The ideal candidate is structured, calm under pressure, analytical, and able to coordinate multiple stakeholders.",
+    "expected": {
+      "headline": "Disponent",
+      "requiredKeywords": [
+        "dispatch",
+        "transport",
+        "planning",
+        "coordination"
+      ],
+      "forbiddenKeywords": [
+        "product strategy",
+        "software engineering"
+      ],
+      "shouldRewriteExperience": true,
+      "preferredSectionOrderPrefix": [
+        "summary",
+        "skills",
+        "experience"
+      ]
+    }
+  }
+]

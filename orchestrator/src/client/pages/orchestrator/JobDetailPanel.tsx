@@ -104,6 +104,15 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     return () => onPauseRefreshChange?.(false);
   }, [onPauseRefreshChange]);
 
+  const parseJsonSafe = <T,>(value: string | null | undefined, fallback: T): T => {
+    if (!value) return fallback;
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return fallback;
+    }
+  };
+
   const description = useMemo(() => {
     if (!selectedJob?.jobDescription) return "No description available.";
     const jd = selectedJob.jobDescription;
@@ -148,6 +157,18 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
       setIsSavingDescription(false);
     }
   };
+
+  const tailoringAudit = useMemo(() => ({
+    experienceEdits: parseJsonSafe<Array<{ id: string; bullets: string[] }>>(selectedJob?.tailoredExperienceEdits, []),
+    layoutDirectives: parseJsonSafe<{ sectionOrder?: string[]; hiddenSections?: string[]; hiddenProjectIds?: string[]; hiddenExperienceIds?: string[] }>(selectedJob?.tailoredLayoutDirectives, {}),
+    sectionRationale: selectedJob?.tailoredSectionRationale || "",
+    omissionRationale: selectedJob?.tailoredOmissionRationale || "",
+  }), [selectedJob]);
+
+  const sectionOrder = tailoringAudit.layoutDirectives.sectionOrder ?? [];
+  const hiddenSections = tailoringAudit.layoutDirectives.hiddenSections ?? [];
+  const hiddenProjectIds = tailoringAudit.layoutDirectives.hiddenProjectIds ?? [];
+  const hiddenExperienceIds = tailoringAudit.layoutDirectives.hiddenExperienceIds ?? [];
 
   const hasUnsavedDescription =
     !!selectedJob &&
@@ -604,6 +625,101 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
         <TabsContent value="overview" className="space-y-3 pt-2">
           <FitAssessment job={selectedJob} />
           <TailoredSummary job={selectedJob} />
+
+          <div className="rounded-lg border border-border/60 bg-muted/10 p-3 text-xs space-y-4">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">AI tailoring audit</div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-md border border-border/50 bg-background/70 p-3">
+                <div className="font-medium text-foreground/90">Section rationale</div>
+                <div className="mt-1 whitespace-pre-wrap text-muted-foreground">{tailoringAudit.sectionRationale || "-"}</div>
+              </div>
+              <div className="rounded-md border border-border/50 bg-background/70 p-3">
+                <div className="font-medium text-foreground/90">Omission rationale</div>
+                <div className="mt-1 whitespace-pre-wrap text-muted-foreground">{tailoringAudit.omissionRationale || "-"}</div>
+              </div>
+            </div>
+
+            <div className="rounded-md border border-border/50 bg-background/70 p-3 space-y-2">
+              <div className="font-medium text-foreground/90">Section order</div>
+              {sectionOrder.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {sectionOrder.map((sectionId, index) => (
+                    <div
+                      key={sectionId}
+                      className="rounded-full border border-border/50 bg-muted/40 px-2.5 py-1 text-[11px] text-foreground/80"
+                    >
+                      {index + 1}. {sectionId}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-muted-foreground">No section reordering suggested.</div>
+              )}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-md border border-border/50 bg-background/70 p-3">
+                <div className="font-medium text-foreground/90">Hidden sections</div>
+                {hiddenSections.length > 0 ? (
+                  <ul className="mt-1 list-disc pl-4 text-muted-foreground">
+                    {hiddenSections.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="mt-1 text-muted-foreground">None</div>
+                )}
+              </div>
+              <div className="rounded-md border border-border/50 bg-background/70 p-3">
+                <div className="font-medium text-foreground/90">Hidden projects</div>
+                {hiddenProjectIds.length > 0 ? (
+                  <ul className="mt-1 list-disc pl-4 text-muted-foreground">
+                    {hiddenProjectIds.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="mt-1 text-muted-foreground">None</div>
+                )}
+              </div>
+              <div className="rounded-md border border-border/50 bg-background/70 p-3">
+                <div className="font-medium text-foreground/90">Hidden experience</div>
+                {hiddenExperienceIds.length > 0 ? (
+                  <ul className="mt-1 list-disc pl-4 text-muted-foreground">
+                    {hiddenExperienceIds.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="mt-1 text-muted-foreground">None</div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="font-medium text-foreground/90">Experience edits</div>
+              {tailoringAudit.experienceEdits.length > 0 ? (
+                tailoringAudit.experienceEdits.map((edit) => (
+                  <div
+                    key={edit.id}
+                    className="rounded-md border border-border/50 bg-background/70 p-3 space-y-2"
+                  >
+                    <div className="text-[11px] font-medium text-foreground/90">{edit.id}</div>
+                    <ul className="list-disc pl-4 space-y-1 text-muted-foreground">
+                      {edit.bullets.map((bullet, index) => (
+                        <li key={`${edit.id}-${index}`}>{bullet}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-md border border-dashed border-border/50 bg-background/40 p-3 text-muted-foreground">
+                  No experience rewrites saved for this job yet.
+                </div>
+              )}
+            </div>
+          </div>
 
           <div className="grid gap-2 text-xs sm:grid-cols-2">
             <div>

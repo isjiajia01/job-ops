@@ -41,6 +41,15 @@ describe("generateTailoring", () => {
         summary: "Tailored summary",
         headline: "Senior Engineer",
         skills: [],
+        experienceEdits: [],
+        layoutDirectives: {
+          sectionOrder: [],
+          hiddenSections: [],
+          hiddenProjectIds: [],
+          hiddenExperienceIds: [],
+        },
+        sectionRationale: "Why this emphasis fits",
+        omissionRationale: "No omission needed",
       },
     });
     vi.mocked(getSetting).mockResolvedValue(null);
@@ -60,6 +69,21 @@ describe("generateTailoring", () => {
         name: "Test User",
         label: "Engineer",
         summary: "Existing summary",
+      },
+      sections: {
+        projects: {
+          items: [
+            {
+              id: "project-1",
+              name: "Planning Dashboard",
+              description: "Built KPI reporting workflow",
+              date: "2025",
+              summary: "Improved reporting for planning teams",
+              visible: true,
+              keywords: ["Excel", "forecasting"],
+            },
+          ],
+        },
       },
     };
 
@@ -87,6 +111,15 @@ describe("generateTailoring", () => {
     );
     expect(request?.messages?.[0]?.content).toContain(
       'Keep "headline" in the exact original job-title wording from the JD.',
+    );
+    expect(request?.messages?.[0]?.content).toContain(
+      '"id": "project-1"',
+    );
+    expect(request?.messages?.[0]?.content).toContain(
+      "Use only ids that appear in the provided projects list.",
+    );
+    expect(request?.messages?.[0]?.content).toContain(
+      "TRUTH AND EVIDENCE RULES:",
     );
   });
 

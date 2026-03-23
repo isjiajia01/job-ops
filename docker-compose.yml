@@ -10,7 +10,7 @@ services:
     image: ghcr.io/dakheera47/job-ops:latest
     container_name: job-ops
     ports:
-      - "3005:3001"
+      - "127.0.0.1:3005:3001"
     volumes:
       # Persist database and generated PDFs
       - ./data:/app/data

@@ -119,6 +119,18 @@ export interface Interview {
 
 export type JobSource = ExtractorSourceId;
 
+export interface TailoredExperienceEdit {
+  id: string;
+  bullets: string[];
+}
+
+export interface TailoredLayoutDirectives {
+  sectionOrder?: string[];
+  hiddenSections?: string[];
+  hiddenProjectIds?: string[];
+  hiddenExperienceIds?: string[];
+}
+
 export interface Job {
   id: string;
 
@@ -151,6 +163,10 @@ export interface Job {
   tailoredSummary: string | null; // Generated resume summary
   tailoredHeadline: string | null; // Generated resume headline
   tailoredSkills: string | null; // Generated resume skills (JSON)
+  tailoredExperienceEdits: string | null; // Generated experience bullet rewrites (JSON)
+  tailoredLayoutDirectives: string | null; // Generated layout directives (JSON)
+  tailoredSectionRationale: string | null; // AI rationale for section ordering/emphasis
+  tailoredOmissionRationale: string | null; // AI rationale for hidden sections/items
   selectedProjectIds: string | null; // Comma-separated IDs of selected projects
   pdfPath: string | null; // Path to generated PDF
   tracerLinksEnabled: boolean; // Rewrite outbound resume links to tracer links on next PDF generation
@@ -307,6 +323,10 @@ export interface UpdateJobInput {
   tailoredSummary?: string;
   tailoredHeadline?: string;
   tailoredSkills?: string;
+  tailoredExperienceEdits?: string;
+  tailoredLayoutDirectives?: string;
+  tailoredSectionRationale?: string;
+  tailoredOmissionRationale?: string;
   selectedProjectIds?: string;
   pdfPath?: string;
   tracerLinksEnabled?: boolean;

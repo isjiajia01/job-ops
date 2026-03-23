@@ -14,10 +14,29 @@ export type TailoredSkillsInput =
   | null
   | undefined;
 
+export type TailoredExperienceEditsInput =
+  | Array<{ id: string; bullets: string[] }>
+  | string
+  | null
+  | undefined;
+
+export type TailoredLayoutDirectivesInput =
+  | {
+      sectionOrder?: string[];
+      hiddenSections?: string[];
+      hiddenProjectIds?: string[];
+      hiddenExperienceIds?: string[];
+    }
+  | string
+  | null
+  | undefined;
+
 export type TailorChunkInput = {
   headline?: string | null;
   summary?: string | null;
   skills?: TailoredSkillsInput;
+  experienceEdits?: TailoredExperienceEditsInput;
+  layoutDirectives?: TailoredLayoutDirectivesInput;
 };
 
 export type ResumeProjectSelectionItem = ResumeProjectCatalogItem & {
@@ -419,12 +438,223 @@ export function applyProjectVisibility(args: {
   }
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function renderBulletsHtml(bullets: string[]): string {
+  return `<ul>${bullets.map((bullet) => `<li>${escapeHtml(bullet)}</li>`).join("")}</ul>`;
+}
+
+function parseTailoredExperienceEdits(
+  edits: TailoredExperienceEditsInput,
+): Array<{ id: string; bullets: string[] }> | null {
+  if (!edits) return null;
+  const parsed = Array.isArray(edits)
+    ? edits
+    : typeof edits === "string"
+      ? (JSON.parse(edits) as unknown)
+      : null;
+  if (!Array.isArray(parsed)) return null;
+  const out: Array<{ id: string; bullets: string[] }> = [];
+  const seen = new Set<string>();
+  for (const raw of parsed) {
+    const item = asRecord(raw);
+    if (!item) continue;
+    const id = typeof item.id === "string" ? item.id.trim() : "";
+    const bullets = Array.isArray(item.bullets)
+      ? item.bullets
+          .filter((value): value is string => typeof value === "string")
+          .map((value) => value.trim())
+          .filter(Boolean)
+      : [];
+    if (!id || bullets.length === 0 || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, bullets });
+  }
+  return out;
+}
+
+export function applyTailoredExperienceEdits(args: {
+  mode: RxResumeMode;
+  resumeData: RecordLike;
+  experienceEdits?: TailoredExperienceEditsInput;
+}): void {
+  const parsed = parseTailoredExperienceEdits(args.experienceEdits);
+  if (!parsed || parsed.length === 0) return;
+  const sections = asRecord(args.resumeData.sections);
+  const experienceSection = asRecord(sections?.experience);
+  const items = asArray(experienceSection?.items);
+  if (!experienceSection || !items) return;
+
+  const byId = new Map(parsed.map((edit) => [edit.id, edit]));
+  for (const raw of items) {
+    const item = asRecord(raw);
+    if (!item) continue;
+    const id = typeof item.id === "string" ? item.id : "";
+    const edit = byId.get(id);
+    if (!edit) continue;
+    const html = renderBulletsHtml(edit.bullets);
+    if (args.mode === "v5") {
+      if ("description" in item) item.description = html;
+      else if ("summary" in item) item.summary = html;
+    } else {
+      if ("summary" in item) item.summary = html;
+      else if ("description" in item) item.description = html;
+    }
+  }
+}
+
+function parseTailoredLayoutDirectives(
+  directives: TailoredLayoutDirectivesInput,
+): {
+  sectionOrder: string[];
+  hiddenSections: string[];
+  hiddenProjectIds: string[];
+  hiddenExperienceIds: string[];
+} | null {
+  if (!directives) return null;
+  const parsed = typeof directives === "string"
+    ? (JSON.parse(directives) as unknown)
+    : directives;
+  const record = asRecord(parsed);
+  if (!record) return null;
+  const arr = (value: unknown) =>
+    Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean)
+      : [];
+  return {
+    sectionOrder: arr(record.sectionOrder),
+    hiddenSections: arr(record.hiddenSections),
+    hiddenProjectIds: arr(record.hiddenProjectIds),
+    hiddenExperienceIds: arr(record.hiddenExperienceIds),
+  };
+}
+
+function applyVisibilityByIds(args: {
+  section: RecordLike | null;
+  ids: string[];
+  mode: RxResumeMode;
+}): void {
+  const items = asArray(args.section?.items);
+  if (!args.section || !items || args.ids.length === 0) return;
+  const hidden = new Set(args.ids);
+  for (const raw of items) {
+    const item = asRecord(raw);
+    if (!item) continue;
+    const id = typeof item.id === "string" ? item.id : "";
+    if (!id || !hidden.has(id)) continue;
+    if (args.mode === "v5") {
+      if ("hidden" in item) item.hidden = true;
+      else if ("visible" in item) item.visible = false;
+    } else {
+      item.visible = false;
+    }
+  }
+}
+
+function reorderSections(
+  currentMain: string[],
+  currentSidebar: string[],
+  requestedOrder: string[],
+): { main: string[]; sidebar: string[] } {
+  const current = [...currentMain, ...currentSidebar];
+  const existing = new Set(current);
+  const prioritized = requestedOrder.filter(
+    (sectionId, index) => existing.has(sectionId) && requestedOrder.indexOf(sectionId) === index,
+  );
+  const remainder = current.filter((sectionId) => !prioritized.includes(sectionId));
+  const ordered = [...prioritized, ...remainder];
+  return {
+    main: ordered.slice(0, currentMain.length),
+    sidebar: ordered.slice(currentMain.length),
+  };
+}
+
+function applySectionLayoutDirectives(args: {
+  mode: RxResumeMode;
+  resumeData: RecordLike;
+  layoutDirectives?: TailoredLayoutDirectivesInput;
+}): void {
+  const directives = parseTailoredLayoutDirectives(args.layoutDirectives);
+  if (!directives) return;
+  const sections = asRecord(args.resumeData.sections);
+  if (!sections) return;
+
+  for (const sectionId of directives.hiddenSections) {
+    const section = asRecord(sections[sectionId]);
+    if (!section) continue;
+    if (args.mode === "v5") {
+      if ("hidden" in section) section.hidden = true;
+      else if ("visible" in section) section.visible = false;
+    } else {
+      section.visible = false;
+    }
+  }
+
+  applyVisibilityByIds({
+    section: asRecord(sections.projects),
+    ids: directives.hiddenProjectIds,
+    mode: args.mode,
+  });
+  applyVisibilityByIds({
+    section: asRecord(sections.experience),
+    ids: directives.hiddenExperienceIds,
+    mode: args.mode,
+  });
+
+  const metadata = asRecord(args.resumeData.metadata);
+  if (!metadata || directives.sectionOrder.length === 0) return;
+
+  if (args.mode === "v5") {
+    const layout = asRecord(metadata.layout);
+    const pages = asArray(layout?.pages);
+    const page = pages && pages.length > 0 ? asRecord(pages[0]) : null;
+    const main = asArray(page?.main);
+    const sidebar = asArray(page?.sidebar);
+    if (!page || !main || !sidebar) return;
+    const currentMain = main.filter((value): value is string => typeof value === "string");
+    const currentSidebar = sidebar.filter((value): value is string => typeof value === "string");
+    const next = reorderSections(currentMain, currentSidebar, directives.sectionOrder);
+    page.main = next.main;
+    page.sidebar = next.sidebar;
+    return;
+  }
+
+  const layout = asArray(metadata.layout);
+  const firstPage = layout && layout.length > 0 ? asArray(layout[0]) : null;
+  const main = firstPage && firstPage.length > 0 ? asArray(firstPage[0]) : null;
+  const sidebar = firstPage && firstPage.length > 1 ? asArray(firstPage[1]) : null;
+  if (!main || !sidebar) return;
+  const currentMain = main.filter((value): value is string => typeof value === "string");
+  const currentSidebar = sidebar.filter((value): value is string => typeof value === "string");
+  const next = reorderSections(currentMain, currentSidebar, directives.sectionOrder);
+  firstPage[0] = next.main;
+  firstPage[1] = next.sidebar;
+}
+
+
 export function applyTailoredChunks(args: {
   mode: RxResumeMode;
   resumeData: RecordLike;
   tailoredContent: TailorChunkInput;
 }): void {
   applyTailoredSkills(args.mode, args.resumeData, args.tailoredContent.skills);
+  applyTailoredExperienceEdits({
+    mode: args.mode,
+    resumeData: args.resumeData,
+    experienceEdits: args.tailoredContent.experienceEdits,
+  });
+  applySectionLayoutDirectives({
+    mode: args.mode,
+    resumeData: args.resumeData,
+    layoutDirectives: args.tailoredContent.layoutDirectives,
+  });
   applyTailoredSummary(
     args.mode,
     args.resumeData,

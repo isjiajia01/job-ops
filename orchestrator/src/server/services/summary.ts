@@ -16,10 +16,26 @@ import {
   stripLanguageDirectivesFromConstraints,
 } from "./writing-style";
 
+export interface TailoredExperienceEdit {
+  id: string;
+  bullets: string[];
+}
+
+export interface TailoredLayoutDirectives {
+  sectionOrder?: string[];
+  hiddenSections?: string[];
+  hiddenProjectIds?: string[];
+  hiddenExperienceIds?: string[];
+}
+
 export interface TailoredData {
   summary: string;
   headline: string;
   skills: Array<{ name: string; keywords: string[] }>;
+  experienceEdits: TailoredExperienceEdit[];
+  layoutDirectives: TailoredLayoutDirectives;
+  sectionRationale: string;
+  omissionRationale: string;
 }
 
 export interface TailoringResult {
@@ -42,6 +58,32 @@ const TAILORING_SCHEMA: JsonSchemaDefinition = {
         type: "string",
         description: "Tailored resume summary paragraph",
       },
+      experienceEdits: {
+        type: "array",
+        description: "Structured rewrites for resume experience bullet lists keyed by experience id",
+        items: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            bullets: { type: "array", items: { type: "string" } },
+          },
+          required: ["id", "bullets"],
+          additionalProperties: false,
+        },
+      },
+      layoutDirectives: {
+        type: "object",
+        properties: {
+          sectionOrder: { type: "array", items: { type: "string" } },
+          hiddenSections: { type: "array", items: { type: "string" } },
+          hiddenProjectIds: { type: "array", items: { type: "string" } },
+          hiddenExperienceIds: { type: "array", items: { type: "string" } },
+        },
+        required: ["sectionOrder", "hiddenSections", "hiddenProjectIds", "hiddenExperienceIds"],
+        additionalProperties: false,
+      },
+      sectionRationale: { type: "string", description: "Short explanation of why the chosen section ordering and emphasis fit this JD" },
+      omissionRationale: { type: "string", description: "Short explanation of any hidden sections, projects, or experience items for this JD" },
       skills: {
         type: "array",
         description: "Skills sections with keywords tailored to the job",
@@ -63,7 +105,7 @@ const TAILORING_SCHEMA: JsonSchemaDefinition = {
         },
       },
     },
-    required: ["headline", "summary", "skills"],
+    required: ["headline", "summary", "skills", "experienceEdits", "layoutDirectives", "sectionRationale", "omissionRationale"],
     additionalProperties: false,
   },
 };
@@ -109,7 +151,7 @@ export async function generateTailoring(
     };
   }
 
-  const { summary, headline, skills } = result.data;
+  const { summary, headline, skills, experienceEdits, layoutDirectives, sectionRationale, omissionRationale } = result.data;
 
   // Basic validation
   if (!summary || !headline || !Array.isArray(skills)) {
@@ -122,6 +164,10 @@ export async function generateTailoring(
       summary: sanitizeText(summary || ""),
       headline: sanitizeText(headline || ""),
       skills: skills || [],
+      experienceEdits: sanitizeExperienceEdits(experienceEdits || []),
+      layoutDirectives: sanitizeLayoutDirectives(layoutDirectives || {}),
+      sectionRationale: sanitizeText(sectionRationale || ""),
+      omissionRationale: sanitizeText(omissionRationale || ""),
     },
   };
 }
@@ -165,20 +211,28 @@ function buildTailoringPrompt(
     },
     skills: profile.sections?.skills,
     projects: profile.sections?.projects?.items?.map((p) => ({
+      id: p.id,
       name: p.name,
       description: p.description,
       keywords: p.keywords,
     })),
-    experience: profile.sections?.experience?.items?.map((e) => ({
-      company: e.company,
-      position: e.position,
-      summary: e.summary,
-    })),
+    experience: profile.sections?.experience?.items?.map((e) => {
+      const raw = e as unknown as Record<string, unknown>;
+      return {
+        id: e.id,
+        company: e.company,
+        position: e.position,
+        summary: e.summary,
+        description:
+          typeof raw.description === "string" ? raw.description : undefined,
+        bullets: extractExperienceBullets(raw),
+      };
+    }),
   };
 
   return `
-You are an expert resume writer tailoring a profile for a specific job application.
-You must return a JSON object with three fields: "headline", "summary", and "skills".
+You are an expert resume writer tailoring a full resume for a specific job application.
+You must return a JSON object with seven fields: "headline", "summary", "skills", "experienceEdits", "layoutDirectives", "sectionRationale", and "omissionRationale".
 
 JOB DESCRIPTION (JD):
 ${jd}
@@ -194,18 +248,54 @@ INSTRUCTIONS:
    - Do NOT translate, localize, or paraphrase the headline, even if the rest of the output is in ${outputLanguage}.
 
 2. "summary" (String):
-   - The Hook. This needs to mirror the company's "About You" / "What we're looking for" section.
-   - Keep it concise, warm, and confident.
+   - The Hook. Mirror the role's actual needs and foreground the strongest relevant evidence from the profile.
+   - Keep it concise, direct, business-oriented, and specific.
+   - Prefer 2-4 sentences and keep it under 90 words unless the writing-style constraints require otherwise.
    - Do NOT invent experience.
    - Use the profile to add context.
+   - Avoid generic filler such as "passionate", "dynamic", "results-driven", "team player", or vague claims with no evidence.
    - Write the summary in ${outputLanguage}.
 
-3. "skills" (Array of Objects):
+3. "experienceEdits" (Array of Objects):
+   - You may rewrite experience bullets to better match the JD, but you must stay strictly truthful to the original evidence.
+   - Only edit experience entries that clearly benefit from tailoring.
+   - Use the provided experience item ids exactly.
+   - Each edit must be shaped as: { "id": "...", "bullets": ["...", "..."] }.
+   - Only rewrite 1-3 experience entries unless broader changes are clearly justified by the JD.
+   - For each edited entry, return 2-4 bullets unless the source evidence is too thin.
+   - Bullets should be concise, evidence-led, achievement-oriented where supported, and written in ${outputLanguage}.
+   - Do NOT invent responsibilities, tools, metrics, or business ownership that are not supported by the original profile.
+   - If a JD term is relevant but not stated verbatim in the source profile, you may use adjacent wording only when the evidence clearly supports it.
+
+4. "layoutDirectives" (Object):
+   - Use this to control resume organization, emphasis, and omissions.
+   - sectionOrder: ordered list of section ids in the preferred reading order, using ids such as summary, experience, education, projects, skills, languages, profiles.
+   - hiddenSections: section ids to hide completely when they are weakly relevant.
+   - hiddenProjectIds: project ids to hide. Use only ids that appear in the provided projects list.
+   - hiddenExperienceIds: experience ids to hide.
+   - Use omissions conservatively: only hide content that is clearly distracting or off-target for this JD.
+
+5. "sectionRationale" (String):
+   - Explain briefly why the chosen section order and emphasis fit this JD.
+   - Mention the most relevant evidence the resume should foreground.
+   - Keep it to 1-2 sentences in ${outputLanguage}.
+
+6. "omissionRationale" (String):
+   - Explain what was hidden or deemphasized, or state clearly that no omission was necessary.
+   - Keep it to 1-2 sentences in ${outputLanguage}.
+
+7. "skills" (Array of Objects):
    - Review my existing skills section structure.
    - Keyword Stuffing: Swap synonyms to match the JD exactly (e.g. "TDD" -> "Unit Testing", "ReactJS" -> "React").
    - Keep my original skill levels and categories, just rename/reorder keywords to prioritize JD terms.
+   - Prefer JD-relevant keywords that are already supported by the profile; do not pad categories with speculative tools.
    - Return the full "items" array for the skills section, preserving the structure: { "name": "Frontend", "keywords": [...] }.
    - Write user-visible skill text in ${outputLanguage} when natural, but keep exact JD terms, acronyms, and technology names when that helps ATS matching.
+
+TRUTH AND EVIDENCE RULES:
+- Every output field must be grounded in the supplied profile.
+- Do not add seniority, ownership, domain depth, certifications, tools, or metrics that are not supported by the profile.
+- If the profile is only adjacent to part of the JD, make that adjacency clear instead of pretending full direct experience.
 
 WRITING STYLE PREFERENCES:
 - Tone: ${writingStyle.tone}
@@ -222,6 +312,17 @@ OUTPUT FORMAT (JSON):
 {
   "headline": "...",
   "summary": "...",
+  "experienceEdits": [
+    { "id": "experience-id", "bullets": ["bullet 1", "bullet 2"] }
+  ],
+  "layoutDirectives": {
+    "sectionOrder": ["summary", "experience", "projects", "education", "skills"],
+    "hiddenSections": [],
+    "hiddenProjectIds": [],
+    "hiddenExperienceIds": []
+  },
+  "sectionRationale": "Why this section order works",
+  "omissionRationale": "What was hidden and why",
   "skills": [ ... ]
 }
 `;
@@ -230,5 +331,74 @@ OUTPUT FORMAT (JSON):
 function sanitizeText(text: string): string {
   return text
     .replace(/\*\*[\s\S]*?\*\*/g, "") // remove markdown bold
+    .replace(/\s+/g, " ")
     .trim();
+}
+
+
+function stripHtmlToText(text: string | null | undefined): string {
+  if (!text) return "";
+  return text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function extractExperienceBullets(item: Record<string, unknown>): string[] {
+  const candidates = [item.summary, item.description].filter(
+    (value): value is string => typeof value === "string" && value.trim().length > 0,
+  );
+  for (const candidate of candidates) {
+    const matches = [...candidate.matchAll(/<li>([\s\S]*?)<\/li>/gi)]
+      .map((match) => stripHtmlToText(match[1]))
+      .filter(Boolean);
+    if (matches.length > 0) return matches;
+  }
+  const text = stripHtmlToText(candidates[0] ?? "");
+  return text ? [text] : [];
+}
+
+function sanitizeExperienceEdits(
+  edits: TailoredExperienceEdit[],
+): TailoredExperienceEdit[] {
+  const out: TailoredExperienceEdit[] = [];
+  const seen = new Set<string>();
+  for (const edit of edits) {
+    const id = edit?.id?.trim();
+    if (!id || seen.has(id)) continue;
+    const bullets = Array.isArray(edit.bullets)
+      ? edit.bullets
+          .map((bullet) => sanitizeText(String(bullet || "")))
+          .filter(Boolean)
+          .slice(0, 6)
+      : [];
+    if (bullets.length === 0) continue;
+    seen.add(id);
+    out.push({ id, bullets });
+  }
+  return out;
+}
+
+
+function sanitizeStringArray(value: unknown, limit = 20): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of value) {
+    if (typeof raw !== "string") continue;
+    const item = raw.trim();
+    if (!item || seen.has(item)) continue;
+    seen.add(item);
+    out.push(item);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function sanitizeLayoutDirectives(
+  directives: TailoredLayoutDirectives,
+): TailoredLayoutDirectives {
+  return {
+    sectionOrder: sanitizeStringArray(directives.sectionOrder, 20),
+    hiddenSections: sanitizeStringArray(directives.hiddenSections, 20),
+    hiddenProjectIds: sanitizeStringArray(directives.hiddenProjectIds, 50),
+    hiddenExperienceIds: sanitizeStringArray(directives.hiddenExperienceIds, 50),
+  };
 }

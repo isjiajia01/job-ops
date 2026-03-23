@@ -8,6 +8,7 @@ import type { JobSource, JobStatus } from "@shared/types";
 export const DEFAULT_PIPELINE_SOURCES: JobSource[] = [
   "gradcracker",
   "indeed",
+  "jobindex",
   "linkedin",
   "ukvisajobs",
 ];

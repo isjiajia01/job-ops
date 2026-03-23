@@ -38,7 +38,7 @@ const DEFAULT_CONFIG: PipelineConfig = {
   topN: 10,
   minSuitabilityScore: 50,
   // Keep Glassdoor opt-in via source picker/settings; do not enable by default.
-  sources: ["gradcracker", "indeed", "linkedin", "ukvisajobs"],
+  sources: ["gradcracker", "indeed", "jobindex", "linkedin", "ukvisajobs"],
   outputDir: join(getDataDir(), "pdfs"),
   enableCrawling: true,
   enableScoring: true,
@@ -249,6 +249,10 @@ export async function summarizeJob(
       let tailoredSummary = job.tailoredSummary;
       let tailoredHeadline = job.tailoredHeadline;
       let tailoredSkills = job.tailoredSkills;
+      let tailoredExperienceEdits = job.tailoredExperienceEdits;
+      let tailoredLayoutDirectives = job.tailoredLayoutDirectives;
+      let tailoredSectionRationale = job.tailoredSectionRationale;
+      let tailoredOmissionRationale = job.tailoredOmissionRationale;
 
       if (!tailoredSummary || !tailoredHeadline || options?.force) {
         jobLogger.info("Generating tailoring content");
@@ -260,6 +264,10 @@ export async function summarizeJob(
           tailoredSummary = tailoringResult.data.summary;
           tailoredHeadline = tailoringResult.data.headline;
           tailoredSkills = JSON.stringify(tailoringResult.data.skills);
+          tailoredExperienceEdits = JSON.stringify(tailoringResult.data.experienceEdits);
+          tailoredLayoutDirectives = JSON.stringify(tailoringResult.data.layoutDirectives);
+          tailoredSectionRationale = tailoringResult.data.sectionRationale;
+          tailoredOmissionRationale = tailoringResult.data.omissionRationale;
         } else if (options?.force || !tailoredSummary || !tailoredHeadline) {
           return {
             success: false,
@@ -307,6 +315,10 @@ export async function summarizeJob(
         tailoredSummary: tailoredSummary ?? undefined,
         tailoredHeadline: tailoredHeadline ?? undefined,
         tailoredSkills: tailoredSkills ?? undefined,
+        tailoredExperienceEdits: tailoredExperienceEdits ?? undefined,
+        tailoredLayoutDirectives: tailoredLayoutDirectives ?? undefined,
+        tailoredSectionRationale: tailoredSectionRationale ?? undefined,
+        tailoredOmissionRationale: tailoredOmissionRationale ?? undefined,
         selectedProjectIds: selectedProjectIds ?? undefined,
       });
 
@@ -345,6 +357,12 @@ export async function generateFinalPdf(
           summary: job.tailoredSummary || "",
           headline: job.tailoredHeadline || "",
           skills: job.tailoredSkills ? JSON.parse(job.tailoredSkills) : [],
+          experienceEdits: job.tailoredExperienceEdits
+            ? JSON.parse(job.tailoredExperienceEdits)
+            : [],
+          layoutDirectives: job.tailoredLayoutDirectives
+            ? JSON.parse(job.tailoredLayoutDirectives)
+            : {},
         },
         job.jobDescription || "",
         undefined, // deprecated baseResumePath parameter

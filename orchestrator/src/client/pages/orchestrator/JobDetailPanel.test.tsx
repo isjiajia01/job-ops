@@ -188,6 +188,38 @@ describe("JobDetailPanel", () => {
     expect(screen.getByText("Hello world")).toBeInTheDocument();
   });
 
+  it("renders AI tailoring audit as readable cards", async () => {
+    await renderJobDetailPanel({
+      activeTab: "all",
+      activeJobs: [],
+      selectedJob: createJob({
+        tailoredExperienceEdits: JSON.stringify([
+          { id: "experience-dtu-thesis", bullets: ["Bullet A", "Bullet B"] },
+        ]),
+        tailoredLayoutDirectives: JSON.stringify({
+          sectionOrder: ["summary", "skills", "experience"],
+          hiddenSections: ["publications"],
+          hiddenProjectIds: ["project-old"],
+          hiddenExperienceIds: ["experience-legacy"],
+        }),
+        tailoredSectionRationale: "Put summary first to foreground planning fit.",
+        tailoredOmissionRationale: "Hide low-signal legacy items.",
+      }),
+      onSelectJobId: vi.fn(),
+      onJobUpdated: vi.fn().mockResolvedValue(undefined),
+    });
+
+    expect(screen.getByText(/AI tailoring audit/i)).toBeInTheDocument();
+    expect(screen.getByText(/Put summary first to foreground planning fit\./i)).toBeInTheDocument();
+    expect(screen.getByText(/Hide low-signal legacy items\./i)).toBeInTheDocument();
+    expect(screen.getByText(/1\. summary/i)).toBeInTheDocument();
+    expect(screen.getByText(/publications/i)).toBeInTheDocument();
+    expect(screen.getByText(/project-old/i)).toBeInTheDocument();
+    expect(screen.getByText(/experience-legacy/i)).toBeInTheDocument();
+    expect(screen.getByText(/experience-dtu-thesis/i)).toBeInTheDocument();
+    expect(screen.getByText(/Bullet A/i)).toBeInTheDocument();
+  });
+
   it("saves an edited description", async () => {
     const onJobUpdated = vi.fn().mockResolvedValue(undefined);
     vi.mocked(api.updateJob).mockResolvedValue(undefined as any);

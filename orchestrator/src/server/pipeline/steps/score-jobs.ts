@@ -1,7 +1,9 @@
 import { logger } from "@infra/logger";
 import * as jobsRepo from "@server/repositories/jobs";
 import * as settingsRepo from "@server/repositories/settings";
+import { evaluateJobPrefilter } from "@server/services/job-prefilter";
 import { scoreJobSuitability } from "@server/services/scorer";
+import { suppressDuplicateDiscoveredJobs } from "@server/services/job-dedupe";
 import * as visaSponsors from "@server/services/visa-sponsors/index";
 import { asyncPool } from "@server/utils/async-pool";
 import type { Job } from "@shared/types";
@@ -17,10 +19,13 @@ export async function scoreJobsStep(args: {
   logger.info("Running scoring step");
   const unprocessedJobs = await jobsRepo.getUnscoredDiscoveredJobs();
 
-  // Check if auto-skip threshold is configured
-  const autoSkipThresholdRaw = await settingsRepo.getSetting(
-    "autoSkipScoreThreshold",
-  );
+  const [autoSkipThresholdRaw, searchCitiesSetting, selectedCountry] =
+    await Promise.all([
+      settingsRepo.getSetting("autoSkipScoreThreshold"),
+      settingsRepo.getSetting("searchCities"),
+      settingsRepo.getSetting("jobspyCountryIndeed"),
+    ]);
+
   const autoSkipThreshold = autoSkipThresholdRaw
     ? parseInt(autoSkipThresholdRaw, 10)
     : null;
@@ -63,6 +68,40 @@ export async function scoreJobsStep(args: {
         return;
       }
 
+      const prefilter = evaluateJobPrefilter(job, {
+        searchCitiesSetting,
+        selectedCountry,
+      });
+
+      if (prefilter) {
+        await jobsRepo.updateJob(job.id, {
+          suitabilityScore: prefilter.score,
+          suitabilityReason: prefilter.reason,
+          status: prefilter.status,
+        });
+
+        logger.info("Auto-skipped job via hard prefilter", {
+          jobId: job.id,
+          title: job.title,
+          category: prefilter.category,
+          score: prefilter.score,
+        });
+
+        completed += 1;
+        progressHelpers.scoringJob(
+          completed,
+          unprocessedJobs.length,
+          `${job.title} (prefiltered)`,
+        );
+        scoredJobs.push({
+          ...job,
+          suitabilityScore: prefilter.score,
+          suitabilityReason: prefilter.reason,
+          status: prefilter.status,
+        });
+        return;
+      }
+
       const { score, reason } = await scoreJobSuitability(job, args.profile);
       if (args.shouldCancel?.()) return;
 
@@ -81,7 +120,6 @@ export async function scoreJobsStep(args: {
         sponsorMatchNames = summary.sponsorMatchNames ?? undefined;
       }
 
-      // Check if job should be auto-skipped based on score threshold
       const shouldAutoSkip =
         job.status !== "applied" &&
         autoSkipThreshold !== null &&
@@ -114,6 +152,9 @@ export async function scoreJobsStep(args: {
       });
     },
   });
+
+  const dedupeResult = await suppressDuplicateDiscoveredJobs();
+  logger.info("Duplicate suppression completed", dedupeResult);
 
   progressHelpers.scoringComplete(scoredJobs.length);
   logger.info("Scoring step completed", {

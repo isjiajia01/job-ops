@@ -3,6 +3,7 @@ import { z } from "zod";
 export const EXTRACTOR_SOURCE_IDS = [
   "gradcracker",
   "indeed",
+  "jobindex",
   "linkedin",
   "glassdoor",
   "ukvisajobs",
@@ -33,6 +34,7 @@ export const EXTRACTOR_SOURCE_METADATA: Record<
     ukOnly: true,
   },
   indeed: { label: "Indeed", order: 20, category: "pipeline" },
+  jobindex: { label: "Jobindex", order: 25, category: "pipeline" },
   linkedin: { label: "LinkedIn", order: 30, category: "pipeline" },
   glassdoor: { label: "Glassdoor", order: 40, category: "pipeline" },
   ukvisajobs: {

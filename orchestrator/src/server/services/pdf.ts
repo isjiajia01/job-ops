@@ -30,6 +30,13 @@ export interface TailoredPdfContent {
   summary?: string | null;
   headline?: string | null;
   skills?: Array<{ name: string; keywords: string[] }> | null;
+  experienceEdits?: Array<{ id: string; bullets: string[] }> | null;
+  layoutDirectives?: {
+    sectionOrder?: string[];
+    hiddenSections?: string[];
+    hiddenProjectIds?: string[];
+    hiddenExperienceIds?: string[];
+  } | null;
 }
 
 export interface GeneratePdfOptions {

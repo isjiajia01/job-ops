@@ -400,6 +400,13 @@ export async function prepareTailoredResumeForPdf(args: {
     summary?: string | null;
     headline?: string | null;
     skills?: TailoredSkillsInput;
+    experienceEdits?: Array<{ id: string; bullets: string[] }> | string | null;
+    layoutDirectives?: {
+      sectionOrder?: string[];
+      hiddenSections?: string[];
+      hiddenProjectIds?: string[];
+      hiddenExperienceIds?: string[];
+    } | string | null;
   };
   jobDescription: string;
   selectedProjectIds?: string | null;

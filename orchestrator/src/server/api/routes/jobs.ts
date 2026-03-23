@@ -33,6 +33,7 @@ import {
   simulateSummarizeJob,
 } from "@server/services/demo-simulator";
 import { getProfile } from "@server/services/profile";
+import { evaluateJobPrefilter } from "@server/services/job-prefilter";
 import { scoreJobSuitability } from "@server/services/scorer";
 import { getTracerReadiness } from "@server/services/tracer-links";
 import * as visaSponsors from "@server/services/visa-sponsors/index";
@@ -439,11 +440,48 @@ async function executeJobActionForJob(
           return rawProfile as Record<string, unknown>;
         })();
 
+    const [searchCitiesSetting, selectedCountry, autoSkipThresholdRaw] = await Promise.all([
+      settingsRepo.getSetting("searchCities"),
+      settingsRepo.getSetting("jobspyCountryIndeed"),
+      settingsRepo.getSetting("autoSkipScoreThreshold"),
+    ]);
+    const autoSkipThreshold = autoSkipThresholdRaw
+      ? parseInt(autoSkipThresholdRaw, 10)
+      : null;
+
+    const prefilter = evaluateJobPrefilter(job, {
+      searchCitiesSetting,
+      selectedCountry,
+    });
+
+    if (prefilter) {
+      const updated = await jobsRepo.updateJob(job.id, {
+        suitabilityScore: prefilter.score,
+        suitabilityReason: prefilter.reason,
+        status: prefilter.status,
+      });
+      if (!updated) {
+        throw new AppError({
+          status: 404,
+          code: "NOT_FOUND",
+          message: "Job not found",
+        });
+      }
+
+      return { jobId, ok: true, job: updated };
+    }
+
     const { score, reason } = await scoreJobSuitability(job, profile);
+    const shouldAutoSkip =
+      job.status !== "applied" &&
+      autoSkipThreshold !== null &&
+      !Number.isNaN(autoSkipThreshold) &&
+      score < autoSkipThreshold;
 
     const updated = await jobsRepo.updateJob(job.id, {
       suitabilityScore: score,
       suitabilityReason: reason,
+      ...(shouldAutoSkip ? { status: "skipped" } : {}),
     });
     if (!updated) {
       throw new AppError({
