@@ -113,6 +113,18 @@ describe("buildJobChatPromptContext", () => {
       "For cover letters, explain why this role and employer are a fit and support that case with 2-3 concrete examples from the provided profile.",
     );
     expect(context.systemPrompt).toContain(
+      "For this candidate, default to an early-career, analytical, practical, and modest voice rather than a senior or highly promotional tone.",
+    );
+    expect(context.systemPrompt).toContain(
+      'Avoid formulaic openings such as "I am writing to express my interest" unless the user explicitly asks for a more traditional letter style.',
+    );
+    expect(context.systemPrompt).toContain(
+      'Avoid stock motivation phrases such as "I am looking for a role where..."',
+    );
+    expect(context.systemPrompt).toContain(
+      "Prefer openings that start from the work, planning problem, business need, or operating context rather than from generic motivation language.",
+    );
+    expect(context.systemPrompt).toContain(
       "Writing constraints: Keep responses under 120 words",
     );
     expect(context.systemPrompt).toContain(

@@ -25,6 +25,12 @@ type PatternGroup = {
 
 const NEGATIVE_TITLE_GROUPS: PatternGroup[] = [
   {
+    score: 10,
+    reason:
+      "Title is communications, recruiting, or employer-brand work rather than planning-oriented supply chain work.",
+    patterns: [/\b(kommunikat[oø]r|communication|communications|recruit(?:er|ing)|talent acquisition)\b/i],
+  },
+  {
     score: 5,
     reason:
       "Title is dominated by military, public case-handling, or non-commercial administration rather than planning-oriented supply chain work.",
@@ -35,7 +41,7 @@ const NEGATIVE_TITLE_GROUPS: PatternGroup[] = [
     reason:
       "Title is finance, controlling, commercial, or account-management oriented rather than planning-oriented supply chain work.",
     patterns: [
-      /\b(controller|financial analyst|finance|accountant|audit|underwriter|key account|sales|revenue operations)\b/i,
+      /\b(controller|financial analyst|finance|accountant|audit|underwriter|key account|inside sales|field sales|sales|revenue operations|commercial agreements?|kommercielle? aftaler)\b/i,
     ],
   },
   {
@@ -71,7 +77,7 @@ const NEGATIVE_TITLE_GROUPS: PatternGroup[] = [
     reason:
       "Title is primarily software, systems, or engineering oriented rather than planning-oriented supply chain work.",
     patterns: [
-      /\b(python|software|developer|full[- ]?stack|frontend|backend|data engineer|ml engineer|systems specialist|tools & systems specialist)\b/i,
+      /\b(python|software|developer|full[- ]?stack|frontend|backend|data engineer|ml engineer|systems specialist|tools & systems specialist|it[- ]?udvikler|technology coordinator)\b/i,
       /\b(subsea|r&d|end fitting|design review|design engineer|designer|engineer)\b/i,
     ],
   },
@@ -79,7 +85,7 @@ const NEGATIVE_TITLE_GROUPS: PatternGroup[] = [
     score: 18,
     reason:
       "Title signals a senior or management profile beyond the current junior-to-mid planning target.",
-    patterns: [/\b(senior|manager|director|head|lead|principal|staff|vp|vice president|chief)\b/i],
+    patterns: [/\b(senior|manager|director|head|lead|principal|staff|vp|vice president|chief|afdelingsleder|driftsleder)\b/i],
   },
 ];
 
@@ -140,6 +146,8 @@ const NEGATIVE_CONTENT_GROUPS: PatternGroup[] = [
       /sales pipeline/i,
       /account management/i,
       /commercial ownership/i,
+      /commercial agreements/i,
+      /recruitment/i,
       /revenue operations/i,
       /marketing/i,
     ],

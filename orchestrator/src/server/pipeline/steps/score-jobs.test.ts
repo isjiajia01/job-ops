@@ -28,6 +28,13 @@ vi.mock("@server/services/visa-sponsors/index", () => ({
   calculateSponsorMatchSummary: vi.fn(),
 }));
 
+vi.mock("@server/services/job-dedupe", () => ({
+  suppressDuplicateDiscoveredJobs: vi.fn().mockResolvedValue({
+    kept: 0,
+    skipped: 0,
+  }),
+}));
+
 vi.mock("../progress", () => ({
   updateProgress: vi.fn(),
   progressHelpers: {
@@ -47,11 +54,12 @@ describe("scoreJobsStep auto-skip behavior", () => {
 
     vi.mocked(jobsRepo.getUnscoredDiscoveredJobs).mockResolvedValue([
       createJob({
-        title: "Software Engineer",
+        title: "Demand Planner",
         employer: "Acme Corp",
         status: "discovered",
         suitabilityScore: null,
         suitabilityReason: null,
+        jobDescription: "Forecasting, planning, and KPI follow-up for supply chain decisions.",
       }),
     ]);
     vi.mocked(jobsRepo.updateJob).mockResolvedValue(null);
@@ -161,10 +169,11 @@ describe("scoreJobsStep auto-skip behavior", () => {
       createJob({
         id: "job-applied",
         status: "applied",
-        title: "Software Engineer",
+        title: "Demand Planner",
         employer: "Acme Corp",
         suitabilityScore: null,
         suitabilityReason: null,
+        jobDescription: "Forecasting, planning, and KPI follow-up for supply chain decisions.",
       }),
     ]);
 
@@ -214,6 +223,21 @@ describe("scoreJobsStep auto-skip behavior", () => {
     expect(vi.mocked(jobsRepo.updateJob)).toHaveBeenCalledTimes(2);
     expect(vi.mocked(progressHelpers.scoringJob)).toHaveBeenCalledTimes(2);
     expect(vi.mocked(progressHelpers.scoringComplete)).toHaveBeenCalledWith(2);
+  });
+
+  it("suppresses duplicates before loading unscored discovered jobs", async () => {
+    const jobsRepo = await import("@server/repositories/jobs");
+    const jobDedupe = await import("@server/services/job-dedupe");
+
+    await scoreJobsStep({ profile: {} });
+
+    expect(jobDedupe.suppressDuplicateDiscoveredJobs).toHaveBeenCalledTimes(1);
+    expect(
+      vi.mocked(jobDedupe.suppressDuplicateDiscoveredJobs)
+        .mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      vi.mocked(jobsRepo.getUnscoredDiscoveredJobs).mock.invocationCallOrder[0],
+    );
   });
 
   it("stops before processing when cancellation is requested", async () => {

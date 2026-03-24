@@ -63,6 +63,7 @@ COPY extractors/gradcracker ./extractors/gradcracker
 COPY extractors/jobindex ./extractors/jobindex
 COPY extractors/jobspy ./extractors/jobspy
 COPY extractors/startupjobs ./extractors/startupjobs
+COPY extractors/thehub ./extractors/thehub
 COPY extractors/ukvisajobs ./extractors/ukvisajobs
 
 # Build documentation site bundle
@@ -130,6 +131,7 @@ COPY extractors/gradcracker ./extractors/gradcracker
 COPY extractors/jobindex ./extractors/jobindex
 COPY extractors/jobspy ./extractors/jobspy
 COPY extractors/startupjobs ./extractors/startupjobs
+COPY extractors/thehub ./extractors/thehub
 COPY extractors/ukvisajobs ./extractors/ukvisajobs
 
 # Reuse Camoufox binaries from builder instead of fetching again

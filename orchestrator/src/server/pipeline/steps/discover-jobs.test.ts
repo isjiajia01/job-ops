@@ -312,6 +312,58 @@ describe("discoverJobsStep", () => {
     ).toBe(true);
   });
 
+  it("does not let a broad country token disable strict city filtering", async () => {
+    const settingsRepo = await import("@server/repositories/settings");
+    const registryModule = await import("@server/extractors/registry");
+
+    const gradcrackerManifest = {
+      id: "gradcracker",
+      displayName: "Gradcracker",
+      providesSources: ["gradcracker"],
+      run: vi.fn().mockResolvedValue({
+        success: true,
+        jobs: [
+          {
+            source: "gradcracker",
+            title: "Engineer - Leeds",
+            employer: "ACME",
+            location: "Leeds, England, UK",
+            jobUrl: "https://example.com/grad-1",
+          },
+          {
+            source: "gradcracker",
+            title: "Engineer - London",
+            employer: "ACME",
+            location: "London, England, UK",
+            jobUrl: "https://example.com/grad-2",
+          },
+        ],
+      }),
+    };
+
+    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
+      searchTerms: JSON.stringify(["engineer"]),
+      searchCities: "Leeds|United Kingdom",
+      jobspyCountryIndeed: "united kingdom",
+    } as any);
+
+    vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
+      manifests: new Map([["gradcracker", gradcrackerManifest as any]]),
+      manifestBySource: new Map([["gradcracker", gradcrackerManifest as any]]),
+      availableSources: ["gradcracker"],
+    } as any);
+
+    const result = await discoverJobsStep({
+      mergedConfig: {
+        ...baseConfig,
+        sources: ["gradcracker"],
+      },
+    });
+
+    expect(result.discoveredJobs).toHaveLength(1);
+    expect(result.discoveredJobs[0]?.location).toContain("Leeds");
+  });
+
   it("tracks source completion counters across source transitions", async () => {
     const settingsRepo = await import("@server/repositories/settings");
     const jobsRepo = await import("@server/repositories/jobs");
@@ -387,5 +439,122 @@ describe("discoverJobsStep", () => {
     await expect(getExistingJobUrls()).resolves.toEqual([
       "https://example.com/existing",
     ]);
+  });
+
+  it("prunes Denmark search terms differently for jobspy and jobindex", async () => {
+    const settingsRepo = await import("@server/repositories/settings");
+    const registryModule = await import("@server/extractors/registry");
+
+    const jobspyManifest = {
+      id: "jobspy",
+      displayName: "JobSpy",
+      providesSources: ["indeed", "linkedin", "glassdoor"],
+      run: vi.fn().mockResolvedValue({ success: true, jobs: [] }),
+    };
+    const jobindexManifest = {
+      id: "jobindex",
+      displayName: "Jobindex",
+      providesSources: ["jobindex"],
+      run: vi.fn().mockResolvedValue({ success: true, jobs: [] }),
+    };
+
+    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
+      searchTerms: JSON.stringify([
+        "Demand Planner",
+        "Supply Planner",
+        "Supply Chain Analyst",
+        "Disponent",
+        "Logistikplanlægger",
+        "Forsyningsplanlægger",
+        "Transport Planner",
+      ]),
+      jobspyCountryIndeed: "denmark",
+    } as any);
+
+    vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
+      manifests: new Map([
+        ["jobspy", jobspyManifest as any],
+        ["jobindex", jobindexManifest as any],
+      ]),
+      manifestBySource: new Map([
+        ["linkedin", jobspyManifest as any],
+        ["indeed", jobspyManifest as any],
+        ["jobindex", jobindexManifest as any],
+      ]),
+      availableSources: ["linkedin", "indeed", "jobindex"],
+    } as any);
+
+    await discoverJobsStep({
+      mergedConfig: {
+        ...baseConfig,
+        sources: ["linkedin", "jobindex"],
+      },
+    });
+
+    expect(jobspyManifest.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        searchTerms: [
+          "Demand Planner",
+          "Supply Planner",
+          "Supply Chain Analyst",
+          "Disponent",
+        ],
+      }),
+    );
+    expect(jobindexManifest.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        searchTerms: [
+          "Demand Planner",
+          "Supply Planner",
+          "Disponent",
+          "Logistikplanlægger",
+        ],
+      }),
+    );
+  });
+
+  it("uses thehub-specific adjacent terms instead of the main Denmark planner terms", async () => {
+    const settingsRepo = await import("@server/repositories/settings");
+    const registryModule = await import("@server/extractors/registry");
+
+    const thehubManifest = {
+      id: "thehub",
+      displayName: "The Hub",
+      providesSources: ["thehub"],
+      run: vi.fn().mockResolvedValue({ success: true, jobs: [] }),
+    };
+
+    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
+      searchTerms: JSON.stringify([
+        "Demand Planner",
+        "Supply Planner",
+        "Inventory Planner",
+        "Disponent",
+      ]),
+      jobspyCountryIndeed: "denmark",
+    } as any);
+
+    vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
+      manifests: new Map([["thehub", thehubManifest as any]]),
+      manifestBySource: new Map([["thehub", thehubManifest as any]]),
+      availableSources: ["thehub"],
+    } as any);
+
+    await discoverJobsStep({
+      mergedConfig: {
+        ...baseConfig,
+        sources: ["thehub"] as any,
+      },
+    });
+
+    expect(thehubManifest.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        searchTerms: [
+          "operations",
+          "analyst",
+          "business analyst",
+        ],
+      }),
+    );
   });
 });

@@ -31,6 +31,34 @@ describe("job prefilter", () => {
     });
   });
 
+  it("skips commercial-agreement and sales-oriented titles", () => {
+    const job = createJob({
+      title: "Ansvarlig for driften af kommercielle aftaler",
+      location: "Copenhagen",
+      jobDescription:
+        "Own commercial agreements, revenue follow-up, and cross-functional sales coordination.",
+    });
+
+    expect(evaluateJobPrefilter(job, baseContext)).toMatchObject({
+      status: "skipped",
+      category: "title",
+    });
+  });
+
+  it("skips Danish operations-management titles beyond the current target seniority", () => {
+    const job = createJob({
+      title: "Driftsleder, Teknisk Vedligehold",
+      location: "Køge",
+      jobDescription:
+        "Lead daily technical maintenance operations and coordinate technicians across sites.",
+    });
+
+    expect(evaluateJobPrefilter(job, baseContext)).toMatchObject({
+      status: "skipped",
+      category: "title",
+    });
+  });
+
   it("skips ambiguous analyst roles without planning evidence", () => {
     const job = createJob({
       title: "Operations Analyst",

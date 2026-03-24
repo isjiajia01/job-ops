@@ -15,6 +15,7 @@ import { useDemoInfo } from "./hooks/useDemoInfo";
 import { GmailOauthCallbackPage } from "./pages/GmailOauthCallbackPage";
 import { HomePage } from "./pages/HomePage";
 import { InProgressBoardPage } from "./pages/InProgressBoardPage";
+import { CoverLetterPage } from "./pages/CoverLetterPage";
 import { JobPage } from "./pages/JobPage";
 import { OrchestratorPage } from "./pages/OrchestratorPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -134,6 +135,10 @@ export const App: React.FC = () => {
                 <Route
                   path="/oauth/gmail/callback"
                   element={<GmailOauthCallbackPage />}
+                />
+                <Route
+                  path="/job/:id/cover-letter"
+                  element={<CoverLetterPage />}
                 />
                 <Route path="/job/:id" element={<JobPage />} />
                 <Route

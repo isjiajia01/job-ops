@@ -20,6 +20,36 @@ import { type CrawlSource, progressHelpers, updateProgress } from "../progress";
 
 const DISCOVERY_CONCURRENCY = 3;
 
+const JOBSPY_DENMARK_PREFERRED_TERMS = new Set(
+  [
+    "demand planner",
+    "supply planner",
+    "supply chain planner",
+    "inventory planner",
+    "supply chain analyst",
+    "logistics specialist",
+    "operations planner",
+    "disponent",
+  ].map(normalizeSearchTerm),
+);
+
+const JOBINDEX_DENMARK_PREFERRED_TERMS = new Set(
+  [
+    "disponent",
+    "logistikplanlægger",
+    "demand planner",
+    "supply planner",
+    "inventory planner",
+    "logistics specialist",
+  ].map(normalizeSearchTerm),
+);
+
+const THEHUB_DENMARK_DEFAULT_TERMS = [
+  "operations",
+  "analyst",
+  "business analyst",
+];
+
 type DiscoveryTaskResult = {
   discoveredJobs: CreateJobInput[];
   sourceErrors: string[];
@@ -31,6 +61,60 @@ type DiscoverySourceTask = {
   detail: string;
   run: () => Promise<DiscoveryTaskResult>;
 };
+
+function normalizeSearchTerm(term: string): string {
+  return term
+    .trim()
+    .toLowerCase()
+    .replace(/ø/g, "o")
+    .replace(/æ/g, "ae")
+    .replace(/å/g, "aa")
+    .replace(/\s+/g, " ");
+}
+
+function dedupeSearchTerms(terms: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const term of terms) {
+    const normalized = normalizeSearchTerm(term);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push(term.trim());
+  }
+  return out;
+}
+
+function pruneSearchTermsForManifest(args: {
+  manifestId: string;
+  selectedCountry: string;
+  searchTerms: string[];
+}): string[] {
+  const deduped = dedupeSearchTerms(args.searchTerms);
+  if (deduped.length <= 1) return deduped;
+
+  if (normalizeCountryKey(args.selectedCountry) !== "denmark") {
+    return deduped;
+  }
+
+  if (args.manifestId === "thehub") {
+    return [...THEHUB_DENMARK_DEFAULT_TERMS];
+  }
+
+  const preferredTerms =
+    args.manifestId === "jobspy"
+      ? JOBSPY_DENMARK_PREFERRED_TERMS
+      : args.manifestId === "jobindex"
+        ? JOBINDEX_DENMARK_PREFERRED_TERMS
+        : null;
+
+  if (!preferredTerms) return deduped;
+
+  const filtered = deduped.filter((term) =>
+    preferredTerms.has(normalizeSearchTerm(term)),
+  );
+
+  return filtered.length > 0 ? filtered : deduped;
+}
 
 function parseBlockedCompanyKeywords(raw: string | undefined): string[] {
   if (!raw) return [];
@@ -65,15 +149,15 @@ function filterJobsByRequestedCities(args: {
   const { jobs, selectedCountry, requestedCities } = args;
   if (requestedCities.length === 0) return jobs;
 
+  const strictRequestedCities = requestedCities.filter((requestedCity) =>
+    shouldApplyStrictCityFilter(requestedCity, selectedCountry),
+  );
+  if (strictRequestedCities.length === 0) return jobs;
+
   return jobs.filter((job) =>
-    requestedCities.some((requestedCity) => {
-      const strict = shouldApplyStrictCityFilter(
-        requestedCity,
-        selectedCountry,
-      );
-      if (!strict) return true;
-      return matchesRequestedCity(job.location, requestedCity);
-    }),
+    strictRequestedCities.some((requestedCity) =>
+      matchesRequestedCity(job.location, requestedCity),
+    ),
   );
 }
 
@@ -172,10 +256,15 @@ export async function discoverJobsStep(args: {
   for (const [manifestId, grouped] of groupedByManifest) {
     const manifest = registry.manifests.get(manifestId);
     if (!manifest) continue;
+    const manifestSearchTerms = pruneSearchTermsForManifest({
+      manifestId,
+      selectedCountry,
+      searchTerms,
+    });
 
     sourceTasks.push({
       source: manifest.id,
-      termsTotal: grouped.termsTotal,
+      termsTotal: manifestSearchTerms.length,
       detail:
         grouped.sources.length > 1
           ? `${manifest.displayName}: ${grouped.sources.join(", ")}...`
@@ -192,7 +281,7 @@ export async function discoverJobsStep(args: {
           source: grouped.sources[0],
           selectedSources: grouped.sources,
           settings: filteredSettings,
-          searchTerms,
+          searchTerms: manifestSearchTerms,
           selectedCountry,
           getExistingJobUrls,
           shouldCancel: args.shouldCancel,

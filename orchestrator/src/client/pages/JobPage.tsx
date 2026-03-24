@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   ClipboardList,
   Copy,
+  Download,
   DollarSign,
   Edit2,
   ExternalLink,
@@ -51,6 +52,7 @@ import {
 import {
   copyTextToClipboard,
   formatJobForWebhook,
+  safeFilenamePart,
   formatTimestamp,
 } from "@/lib/utils";
 import * as api from "../api";
@@ -76,6 +78,8 @@ export const JobPage: React.FC = () => {
   const [editingEvent, setEditingEvent] = React.useState<StageEvent | null>(
     null,
   );
+  const [latestGhostwriterDraft, setLatestGhostwriterDraft] =
+    React.useState("");
   const pendingEventRef = React.useRef<StageEvent | null>(null);
 
   const jobQuery = useQuery<Job | null>({
@@ -119,6 +123,31 @@ export const JobPage: React.FC = () => {
   const tasks = tasksQuery.data ?? [];
   const isLoading =
     jobQuery.isLoading || eventsQuery.isLoading || tasksQuery.isLoading;
+
+  React.useEffect(() => {
+    if (!job?.id) {
+      setLatestGhostwriterDraft("");
+      return;
+    }
+
+    let cancelled = false;
+    api
+      .listJobGhostwriterMessages(job.id, { limit: 100 })
+      .then((data) => {
+        if (cancelled) return;
+        const latestAssistant = [...data.messages]
+          .reverse()
+          .find((message) => message.role === "assistant");
+        setLatestGhostwriterDraft(latestAssistant?.content?.trim() || "");
+      })
+      .catch(() => {
+        if (!cancelled) setLatestGhostwriterDraft("");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [job?.id]);
 
   const loadData = React.useCallback(async () => {
     if (!id) return;
@@ -261,6 +290,21 @@ export const JobPage: React.FC = () => {
       toast.success("Marked as applied");
     });
   };
+
+  const handleDownloadCoverLetter = React.useCallback(() => {
+    if (!job || !latestGhostwriterDraft) return;
+    const blob = new Blob([latestGhostwriterDraft], {
+      type: "text/plain;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${safeFilenamePart(job.employer || "Unknown")}_${safeFilenamePart(job.title || "job")}_cover_letter.txt`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, [job, latestGhostwriterDraft]);
 
   const handleMoveToInProgress = async () => {
     await runAction("move-in-progress", async () => {
@@ -479,6 +523,33 @@ export const JobPage: React.FC = () => {
                   </a>
                 </Button>
               )}
+
+              <Button
+                asChild
+                size="sm"
+                variant="outline"
+                className="h-9 border-border/60 bg-background/30"
+              >
+                <a
+                  href={`/job/${job.id}/cover-letter`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <FileText className="mr-1.5 h-3.5 w-3.5" />
+                  View Cover Letter
+                </a>
+              </Button>
+
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9 border-border/60 bg-background/30"
+                onClick={handleDownloadCoverLetter}
+                disabled={!latestGhostwriterDraft}
+              >
+                <Download className="mr-1.5 h-3.5 w-3.5" />
+                Download Cover Letter PDF
+              </Button>
 
               {isReady && (
                 <Button

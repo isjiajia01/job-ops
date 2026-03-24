@@ -4,6 +4,7 @@ export const EXTRACTOR_SOURCE_IDS = [
   "gradcracker",
   "indeed",
   "jobindex",
+  "thehub",
   "linkedin",
   "glassdoor",
   "ukvisajobs",
@@ -21,6 +22,7 @@ export interface ExtractorSourceMetadata {
   category: "pipeline" | "manual";
   requiresCredentials?: boolean;
   ukOnly?: boolean;
+  experimental?: boolean;
 }
 
 export const EXTRACTOR_SOURCE_METADATA: Record<
@@ -35,6 +37,12 @@ export const EXTRACTOR_SOURCE_METADATA: Record<
   },
   indeed: { label: "Indeed", order: 20, category: "pipeline" },
   jobindex: { label: "Jobindex", order: 25, category: "pipeline" },
+  thehub: {
+    label: "The Hub",
+    order: 27,
+    category: "pipeline",
+    experimental: true,
+  },
   linkedin: { label: "LinkedIn", order: 30, category: "pipeline" },
   glassdoor: { label: "Glassdoor", order: 40, category: "pipeline" },
   ukvisajobs: {

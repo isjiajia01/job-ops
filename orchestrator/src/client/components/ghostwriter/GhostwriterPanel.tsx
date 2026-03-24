@@ -1,5 +1,6 @@
 import * as api from "@client/api";
 import type { Job, JobChatMessage, JobChatStreamEvent } from "@shared/types";
+import { Download } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -212,6 +213,34 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
     return last.role === "assistant";
   }, [isStreaming, messages]);
 
+  const latestAssistantMessage = useMemo(() => {
+    return [...messages].reverse().find((message) => message.role === "assistant");
+  }, [messages]);
+
+  const downloadLatestCoverLetter = useCallback(() => {
+    const content = latestAssistantMessage?.content?.trim();
+    if (!content) return;
+
+    const safeEmployer = (job.employer || "employer")
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase();
+    const safeTitle = (job.title || "job")
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase();
+
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `cover-letter-${safeEmployer}-${safeTitle}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, [job.employer, job.title, latestAssistantMessage]);
+
   const triggerQuickPrompt = useCallback(
     async (prompt: string) => {
       await sendMessage(prompt);
@@ -353,6 +382,18 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
                   </span>
                 </Button>
               ))}
+            </div>
+
+            <div className="mb-3 flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isLoading || isStreaming || !latestAssistantMessage?.content?.trim()}
+                onClick={downloadLatestCoverLetter}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Download Draft
+              </Button>
             </div>
 
             <Composer

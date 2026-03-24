@@ -17,6 +17,8 @@ export async function scoreJobsStep(args: {
   shouldCancel?: () => boolean;
 }): Promise<{ unprocessedJobs: Job[]; scoredJobs: ScoredJob[] }> {
   logger.info("Running scoring step");
+  const dedupeResult = await suppressDuplicateDiscoveredJobs();
+  logger.info("Duplicate suppression completed", dedupeResult);
   const unprocessedJobs = await jobsRepo.getUnscoredDiscoveredJobs();
 
   const [autoSkipThresholdRaw, searchCitiesSetting, selectedCountry] =
@@ -152,9 +154,6 @@ export async function scoreJobsStep(args: {
       });
     },
   });
-
-  const dedupeResult = await suppressDuplicateDiscoveredJobs();
-  logger.info("Duplicate suppression completed", dedupeResult);
 
   progressHelpers.scoringComplete(scoredJobs.length);
   logger.info("Scoring step completed", {

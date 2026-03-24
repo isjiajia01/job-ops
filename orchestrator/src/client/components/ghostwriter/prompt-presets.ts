@@ -19,7 +19,7 @@ export const COVER_LETTER_PROMPTS: GhostwriterPromptPreset[] = [
     description:
       "Direct, modest, employer-need driven, and more restrained in tone.",
     prompt:
-      "Draft a concise Denmark-style cover letter for this job. Keep it to 3 short paragraphs and under 220 words. Use natural first-person voice, but keep the tone direct, modest, practical, and employer-need driven. Focus on why this role fits, how my background can help, and 2 concrete examples from the provided profile. Avoid overselling, exaggerated enthusiasm, and generic praise. Do not invent experience or repeat the CV line by line.",
+      "Draft a concise Denmark-style cover letter for this job. Keep it to 3 short paragraphs and under 220 words. Use natural first-person voice, but keep the tone direct, modest, practical, and employer-need driven. Start with a local, non-template opening and avoid generic salutations like 'Dear Hiring Team' unless no better option is possible. Focus on why this role fits, how my background can help, and 2 concrete examples from the provided profile. End with a short, useful closing that focuses on what I can contribute, not a long polite wrap-up. Use concrete day-to-day details from the provided profile or JD when they make the letter feel more real, but do not invent personal stories or unsupported life details. Avoid overselling, exaggerated enthusiasm, and generic praise. Do not invent experience or repeat the CV line by line.",
   },
   {
     id: "cover-letter-email",

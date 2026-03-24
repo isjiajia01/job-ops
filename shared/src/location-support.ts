@@ -100,7 +100,7 @@ export const SUPPORTED_COUNTRY_INPUTS = [
 ] as const;
 
 const UK_ONLY_SOURCES = new Set<JobSource>(["gradcracker", "ukvisajobs"]);
-const DENMARK_ONLY_SOURCES = new Set<JobSource>(["jobindex"]);
+const DENMARK_ONLY_SOURCES = new Set<JobSource>(["jobindex", "thehub"]);
 const GLASSDOOR_SUPPORTED_COUNTRIES = new Set(
   [
     "australia",

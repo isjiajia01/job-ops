@@ -17,6 +17,7 @@ import type { Job, JobListItem } from "@shared/types.js";
 import {
   CheckCircle2,
   Copy,
+  Download,
   Edit2,
   ExternalLink,
   FileText,
@@ -76,6 +77,7 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   const [hasUnsavedTailoring, setHasUnsavedTailoring] = useState(false);
   const [processingJobId, setProcessingJobId] = useState<string | null>(null);
   const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false);
+  const [latestGhostwriterDraft, setLatestGhostwriterDraft] = useState("");
   const saveTailoringRef = useRef<null | (() => Promise<void>)>(null);
   const previousSelectedJobIdRef = useRef<string | null>(null);
   const markAsAppliedMutation = useMarkAsAppliedMutation();
@@ -103,6 +105,31 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   useEffect(() => {
     return () => onPauseRefreshChange?.(false);
   }, [onPauseRefreshChange]);
+
+  useEffect(() => {
+    if (!selectedJob?.id) {
+      setLatestGhostwriterDraft("");
+      return;
+    }
+
+    let cancelled = false;
+    api
+      .listJobGhostwriterMessages(selectedJob.id, { limit: 100 })
+      .then((data) => {
+        if (cancelled) return;
+        const latestAssistant = [...data.messages]
+          .reverse()
+          .find((message) => message.role === "assistant");
+        setLatestGhostwriterDraft(latestAssistant?.content?.trim() || "");
+      })
+      .catch(() => {
+        if (!cancelled) setLatestGhostwriterDraft("");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedJob?.id]);
 
   const parseJsonSafe = <T,>(value: string | null | undefined, fallback: T): T => {
     if (!value) return fallback;
@@ -358,6 +385,15 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     }
   };
 
+  const handleDownloadCoverLetter = useCallback(() => {
+    if (!selectedJob || !latestGhostwriterDraft) return;
+    window.open(
+      `/job/${selectedJob.id}/cover-letter?print=1`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+  }, [latestGhostwriterDraft, selectedJob]);
+
   const handleJobMoved = useCallback(
     (jobId: string) => {
       const currentIndex = activeJobs.findIndex((job) => job.id === jobId);
@@ -489,6 +525,28 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
               PDF
             </Button>
           ))}
+
+        <Button asChild size="sm" variant="ghost" className="h-8 gap-1.5 text-xs">
+          <a
+            href={`/job/${selectedJob.id}/cover-letter`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            View Cover Letter
+          </a>
+        </Button>
+
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-8 gap-1.5 text-xs"
+          disabled={!latestGhostwriterDraft}
+          onClick={handleDownloadCoverLetter}
+        >
+          <Download className="h-3.5 w-3.5" />
+          Cover Letter PDF
+        </Button>
 
         {showGeneratePdf && (
           <Button

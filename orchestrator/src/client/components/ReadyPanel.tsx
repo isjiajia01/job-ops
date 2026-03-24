@@ -88,11 +88,41 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
   const skipJobMutation = useSkipJobMutation();
 
   const { personName } = useProfile();
+  const [latestGhostwriterDraft, setLatestGhostwriterDraft] = useState<string>(
+    "",
+  );
 
   // Load project catalog once
   useEffect(() => {
     api.getResumeProjectsCatalog().then(setCatalog).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (!job) {
+      setLatestGhostwriterDraft("");
+      return;
+    }
+
+    let cancelled = false;
+    api
+      .listJobGhostwriterMessages(job.id, { limit: 100 })
+      .then((data) => {
+        if (cancelled) return;
+        const latestAssistant = [...data.messages]
+          .reverse()
+          .find((message) => message.role === "assistant");
+        setLatestGhostwriterDraft(latestAssistant?.content?.trim() || "");
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLatestGhostwriterDraft("");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [job?.id]);
 
   // Reset mode when job changes
   useEffect(() => {
@@ -247,6 +277,13 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
     [job?.id, rescoreJob],
   );
 
+  const handleDownloadCoverLetter = useCallback(() => {
+    if (!job || !latestGhostwriterDraft) return;
+    window.open(`/job/${job.id}/cover-letter?print=1`, "_blank", "noopener,noreferrer");
+  }, [job, latestGhostwriterDraft]);
+
+  const coverLetterHref = job ? `/job/${job.id}/cover-letter` : "#";
+
   const handleSkip = useCallback(async () => {
     if (!job) return;
 
@@ -397,12 +434,29 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
             </a>
           </Button>
 
+          <Button asChild variant="outline" className="h-9 w-full gap-1 px-2 text-xs">
+            <a href={coverLetterHref} target="_blank" rel="noopener noreferrer">
+              <FileText className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">View Cover Letter</span>
+            </a>
+          </Button>
+
           {/* Open job - to verify before applying */}
           <OpenJobListingButton
             href={jobLink}
             className="h-9 w-full px-2 text-xs"
             shortcut="o"
           />
+
+          <Button
+            variant="outline"
+            className="h-9 w-full gap-1 px-2 text-xs"
+            disabled={!latestGhostwriterDraft}
+            onClick={handleDownloadCoverLetter}
+          >
+            <Download className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">Download Cover Letter PDF</span>
+          </Button>
 
           {/* Primary CTA: Mark Applied */}
           <Button
