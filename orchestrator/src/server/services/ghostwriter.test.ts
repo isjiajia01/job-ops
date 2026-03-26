@@ -320,6 +320,69 @@ describe("ghostwriter service", () => {
     });
   });
 
+  it("drops obviously overclaiming resumePatch fields before updating the job", async () => {
+    const assistantPartial: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-overclaiming",
+      content: "",
+      status: "partial",
+    };
+    const assistantComplete: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-overclaiming",
+      status: "complete",
+      content: "",
+    };
+
+    mocks.repo.createMessage
+      .mockResolvedValueOnce(baseUserMessage)
+      .mockResolvedValueOnce(assistantPartial);
+    mocks.repo.updateMessage.mockImplementation(async (_id, update) => ({
+      ...assistantComplete,
+      content: update.content ?? "",
+      tokensIn: update.tokensIn ?? null,
+      tokensOut: update.tokensOut ?? null,
+    }));
+    mocks.repo.getMessageById.mockImplementation(async () => {
+      const [, update] = mocks.repo.updateMessage.mock.calls.at(-1) ?? [];
+      return {
+        ...assistantComplete,
+        content: update?.content ?? "",
+      };
+    });
+    mocks.llmCallJson.mockResolvedValue({
+      success: true,
+      data: {
+        response: "I refreshed the current CV draft for this role.",
+        resumePatch: {
+          tailoredSummary:
+            "Senior leader with 10+ years driving enterprise-wide planning transformation.",
+          tailoredHeadline: "Head of Supply Chain Planning",
+          tailoredSkills: [
+            { name: "Planning", keywords: ["forecasting"] },
+            { name: "SAP IBP", keywords: ["global ownership"] },
+          ],
+        },
+      },
+    });
+
+    await sendMessageForJob({
+      jobId: "job-1",
+      content: "Update my CV for this role",
+    });
+
+    expect(mocks.jobs.updateJob).toHaveBeenCalledWith(
+      "job-1",
+      expect.objectContaining({
+        tailoredSummary: undefined,
+        tailoredHeadline: undefined,
+        tailoredSkills: JSON.stringify([
+          { name: "Planning", keywords: ["forecasting"] },
+        ]),
+      }),
+    );
+  });
+
   it("normalizes looser payload shapes instead of failing the request", async () => {
     const assistantPartial: JobChatMessage = {
       ...baseAssistantMessage,

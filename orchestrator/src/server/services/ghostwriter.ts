@@ -8,7 +8,11 @@ import {
 import { logger } from "@infra/logger";
 import { getRequestId } from "@infra/request-context";
 import { sanitizeUnknown } from "@infra/sanitize";
-import type { JobChatMessage, JobChatRun } from "@shared/types";
+import type {
+  GhostwriterSkillGroup,
+  JobChatMessage,
+  JobChatRun,
+} from "@shared/types";
 import {
   getGhostwriterDisplayText,
   normalizeGhostwriterAssistantPayload,
@@ -104,6 +108,72 @@ function isRunningRunUniqueConstraintError(error: unknown): boolean {
     message.includes("idx_job_chat_runs_thread_running_unique") ||
     message.includes("UNIQUE constraint failed: job_chat_runs.thread_id")
   );
+}
+
+const HIGH_RISK_PATCH_PATTERNS = [
+  /\b(?:10\+|[1-9]\d+\+)\s+years?\b/i,
+  /\b(?:led|owned|drove|managed)\s+(?:global|company-?wide|enterprise-?wide)\b/i,
+  /\b(?:head of|director|vp|vice president|chief|principal|staff engineer|senior manager)\b/i,
+  /\b(?:expert in|world-?class|industry-?leading|best-?in-?class)\b/i,
+  /\b(?:sap ibp|kinaxis|o9|anaplan)\b/i,
+];
+
+function containsHighRiskPatchLanguage(
+  value: string | null | undefined,
+): boolean {
+  if (!value) return false;
+  return HIGH_RISK_PATCH_PATTERNS.some((pattern) => pattern.test(value));
+}
+
+function sanitizeResumePatch(
+  patch: NonNullable<
+    NonNullable<
+      ReturnType<typeof normalizeGhostwriterAssistantPayload>
+    >["resumePatch"]
+  >,
+): {
+  sanitized: typeof patch | null;
+  removedFields: string[];
+} {
+  const removedFields: string[] = [];
+
+  let tailoredSummary = patch.tailoredSummary ?? null;
+  if (containsHighRiskPatchLanguage(tailoredSummary)) {
+    removedFields.push("tailoredSummary");
+    tailoredSummary = null;
+  }
+
+  let tailoredHeadline = patch.tailoredHeadline ?? null;
+  if (containsHighRiskPatchLanguage(tailoredHeadline)) {
+    removedFields.push("tailoredHeadline");
+    tailoredHeadline = null;
+  }
+
+  const tailoredSkills =
+    patch.tailoredSkills?.filter((skill: GhostwriterSkillGroup) => {
+      const combined = [skill.name, ...(skill.keywords ?? [])].join(" ");
+      const isSafe = !containsHighRiskPatchLanguage(combined);
+      if (!isSafe) removedFields.push(`tailoredSkills:${skill.name}`);
+      return isSafe;
+    }) ?? null;
+
+  if (
+    !tailoredSummary &&
+    !tailoredHeadline &&
+    (!tailoredSkills || tailoredSkills.length === 0)
+  ) {
+    return { sanitized: null, removedFields };
+  }
+
+  return {
+    sanitized: {
+      tailoredSummary,
+      tailoredHeadline,
+      tailoredSkills:
+        tailoredSkills && tailoredSkills.length > 0 ? tailoredSkills : null,
+    },
+    removedFields,
+  };
 }
 
 async function resolveLlmRuntimeSettings(): Promise<LlmRuntimeSettings> {
@@ -241,11 +311,20 @@ async function applyResumePatchToJob(
 ): Promise<void> {
   if (!payload.resumePatch) return;
 
+  const { sanitized, removedFields } = sanitizeResumePatch(payload.resumePatch);
+  if (removedFields.length > 0) {
+    logger.warn("Ghostwriter resumePatch fields removed by server-side guard", {
+      jobId,
+      removedFields,
+    });
+  }
+  if (!sanitized) return;
+
   await jobsRepo.updateJob(jobId, {
-    tailoredSummary: payload.resumePatch.tailoredSummary ?? undefined,
-    tailoredHeadline: payload.resumePatch.tailoredHeadline ?? undefined,
-    tailoredSkills: payload.resumePatch.tailoredSkills
-      ? JSON.stringify(payload.resumePatch.tailoredSkills)
+    tailoredSummary: sanitized.tailoredSummary ?? undefined,
+    tailoredHeadline: sanitized.tailoredHeadline ?? undefined,
+    tailoredSkills: sanitized.tailoredSkills
+      ? JSON.stringify(sanitized.tailoredSkills)
       : undefined,
   });
 }
