@@ -76,4 +76,54 @@ describe("buildGhostwriterSystemPrompt", () => {
     );
     expect(prompt).toContain("Avoid these terms: synergy, leverage");
   });
+
+  it("adds planning-track and denmark-local presets when the profile matches them", () => {
+    const prompt = buildGhostwriterSystemPrompt(
+      {
+        tone: "professional",
+        formality: "medium",
+        constraints: "",
+        doNotUse: "",
+        languageMode: "manual",
+        manualLanguage: "english",
+      },
+      {
+        basics: {
+          name: "Jiajia Zhang",
+          headline: "Planning Analytics Candidate in Denmark",
+          summary:
+            "DTU candidate focused on planning, forecasting-adjacent analysis, and operations research in Copenhagen.",
+        },
+      },
+    );
+
+    expect(prompt).toContain("Preset layer:");
+    expect(prompt).toContain("Preset: general-track");
+    expect(prompt).toContain("Preset: planning-track");
+    expect(prompt).toContain("Preset: denmark-local");
+  });
+
+  it("keeps only the general preset for a neutral profile", () => {
+    const prompt = buildGhostwriterSystemPrompt(
+      {
+        tone: "professional",
+        formality: "medium",
+        constraints: "",
+        doNotUse: "",
+        languageMode: "manual",
+        manualLanguage: "english",
+      },
+      {
+        basics: {
+          name: "Alex",
+          headline: "Software Engineer",
+          summary: "Builds web applications and internal tools.",
+        },
+      },
+    );
+
+    expect(prompt).toContain("Preset: general-track");
+    expect(prompt).not.toContain("Preset: planning-track");
+    expect(prompt).not.toContain("Preset: denmark-local");
+  });
 });
