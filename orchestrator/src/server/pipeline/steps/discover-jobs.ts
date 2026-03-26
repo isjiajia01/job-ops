@@ -19,6 +19,9 @@ import type { CreateJobInput, PipelineConfig } from "@shared/types";
 import { type CrawlSource, progressHelpers, updateProgress } from "../progress";
 
 const DISCOVERY_CONCURRENCY = 3;
+const THEHUB_TERM_TELEMETRY_KEY = "thehubTermTelemetry";
+const THEHUB_ZERO_HIT_PRUNE_THRESHOLD = 3;
+const THEHUB_COOLDOWN_DAYS = 14;
 
 const JOBSPY_DENMARK_PREFERRED_TERMS = new Set(
   [
@@ -44,11 +47,21 @@ const JOBINDEX_DENMARK_PREFERRED_TERMS = new Set(
   ].map(normalizeSearchTerm),
 );
 
-const THEHUB_DENMARK_DEFAULT_TERMS = [
-  "operations",
-  "analyst",
-  "business analyst",
-];
+const THEHUB_DENMARK_DEFAULT_TERMS = ["operations", "business analyst"];
+
+type TheHubTermTelemetryEntry = {
+  attempts: number;
+  zeroHits: number;
+  positiveRuns: number;
+  jobsFound: number;
+  consecutiveZeroHits: number;
+  lastAttemptedAt: string;
+  lastHitAt: string | null;
+  lastZeroAt: string | null;
+  cooldownUntil: string | null;
+};
+
+type TheHubTermTelemetry = Record<string, TheHubTermTelemetryEntry>;
 
 type DiscoveryTaskResult = {
   discoveredJobs: CreateJobInput[];
@@ -84,10 +97,148 @@ function dedupeSearchTerms(terms: string[]): string[] {
   return out;
 }
 
+function parseTheHubTermTelemetry(
+  raw: string | undefined,
+): TheHubTermTelemetry {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+
+    const entries = Object.entries(parsed).flatMap(([key, value]) => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return [];
+      }
+      const record = value as Record<string, unknown>;
+      return [
+        [
+          normalizeSearchTerm(key),
+          {
+            attempts: typeof record.attempts === "number" ? record.attempts : 0,
+            zeroHits: typeof record.zeroHits === "number" ? record.zeroHits : 0,
+            positiveRuns:
+              typeof record.positiveRuns === "number" ? record.positiveRuns : 0,
+            jobsFound:
+              typeof record.jobsFound === "number" ? record.jobsFound : 0,
+            consecutiveZeroHits:
+              typeof record.consecutiveZeroHits === "number"
+                ? record.consecutiveZeroHits
+                : 0,
+            lastAttemptedAt:
+              typeof record.lastAttemptedAt === "string"
+                ? record.lastAttemptedAt
+                : "",
+            lastHitAt:
+              typeof record.lastHitAt === "string" ? record.lastHitAt : null,
+            lastZeroAt:
+              typeof record.lastZeroAt === "string" ? record.lastZeroAt : null,
+            cooldownUntil:
+              typeof record.cooldownUntil === "string"
+                ? record.cooldownUntil
+                : null,
+          } satisfies TheHubTermTelemetryEntry,
+        ],
+      ];
+    });
+
+    return Object.fromEntries(entries);
+  } catch {
+    return {};
+  }
+}
+
+function shouldPruneTheHubTerm(
+  term: string,
+  telemetry: TheHubTermTelemetry,
+  nowIso: string,
+): boolean {
+  const entry = telemetry[normalizeSearchTerm(term)];
+  if (!entry) return false;
+  if (
+    entry.consecutiveZeroHits < THEHUB_ZERO_HIT_PRUNE_THRESHOLD ||
+    !entry.cooldownUntil
+  ) {
+    return false;
+  }
+  return entry.cooldownUntil > nowIso;
+}
+
+function pruneTheHubTermsWithTelemetry(args: {
+  searchTerms: string[];
+  telemetryRaw: string | undefined;
+}): string[] {
+  const deduped = dedupeSearchTerms(args.searchTerms);
+  const telemetry = parseTheHubTermTelemetry(args.telemetryRaw);
+  const nowIso = new Date().toISOString();
+  const filtered = deduped.filter(
+    (term) => !shouldPruneTheHubTerm(term, telemetry, nowIso),
+  );
+  return filtered.length > 0 ? filtered : deduped.slice(0, 1);
+}
+
+async function updateTheHubTermTelemetry(args: {
+  telemetryRaw: string | undefined;
+  attemptedTerms: string[];
+  termHitCounts: Record<string, number> | undefined;
+}): Promise<void> {
+  const telemetry = parseTheHubTermTelemetry(args.telemetryRaw);
+  const now = new Date();
+  const nowIso = now.toISOString();
+
+  for (const term of dedupeSearchTerms(args.attemptedTerms)) {
+    const key = normalizeSearchTerm(term);
+    const hits = Math.max(0, args.termHitCounts?.[term] ?? 0);
+    const previous = telemetry[key] ?? {
+      attempts: 0,
+      zeroHits: 0,
+      positiveRuns: 0,
+      jobsFound: 0,
+      consecutiveZeroHits: 0,
+      lastAttemptedAt: "",
+      lastHitAt: null,
+      lastZeroAt: null,
+      cooldownUntil: null,
+    };
+
+    const next: TheHubTermTelemetryEntry = {
+      ...previous,
+      attempts: previous.attempts + 1,
+      jobsFound: previous.jobsFound + hits,
+      lastAttemptedAt: nowIso,
+    };
+
+    if (hits > 0) {
+      next.positiveRuns = previous.positiveRuns + 1;
+      next.consecutiveZeroHits = 0;
+      next.lastHitAt = nowIso;
+      next.cooldownUntil = null;
+    } else {
+      next.zeroHits = previous.zeroHits + 1;
+      next.consecutiveZeroHits = previous.consecutiveZeroHits + 1;
+      next.lastZeroAt = nowIso;
+      if (next.consecutiveZeroHits >= THEHUB_ZERO_HIT_PRUNE_THRESHOLD) {
+        const cooldownUntil = new Date(now);
+        cooldownUntil.setDate(cooldownUntil.getDate() + THEHUB_COOLDOWN_DAYS);
+        next.cooldownUntil = cooldownUntil.toISOString();
+      }
+    }
+
+    telemetry[key] = next;
+  }
+
+  await settingsRepo.setSetting(
+    THEHUB_TERM_TELEMETRY_KEY,
+    JSON.stringify(telemetry),
+  );
+}
+
 function pruneSearchTermsForManifest(args: {
   manifestId: string;
   selectedCountry: string;
   searchTerms: string[];
+  settings: Partial<Record<settingsRepo.SettingKey, string>>;
 }): string[] {
   const deduped = dedupeSearchTerms(args.searchTerms);
   if (deduped.length <= 1) return deduped;
@@ -97,7 +248,10 @@ function pruneSearchTermsForManifest(args: {
   }
 
   if (args.manifestId === "thehub") {
-    return [...THEHUB_DENMARK_DEFAULT_TERMS];
+    return pruneTheHubTermsWithTelemetry({
+      searchTerms: THEHUB_DENMARK_DEFAULT_TERMS,
+      telemetryRaw: args.settings[THEHUB_TERM_TELEMETRY_KEY],
+    });
   }
 
   const preferredTerms =
@@ -260,6 +414,7 @@ export async function discoverJobsStep(args: {
       manifestId,
       selectedCountry,
       searchTerms,
+      settings,
     });
 
     sourceTasks.push({
@@ -316,6 +471,14 @@ export async function discoverJobsStep(args: {
               `${manifest.displayName || manifest.id}: ${result.error ?? "unknown error"} (sources: ${grouped.sources.join(",")})`,
             ],
           };
+        }
+
+        if (manifest.id === "thehub") {
+          await updateTheHubTermTelemetry({
+            telemetryRaw: settings[THEHUB_TERM_TELEMETRY_KEY],
+            attemptedTerms: manifestSearchTerms,
+            termHitCounts: result.termHitCounts,
+          });
         }
 
         return {

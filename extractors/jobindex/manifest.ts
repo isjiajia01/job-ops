@@ -76,7 +76,8 @@ export const manifest: ExtractorManifest = {
       selectedCountry: context.selectedCountry,
       searchTerms: context.searchTerms,
       locations: resolveSearchCities({
-        single: context.settings.searchCities ?? context.settings.jobspyLocation,
+        single:
+          context.settings.searchCities ?? context.settings.jobspyLocation,
       }),
       maxJobsPerTerm,
       preferredPagesPerTerm: strictLocationRequested ? 4 : 2,

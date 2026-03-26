@@ -331,6 +331,7 @@ export const OrchestratorPage: React.FC = () => {
         isCancelling={isCancelling}
         pipelineSources={pipelineSources}
         onOpenAutomaticRun={() => openRunMode("automatic")}
+        onOpenManualImport={() => openRunMode("manual")}
         onCancelPipeline={handleCancelPipeline}
       />
 

@@ -14,10 +14,9 @@ import {
   CheckCircle2,
   ClipboardList,
   Copy,
-  Download,
   DollarSign,
+  Download,
   Edit2,
-  ExternalLink,
   FileText,
   MoreHorizontal,
   PlusCircle,
@@ -35,9 +34,12 @@ import {
   useMarkAsAppliedMutation,
   useRescoreJobMutation,
   useSkipJobMutation,
+  useUnapplyJobMutation,
   useUpdateJobMutation,
 } from "@/client/hooks/queries/useJobMutations";
 import { useQueryErrorToast } from "@/client/hooks/useQueryErrorToast";
+import { downloadCoverLetterPdfForJob } from "@/client/lib/cover-letter-pdf";
+import { downloadCvPdfForJob } from "@/client/lib/cv-pdf";
 import { queryKeys } from "@/client/lib/queryKeys";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,7 +54,6 @@ import {
 import {
   copyTextToClipboard,
   formatJobForWebhook,
-  safeFilenamePart,
   formatTimestamp,
 } from "@/lib/utils";
 import * as api from "../api";
@@ -78,8 +79,6 @@ export const JobPage: React.FC = () => {
   const [editingEvent, setEditingEvent] = React.useState<StageEvent | null>(
     null,
   );
-  const [latestGhostwriterDraft, setLatestGhostwriterDraft] =
-    React.useState("");
   const pendingEventRef = React.useRef<StageEvent | null>(null);
 
   const jobQuery = useQuery<Job | null>({
@@ -112,6 +111,7 @@ export const JobPage: React.FC = () => {
   );
 
   const markAsAppliedMutation = useMarkAsAppliedMutation();
+  const unapplyJobMutation = useUnapplyJobMutation();
   const updateJobMutation = useUpdateJobMutation();
   const skipJobMutation = useSkipJobMutation();
   const rescoreJobMutation = useRescoreJobMutation();
@@ -123,31 +123,6 @@ export const JobPage: React.FC = () => {
   const tasks = tasksQuery.data ?? [];
   const isLoading =
     jobQuery.isLoading || eventsQuery.isLoading || tasksQuery.isLoading;
-
-  React.useEffect(() => {
-    if (!job?.id) {
-      setLatestGhostwriterDraft("");
-      return;
-    }
-
-    let cancelled = false;
-    api
-      .listJobGhostwriterMessages(job.id, { limit: 100 })
-      .then((data) => {
-        if (cancelled) return;
-        const latestAssistant = [...data.messages]
-          .reverse()
-          .find((message) => message.role === "assistant");
-        setLatestGhostwriterDraft(latestAssistant?.content?.trim() || "");
-      })
-      .catch(() => {
-        if (!cancelled) setLatestGhostwriterDraft("");
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [job?.id]);
 
   const loadData = React.useCallback(async () => {
     if (!id) return;
@@ -292,19 +267,15 @@ export const JobPage: React.FC = () => {
   };
 
   const handleDownloadCoverLetter = React.useCallback(() => {
-    if (!job || !latestGhostwriterDraft) return;
-    const blob = new Blob([latestGhostwriterDraft], {
-      type: "text/plain;charset=utf-8",
+    if (!job) return;
+    void downloadCoverLetterPdfForJob(job.id).catch((error) => {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to download cover letter PDF";
+      toast.error(message);
     });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${safeFilenamePart(job.employer || "Unknown")}_${safeFilenamePart(job.title || "job")}_cover_letter.txt`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-  }, [job, latestGhostwriterDraft]);
+  }, [job]);
 
   const handleMoveToInProgress = async () => {
     await runAction("move-in-progress", async () => {
@@ -314,6 +285,14 @@ export const JobPage: React.FC = () => {
         update: { status: "in_progress" },
       });
       toast.success("Moved to in progress");
+    });
+  };
+
+  const handleMoveBackToReady = async () => {
+    await runAction("move-back-ready", async () => {
+      if (!job) return;
+      await unapplyJobMutation.mutateAsync(job.id);
+      toast.success("Moved back to ready");
     });
   };
 
@@ -370,10 +349,10 @@ export const JobPage: React.FC = () => {
   const isClosedStage = currentStage === "closed";
   const canTrackStages = job?.status === "in_progress";
   const canLogEvents = canTrackStages && !isClosedStage;
-  const jobLink = job ? job.applicationLink || job.jobUrl : null;
   const pdfHref = job?.pdfPath
     ? `/pdfs/resume_${job.id}.pdf?v=${encodeURIComponent(job.updatedAt)}`
     : null;
+  const cvHref = job ? `/job/${job.id}/cv` : null;
   const isBusy = activeAction !== null;
   const isDiscovered = job?.status === "discovered";
   const isReady = job?.status === "ready";
@@ -409,16 +388,44 @@ export const JobPage: React.FC = () => {
         <div className="rounded-xl border border-border/60 bg-card/80 p-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/65">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
-              {jobLink && (
+              {(pdfHref || cvHref) && (
                 <Button
                   asChild
                   size="sm"
                   className="h-9 border border-orange-400/50 bg-orange-500/20 text-orange-100 hover:bg-orange-500/30"
                 >
-                  <a href={jobLink} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                    Open Job Listing
+                  <a
+                    href={pdfHref || cvHref || "#"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <FileText className="mr-1.5 h-3.5 w-3.5" />
+                    View CV
                   </a>
+                </Button>
+              )}
+
+              {job && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9 border-border/60 bg-background/30"
+                  onClick={() => {
+                    if (job.pdfPath && pdfHref) {
+                      window.open(pdfHref, "_blank", "noopener,noreferrer");
+                      return;
+                    }
+                    void downloadCvPdfForJob(job.id).catch((error) => {
+                      const message =
+                        error instanceof Error
+                          ? error.message
+                          : "Failed to download CV PDF";
+                      toast.error(message);
+                    });
+                  }}
+                >
+                  <Download className="mr-1.5 h-3.5 w-3.5" />
+                  Download CV PDF
                 </Button>
               )}
 
@@ -445,6 +452,19 @@ export const JobPage: React.FC = () => {
                     Skip Job
                   </Button>
                 </>
+              )}
+
+              {isApplied && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9 border-border/60 bg-background/30"
+                  onClick={handleMoveBackToReady}
+                  disabled={isBusy}
+                >
+                  <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
+                  Move Back To Ready
+                </Button>
               )}
 
               {isDiscovered && (
@@ -510,16 +530,20 @@ export const JobPage: React.FC = () => {
                 </Button>
               )}
 
-              {pdfHref && (
+              {(pdfHref || cvHref) && (
                 <Button
                   asChild
                   size="sm"
                   variant="outline"
                   className="h-9 border-border/60 bg-background/30"
                 >
-                  <a href={pdfHref} target="_blank" rel="noopener noreferrer">
+                  <a
+                    href={pdfHref || cvHref || "#"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     <FileText className="mr-1.5 h-3.5 w-3.5" />
-                    View PDF
+                    View CV
                   </a>
                 </Button>
               )}
@@ -545,7 +569,6 @@ export const JobPage: React.FC = () => {
                 variant="outline"
                 className="h-9 border-border/60 bg-background/30"
                 onClick={handleDownloadCoverLetter}
-                disabled={!latestGhostwriterDraft}
               >
                 <Download className="mr-1.5 h-3.5 w-3.5" />
                 Download Cover Letter PDF

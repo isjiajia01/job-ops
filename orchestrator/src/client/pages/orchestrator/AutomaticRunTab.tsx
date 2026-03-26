@@ -308,6 +308,8 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
     isSaving ||
     compatiblePipelineSources.length === 0 ||
     values.searchTerms.length === 0;
+  const showTheHubHint =
+    values.country === "denmark" && enabledSources.includes("thehub");
 
   const applyPreset = (presetId: AutomaticPresetId) => {
     const preset = AUTOMATIC_PRESETS[presetId];
@@ -508,48 +510,58 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
               {compatibleEnabledSources.length})
             </CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
-            <TooltipProvider>
-              {enabledSources.map((source) => {
-                const countryAllowed = isSourceAllowedForCountry(
-                  source,
-                  values.country,
-                );
-                const allowed = isSourceAvailableForRun(source);
-                const selected = compatiblePipelineSources.includes(source);
-                const disabledReason = getSourceDisabledReason(
-                  source,
-                  countryAllowed,
-                );
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <TooltipProvider>
+                {enabledSources.map((source) => {
+                  const countryAllowed = isSourceAllowedForCountry(
+                    source,
+                    values.country,
+                  );
+                  const allowed = isSourceAvailableForRun(source);
+                  const selected = compatiblePipelineSources.includes(source);
+                  const disabledReason = getSourceDisabledReason(
+                    source,
+                    countryAllowed,
+                  );
 
-                const button = (
-                  <Button
-                    key={source}
-                    type="button"
-                    size="sm"
-                    variant={selected ? "default" : "outline"}
-                    disabled={!allowed}
-                    title={!allowed ? disabledReason : undefined}
-                    onClick={() => onToggleSource(source, !selected)}
-                  >
-                    {sourceLabel[source]}
-                  </Button>
-                );
+                  const button = (
+                    <Button
+                      key={source}
+                      type="button"
+                      size="sm"
+                      variant={selected ? "default" : "outline"}
+                      disabled={!allowed}
+                      title={!allowed ? disabledReason : undefined}
+                      onClick={() => onToggleSource(source, !selected)}
+                    >
+                      {sourceLabel[source]}
+                    </Button>
+                  );
 
-                if (allowed) {
-                  return button;
-                }
+                  if (allowed) {
+                    return button;
+                  }
 
-                return (
-                  <Tooltip key={source}>
-                    <TooltipTrigger asChild>
-                      <span className="inline-flex">{button}</span>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">{disabledReason}</TooltipContent>
-                  </Tooltip>
-                );
-              })}
-            </TooltipProvider>
+                  return (
+                    <Tooltip key={source}>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex">{button}</span>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        {disabledReason}
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                })}
+              </TooltipProvider>
+            </div>
+            {showTheHubHint ? (
+              <p className="text-sm text-muted-foreground">
+                The Hub is Denmark-only and startup-heavy, so JobOps narrows it
+                to adjacent operations and business-analysis roles by default.
+              </p>
+            ) : null}
           </CardContent>
         </Card>
       </div>

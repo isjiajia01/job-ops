@@ -65,15 +65,20 @@ export const manifest: ExtractorManifest = {
       shouldApplyStrictCityFilter(location, context.selectedCountry),
     );
 
+    const termHitCounts: Record<string, number> = {};
     const result = await runTheHub({
       selectedCountry: context.selectedCountry,
       searchTerms: context.searchTerms,
       locations: resolveSearchCities({
-        single: context.settings.searchCities ?? context.settings.jobspyLocation,
+        single:
+          context.settings.searchCities ?? context.settings.jobspyLocation,
       }),
       preferredPages: strictLocationRequested ? 10 : 6,
       shouldCancel: context.shouldCancel,
       onProgress: (event) => {
+        if (event.type === "term_complete") {
+          termHitCounts[event.searchTerm] = event.jobsFoundTerm;
+        }
         if (context.shouldCancel?.()) return;
         context.onProgress?.(toProgress(event));
       },
@@ -90,6 +95,7 @@ export const manifest: ExtractorManifest = {
     return {
       success: true,
       jobs: result.jobs,
+      termHitCounts,
     };
   },
 };

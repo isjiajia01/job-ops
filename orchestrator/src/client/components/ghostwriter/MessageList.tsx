@@ -1,4 +1,8 @@
 import type { JobChatMessage } from "@shared/types";
+import {
+  getGhostwriterDisplayText,
+  parseGhostwriterAssistantContent,
+} from "@shared/utils/ghostwriter";
 import type React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -24,6 +28,10 @@ export const MessageList: React.FC<MessageListProps> = ({
             isStreaming &&
             message.role === "assistant" &&
             streamingMessageId === message.id;
+          const parsedAssistant =
+            message.role === "assistant"
+              ? parseGhostwriterAssistantContent(message.content)
+              : null;
 
           return (
             <div
@@ -42,10 +50,24 @@ export const MessageList: React.FC<MessageListProps> = ({
               {isActiveStreaming ? (
                 <StreamingMessage content={message.content} />
               ) : message.role === "assistant" ? (
-                <div className="text-sm leading-relaxed text-foreground [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l [&_blockquote]:border-border [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-muted/40 [&_code]:px-1 [&_h1]:mt-4 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:mt-4 [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_li]:my-1 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-muted/40 [&_pre]:p-3 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {message.content || "..."}
-                  </ReactMarkdown>
+                <div className="space-y-2">
+                  <div className="text-sm leading-relaxed text-foreground [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l [&_blockquote]:border-border [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-muted/40 [&_code]:px-1 [&_h1]:mt-4 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:mt-4 [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_li]:my-1 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-muted/40 [&_pre]:p-3 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {getGhostwriterDisplayText(message.content) || "..."}
+                    </ReactMarkdown>
+                  </div>
+                  {parsedAssistant?.resumePatch ? (
+                    <div className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[11px] text-emerald-900">
+                      Updated the job-specific CV draft for this role.
+                    </div>
+                  ) : null}
+                  {parsedAssistant?.coverLetterDraft ? (
+                    <div className="rounded-md border border-sky-200 bg-sky-50 px-2.5 py-2 text-[11px] text-sky-900">
+                      {parsedAssistant.coverLetterKind === "email"
+                        ? "Application email draft is ready for preview/export."
+                        : "Cover letter draft is ready for preview/export."}
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">

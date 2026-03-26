@@ -18,11 +18,7 @@
         "team leadership"
       ],
       "shouldRewriteExperience": true,
-      "preferredSectionOrderPrefix": [
-        "summary",
-        "skills",
-        "experience"
-      ]
+      "preferredSectionOrderPrefix": ["summary", "skills", "experience"]
     }
   },
   {
@@ -37,16 +33,9 @@
         "transport",
         "reporting"
       ],
-      "forbiddenKeywords": [
-        "software architecture",
-        "clinical operations"
-      ],
+      "forbiddenKeywords": ["software architecture", "clinical operations"],
       "shouldRewriteExperience": true,
-      "preferredSectionOrderPrefix": [
-        "summary",
-        "skills",
-        "experience"
-      ]
+      "preferredSectionOrderPrefix": ["summary", "skills", "experience"]
     }
   },
   {
@@ -55,22 +44,10 @@
     "jobDescription": "Brøndby-based disponent role responsible for dispatch planning, route coordination, customer follow-up, transport operations, and day-to-day logistics planning. The ideal candidate is structured, calm under pressure, analytical, and able to coordinate multiple stakeholders.",
     "expected": {
       "headline": "Disponent",
-      "requiredKeywords": [
-        "dispatch",
-        "transport",
-        "planning",
-        "coordination"
-      ],
-      "forbiddenKeywords": [
-        "product strategy",
-        "software engineering"
-      ],
+      "requiredKeywords": ["dispatch", "transport", "planning", "coordination"],
+      "forbiddenKeywords": ["product strategy", "software engineering"],
       "shouldRewriteExperience": true,
-      "preferredSectionOrderPrefix": [
-        "summary",
-        "skills",
-        "experience"
-      ]
+      "preferredSectionOrderPrefix": ["summary", "skills", "experience"]
     }
   }
 ]

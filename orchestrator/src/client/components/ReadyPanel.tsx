@@ -25,6 +25,8 @@ import {
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { downloadCoverLetterPdfForJob } from "@/client/lib/cover-letter-pdf";
+import { downloadCvPdfForJob } from "@/client/lib/cv-pdf";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -44,6 +46,7 @@ import * as api from "../api";
 import {
   useMarkAsAppliedMutation,
   useSkipJobMutation,
+  useUnapplyJobMutation,
 } from "../hooks/queries/useJobMutations";
 import { useProfile } from "../hooks/useProfile";
 import { useRescoreJob } from "../hooks/useRescoreJob";
@@ -52,7 +55,6 @@ import { TailorMode } from "./discovered-panel/TailorMode";
 import { GhostwriterDrawer } from "./ghostwriter/GhostwriterDrawer";
 import { JobDetailsEditDrawer } from "./JobDetailsEditDrawer";
 import { KbdHint } from "./KbdHint";
-import { OpenJobListingButton } from "./OpenJobListingButton";
 import { ReadySummaryAccordion } from "./ReadySummaryAccordion";
 import { buildReadyPanelGoogleDorks } from "./ready-panel-google-dorks";
 
@@ -85,44 +87,15 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
   } | null>(null);
   const previousJobIdRef = useRef<string | null>(null);
   const markAsAppliedMutation = useMarkAsAppliedMutation();
+  const unapplyJobMutation = useUnapplyJobMutation();
   const skipJobMutation = useSkipJobMutation();
 
   const { personName } = useProfile();
-  const [latestGhostwriterDraft, setLatestGhostwriterDraft] = useState<string>(
-    "",
-  );
 
   // Load project catalog once
   useEffect(() => {
     api.getResumeProjectsCatalog().then(setCatalog).catch(console.error);
   }, []);
-
-  useEffect(() => {
-    if (!job) {
-      setLatestGhostwriterDraft("");
-      return;
-    }
-
-    let cancelled = false;
-    api
-      .listJobGhostwriterMessages(job.id, { limit: 100 })
-      .then((data) => {
-        if (cancelled) return;
-        const latestAssistant = [...data.messages]
-          .reverse()
-          .find((message) => message.role === "assistant");
-        setLatestGhostwriterDraft(latestAssistant?.content?.trim() || "");
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLatestGhostwriterDraft("");
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [job?.id]);
 
   // Reset mode when job changes
   useEffect(() => {
@@ -148,8 +121,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
   const pdfHref = job
     ? `/pdfs/resume_${job.id}.pdf?v=${encodeURIComponent(job.updatedAt)}`
     : "#";
-
-  const jobLink = job ? job.applicationLink || job.jobUrl : "#";
+  const cvHref = job ? `/job/${job.id}/cv` : "#";
 
   const selectedProjectIds = useMemo(() => {
     return job?.selectedProjectIds?.split(",").filter(Boolean) ?? [];
@@ -162,8 +134,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
   const handleUndoApplied = useCallback(
     async (jobId: string) => {
       try {
-        // Revert to ready status
-        await api.updateJob(jobId, { status: "ready" });
+        await unapplyJobMutation.mutateAsync(jobId);
         trackProductEvent("jobs_job_action_completed", {
           action: "move_to_ready",
           result: "success",
@@ -189,7 +160,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
         toast.error(message);
       }
     },
-    [onJobUpdated, recentlyApplied],
+    [onJobUpdated, recentlyApplied, unapplyJobMutation],
   );
 
   // Handle mark as applied with undo capability
@@ -278,9 +249,15 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
   );
 
   const handleDownloadCoverLetter = useCallback(() => {
-    if (!job || !latestGhostwriterDraft) return;
-    window.open(`/job/${job.id}/cover-letter?print=1`, "_blank", "noopener,noreferrer");
-  }, [job, latestGhostwriterDraft]);
+    if (!job) return;
+    void downloadCoverLetterPdfForJob(job.id).catch((error) => {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to download cover letter PDF";
+      toast.error(message);
+    });
+  }, [job]);
 
   const coverLetterHref = job ? `/job/${job.id}/cover-letter` : "#";
 
@@ -419,39 +396,71 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
           />
 
           {/* Download PDF - primary artifact action */}
+          {job.pdfPath ? (
+            <Button
+              asChild
+              variant="outline"
+              className="h-9 w-full gap-1 px-2 text-xs"
+            >
+              <a
+                href={pdfHref}
+                download={`${safeFilenamePart(personName || "Unknown")}_${safeFilenamePart(job.employer || "Unknown")}.pdf`}
+              >
+                <Download className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">Download PDF</span>
+                <KbdHint shortcut="d" className="ml-auto" />
+              </a>
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              className="h-9 w-full gap-1 px-2 text-xs"
+              onClick={() => {
+                void downloadCvPdfForJob(job.id).catch((error) => {
+                  const message =
+                    error instanceof Error
+                      ? error.message
+                      : "Failed to download CV PDF";
+                  toast.error(message);
+                });
+              }}
+            >
+              <Download className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Download PDF</span>
+              <KbdHint shortcut="d" className="ml-auto" />
+            </Button>
+          )}
+
           <Button
             asChild
             variant="outline"
             className="h-9 w-full gap-1 px-2 text-xs"
           >
-            <a
-              href={pdfHref}
-              download={`${safeFilenamePart(personName || "Unknown")}_${safeFilenamePart(job.employer || "Unknown")}.pdf`}
-            >
-              <Download className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">Download PDF</span>
-              <KbdHint shortcut="d" className="ml-auto" />
-            </a>
-          </Button>
-
-          <Button asChild variant="outline" className="h-9 w-full gap-1 px-2 text-xs">
             <a href={coverLetterHref} target="_blank" rel="noopener noreferrer">
               <FileText className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">View Cover Letter</span>
             </a>
           </Button>
 
-          {/* Open job - to verify before applying */}
-          <OpenJobListingButton
-            href={jobLink}
-            className="h-9 w-full px-2 text-xs"
-            shortcut="o"
-          />
+          <Button
+            asChild
+            variant="outline"
+            className="h-9 w-full gap-1 px-2 text-xs"
+          >
+            <a
+              href={job.pdfPath ? pdfHref : cvHref}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <FileText className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">View CV</span>
+              <KbdHint shortcut="o" className="ml-auto" />
+            </a>
+          </Button>
 
           <Button
             variant="outline"
             className="h-9 w-full gap-1 px-2 text-xs"
-            disabled={!latestGhostwriterDraft}
             onClick={handleDownloadCoverLetter}
           >
             <Download className="h-3.5 w-3.5 shrink-0" />

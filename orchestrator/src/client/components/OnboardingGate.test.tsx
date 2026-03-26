@@ -1,6 +1,6 @@
 import * as api from "@client/api";
 import { useSettings } from "@client/hooks/useSettings";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import type React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithQueryClient } from "../test/renderWithQueryClient";
@@ -12,7 +12,6 @@ const render = (ui: Parameters<typeof renderWithQueryClient>[0]) =>
 vi.mock("@client/api", () => ({
   getDemoInfo: vi.fn(),
   validateLlm: vi.fn(),
-  validateRxresume: vi.fn(),
   validateResumeConfig: vi.fn(),
   updateSettings: vi.fn(),
 }));
@@ -34,10 +33,6 @@ vi.mock("@client/pages/settings/components/SettingsInput", () => ({
       <input {...inputProps} />
     </label>
   ),
-}));
-
-vi.mock("@client/pages/settings/components/BaseResumeSelection", () => ({
-  BaseResumeSelection: () => <div>Base resume selection</div>,
 }));
 
 vi.mock("@/components/ui/alert-dialog", () => ({
@@ -134,10 +129,6 @@ describe("OnboardingGate", () => {
       valid: false,
       message: "Invalid",
     });
-    vi.mocked(api.validateRxresume).mockResolvedValue({
-      valid: true,
-      message: null,
-    });
     vi.mocked(api.validateResumeConfig).mockResolvedValue({
       valid: true,
       message: null,
@@ -156,14 +147,10 @@ describe("OnboardingGate", () => {
       ...settingsResponse,
       settings: {
         ...settingsResponse.settings,
-        rxresumeApiKeyHint: "abcd1234",
+        llmApiKeyHint: "abcd1234",
       },
     } as any);
     vi.mocked(api.validateLlm).mockResolvedValue({
-      valid: true,
-      message: null,
-    });
-    vi.mocked(api.validateRxresume).mockResolvedValue({
       valid: true,
       message: null,
     });
@@ -186,10 +173,6 @@ describe("OnboardingGate", () => {
         llmProvider: { value: "ollama", default: "ollama", override: null },
       },
     } as any);
-    vi.mocked(api.validateRxresume).mockResolvedValue({
-      valid: false,
-      message: "Missing",
-    });
     vi.mocked(api.validateResumeConfig).mockResolvedValue({
       valid: true,
       message: null,
@@ -199,54 +182,35 @@ describe("OnboardingGate", () => {
 
     await waitFor(() => expect(api.validateResumeConfig).toHaveBeenCalled());
     expect(api.validateLlm).not.toHaveBeenCalled();
-    expect(api.validateRxresume).not.toHaveBeenCalled();
-    await waitFor(() => {
-      expect(screen.getByText("Welcome to Job Ops")).toBeInTheDocument();
-    });
+    expect(screen.queryByText("Welcome to Job Ops")).not.toBeInTheDocument();
     expect(screen.queryByText("LLM API key")).not.toBeInTheDocument();
   });
 
-  it("renders the RxResume URL field and includes it in validation", async () => {
+  it("shows the profile step when internal profile validation fails", async () => {
     vi.mocked(useSettings).mockReturnValue({
       ...settingsResponse,
       settings: {
         ...settingsResponse.settings,
-        rxresumeUrl: "https://resume.example.com",
-        rxresumeApiKeyHint: "abcd1234",
+        llmApiKeyHint: "abcd1234",
       },
     } as any);
     vi.mocked(api.validateLlm).mockResolvedValue({
-      valid: false,
-      message: "Invalid",
-    });
-    vi.mocked(api.validateRxresume).mockResolvedValue({
       valid: true,
       message: null,
     });
     vi.mocked(api.validateResumeConfig).mockResolvedValue({
-      valid: true,
-      message: null,
+      valid: false,
+      message: "No internal candidate profile found yet.",
     });
 
     render(<OnboardingGate />);
 
-    await waitFor(() =>
-      expect(screen.getByLabelText("RxResume URL")).toBeInTheDocument(),
-    );
-    await waitFor(() =>
-      expect(api.validateRxresume).toHaveBeenCalledWith(
-        expect.objectContaining({
-          baseUrl: "https://resume.example.com",
-        }),
-      ),
-    );
-
-    fireEvent.change(screen.getByLabelText("RxResume URL"), {
-      target: { value: "https://self-hosted.example.com" },
+    await waitFor(() => {
+      expect(screen.getByText("Profile Hub")).toBeInTheDocument();
     });
-
     expect(
-      screen.getByDisplayValue("https://self-hosted.example.com"),
+      screen.getByText("No internal candidate profile found yet."),
     ).toBeInTheDocument();
+    expect(screen.getByText("Open Profile Hub")).toBeInTheDocument();
   });
 });

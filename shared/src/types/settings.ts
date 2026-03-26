@@ -12,6 +12,26 @@ export interface ResumeProjectsSettings {
   aiSelectableProjectIds: string[];
 }
 
+export interface CandidateKnowledgeFact {
+  id: string;
+  title: string;
+  detail: string;
+}
+
+export interface CandidateKnowledgeProject {
+  id: string;
+  name: string;
+  summary: string;
+  keywords: string[];
+  role: string | null;
+  impact: string | null;
+}
+
+export interface CandidateKnowledgeBase {
+  personalFacts: CandidateKnowledgeFact[];
+  projects: CandidateKnowledgeProject[];
+}
+
 export type RxResumeMode = "v4" | "v5";
 
 export const CHAT_STYLE_LANGUAGE_MODE_VALUES = [
@@ -201,4 +221,6 @@ export interface AppSettings {
   // Computed:
   basicAuthActive: boolean;
   profileProjects: ResumeProjectCatalogItem[];
+  candidateKnowledgeBase: Resolved<CandidateKnowledgeBase>;
+  candidateResumeProfile: Resolved<ResumeProfile>;
 }

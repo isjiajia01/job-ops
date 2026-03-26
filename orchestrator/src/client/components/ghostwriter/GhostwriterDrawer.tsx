@@ -35,7 +35,7 @@ export const GhostwriterDrawer: React.FC<GhostwriterDrawerProps> = ({
           disabled={!job}
         >
           <PanelRightOpen className="h-3.5 w-3.5" />
-          Ghostwriter
+          AI Copilot
         </Button>
       </SheetTrigger>
 
@@ -45,7 +45,7 @@ export const GhostwriterDrawer: React.FC<GhostwriterDrawerProps> = ({
       >
         <div className="border-b border-border/50 p-4">
           <SheetHeader>
-            <SheetTitle>Ghostwriter</SheetTitle>
+            <SheetTitle>AI Copilot</SheetTitle>
             <SheetDescription>
               {job && `${job.title} at ${job.employer}.`}
             </SheetDescription>

@@ -1,26 +1,21 @@
 import * as api from "@client/api";
 import type { Job, JobChatMessage, JobChatStreamEvent } from "@shared/types";
-import { Download } from "lucide-react";
+import { getGhostwriterCoverLetterDraft } from "@shared/utils/ghostwriter";
+import { ChevronRight, Download, FileText } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { CollapsibleSection } from "../discovered-panel/CollapsibleSection";
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
-import { COVER_LETTER_PROMPTS } from "./prompt-presets";
+import { AI_ENTRY_PROMPTS, COVER_LETTER_PROMPTS } from "./prompt-presets";
 
 type GhostwriterPanelProps = {
   job: Job;
 };
 
 export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
-  const [activeTab, setActiveTab] = useState("chat");
   const [messages, setMessages] = useState<JobChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -28,6 +23,9 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
     null,
   );
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [quickActionsOpen, setQuickActionsOpen] = useState(false);
+  const [cvActionsOpen, setCvActionsOpen] = useState(false);
+  const [coverActionsOpen, setCoverActionsOpen] = useState(false);
 
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
@@ -214,11 +212,15 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
   }, [isStreaming, messages]);
 
   const latestAssistantMessage = useMemo(() => {
-    return [...messages].reverse().find((message) => message.role === "assistant");
+    return [...messages]
+      .reverse()
+      .find((message) => message.role === "assistant");
   }, [messages]);
 
   const downloadLatestCoverLetter = useCallback(() => {
-    const content = latestAssistantMessage?.content?.trim();
+    const content = latestAssistantMessage
+      ? getGhostwriterCoverLetterDraft(latestAssistantMessage.content)
+      : "";
     if (!content) return;
 
     const safeEmployer = (job.employer || "employer")
@@ -249,9 +251,7 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
   );
 
   const composerPlaceholder =
-    activeTab === "cover-letter"
-      ? "Ask for a cover letter, email version, or a rewrite..."
-      : "Ask anything about this job...";
+    "Ask anything about this job, your CV, or the cover letter...";
 
   const regenerate = useCallback(async () => {
     if (isStreaming || messages.length === 0) return;
@@ -287,127 +287,152 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
-      <Tabs
-        value={activeTab}
-        onValueChange={setActiveTab}
-        className="flex min-h-0 flex-1 flex-col"
-      >
-        <TabsList className="mb-3 h-auto w-full justify-start gap-1">
-          <TabsTrigger value="chat" className="text-xs">
-            Chat
-          </TabsTrigger>
-          <TabsTrigger value="cover-letter" className="text-xs">
-            Cover Letter
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="chat" className="mt-0 flex min-h-0 flex-1 flex-col">
-          <div
-            ref={messageListRef}
-            className="min-h-0 flex-1 overflow-y-auto border-b border-border/50 pb-3 pr-1"
-          >
-            {messages.length === 0 && !isLoading ? (
-              <div className="flex h-full min-h-[260px] justify-center px-3 flex-col text-left">
-                <h4 className="font-medium">
-                  {job.title} at {job.employer}
-                </h4>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  Ghostwriter already has this job description, your resume and your
-                  writing style preferences. Ask for tailored response drafts,
-                  concise role-fit talking points, or specific rewrite help.
-                </p>
-              </div>
-            ) : (
-              <MessageList
-                messages={messages}
-                isStreaming={isStreaming}
-                streamingMessageId={streamingMessageId}
-              />
-            )}
-          </div>
-
-          <div className="mt-4">
-            <Composer
-              disabled={isLoading || isStreaming}
-              isStreaming={isStreaming}
-              canRegenerate={canRegenerate}
-              placeholder={composerPlaceholder}
-              onRegenerate={regenerate}
-              onStop={stopStreaming}
-              onSend={sendMessage}
-            />
-          </div>
-        </TabsContent>
-
-        <TabsContent
-          value="cover-letter"
-          className="mt-0 flex min-h-0 flex-1 flex-col"
-        >
-          <div
-            ref={messageListRef}
-            className="min-h-0 flex-1 overflow-y-auto border-b border-border/50 pb-3 pr-1"
-          >
-            {messages.length === 0 && !isLoading ? (
-              <div className="flex h-full min-h-[260px] justify-center px-3 flex-col text-left">
-                <h4 className="font-medium">Cover Letter Drafting</h4>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  Generate a tailored cover letter, a concise Denmark-style version,
-                  or a short application email based on this job and your profile.
-                </p>
-              </div>
-            ) : (
-              <MessageList
-                messages={messages}
-                isStreaming={isStreaming}
-                streamingMessageId={streamingMessageId}
-              />
-            )}
-          </div>
-
-          <div className="mt-4">
-            <div className="mb-3 grid gap-2">
-              {COVER_LETTER_PROMPTS.map((item) => (
-                <Button
-                  key={item.id}
-                  variant="outline"
-                  className="h-auto items-start justify-start px-3 py-3 text-left"
-                  disabled={isLoading || isStreaming}
-                  onClick={() => void triggerQuickPrompt(item.prompt)}
-                >
-                  <span className="block">
-                    <span className="block text-sm font-medium">{item.label}</span>
-                    <span className="mt-1 block text-xs text-muted-foreground">
-                      {item.description}
-                    </span>
-                  </span>
-                </Button>
-              ))}
+      <div className="mb-3 rounded-xl border border-border/60 bg-muted/10 px-3 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-foreground">
+              Ask AI Copilot
             </div>
-
-            <div className="mb-3 flex justify-end">
+            <div className="mt-1 text-xs leading-5 text-muted-foreground">
+              Ask in normal Q&A form. It already has this job description, your
+              CV context, and your shared profile knowledge.
+            </div>
+          </div>
+          {latestAssistantMessage &&
+          getGhostwriterCoverLetterDraft(
+            latestAssistantMessage.content,
+          ).trim() ? (
+            <div className="flex shrink-0 items-center gap-2">
               <Button
-                variant="outline"
+                asChild
+                variant="ghost"
                 size="sm"
-                disabled={isLoading || isStreaming || !latestAssistantMessage?.content?.trim()}
+                className="h-8 gap-1 text-xs"
+              >
+                <a
+                  href={`/job/${job.id}/cover-letter`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  View Letter
+                </a>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1 text-xs"
                 onClick={downloadLatestCoverLetter}
               >
-                <Download className="mr-2 h-4 w-4" />
-                Download Draft
+                <Download className="h-3.5 w-3.5" />
+                Draft
               </Button>
             </div>
+          ) : null}
+        </div>
+      </div>
 
-            <Composer
-              disabled={isLoading || isStreaming}
-              isStreaming={isStreaming}
-              canRegenerate={canRegenerate}
-              placeholder={composerPlaceholder}
-              onRegenerate={regenerate}
-              onStop={stopStreaming}
-              onSend={sendMessage}
-            />
+      <div
+        ref={messageListRef}
+        className="min-h-0 flex-1 overflow-y-auto border-b border-border/50 pb-3 pr-1"
+      >
+        {messages.length === 0 && !isLoading ? (
+          <div className="flex h-full min-h-[260px] justify-center px-3 flex-col text-left">
+            <h4 className="font-medium">
+              {job.title} at {job.employer}
+            </h4>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              Ask a question, request a rewrite, update the CV for this role, or
+              draft a cover letter. Quick actions are available below if you
+              want them.
+            </p>
           </div>
-        </TabsContent>
-      </Tabs>
+        ) : (
+          <MessageList
+            messages={messages}
+            isStreaming={isStreaming}
+            streamingMessageId={streamingMessageId}
+          />
+        )}
+      </div>
+
+      <div className="mt-4 space-y-3">
+        <CollapsibleSection
+          isOpen={quickActionsOpen}
+          label="Quick Actions"
+          onToggle={() => setQuickActionsOpen((current) => !current)}
+        >
+          <div className="rounded-xl border border-border/60 bg-muted/10 p-3 space-y-3">
+            <CollapsibleSection
+              isOpen={cvActionsOpen}
+              label="CV Actions"
+              onToggle={() => setCvActionsOpen((current) => !current)}
+            >
+              <div className="grid gap-2 pt-1">
+                {AI_ENTRY_PROMPTS.map((item) => (
+                  <Button
+                    key={item.id}
+                    variant="outline"
+                    size="sm"
+                    className="justify-between gap-3 text-left"
+                    disabled={isLoading || isStreaming}
+                    onClick={() => void triggerQuickPrompt(item.prompt)}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">
+                        {item.label}
+                      </span>
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {item.description}
+                      </span>
+                    </span>
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                  </Button>
+                ))}
+              </div>
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              isOpen={coverActionsOpen}
+              label="Cover Letter Actions"
+              onToggle={() => setCoverActionsOpen((current) => !current)}
+            >
+              <div className="grid gap-2 pt-1">
+                {COVER_LETTER_PROMPTS.map((item) => (
+                  <Button
+                    key={item.id}
+                    variant="outline"
+                    size="sm"
+                    className="justify-between gap-3 text-left"
+                    disabled={isLoading || isStreaming}
+                    onClick={() => void triggerQuickPrompt(item.prompt)}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">
+                        {item.label}
+                      </span>
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {item.description}
+                      </span>
+                    </span>
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                  </Button>
+                ))}
+              </div>
+            </CollapsibleSection>
+          </div>
+        </CollapsibleSection>
+
+        <Composer
+          disabled={isLoading || isStreaming}
+          isStreaming={isStreaming}
+          canRegenerate={canRegenerate}
+          placeholder={composerPlaceholder}
+          onRegenerate={regenerate}
+          onStop={stopStreaming}
+          onSend={sendMessage}
+        />
+      </div>
     </div>
   );
 };

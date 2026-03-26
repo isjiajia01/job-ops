@@ -11,6 +11,7 @@ import { TailoringEditor } from "@client/components/TailoringEditor";
 import {
   useMarkAsAppliedMutation,
   useSkipJobMutation,
+  useUnapplyJobMutation,
 } from "@client/hooks/queries/useJobMutations";
 import { useProfile } from "@client/hooks/useProfile";
 import type { Job, JobListItem } from "@shared/types.js";
@@ -46,6 +47,7 @@ import { trackProductEvent } from "@/lib/analytics";
 import {
   copyTextToClipboard,
   formatJobForWebhook,
+  getJobListingUrl,
   safeFilenamePart,
   stripHtml,
 } from "@/lib/utils";
@@ -58,6 +60,15 @@ interface JobDetailPanelProps {
   onSelectJobId: (jobId: string | null) => void;
   onJobUpdated: () => Promise<void>;
   onPauseRefreshChange?: (paused: boolean) => void;
+}
+
+function parseJsonSafe<T>(value: string | null | undefined, fallback: T): T {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
 }
 
 export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
@@ -77,11 +88,11 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   const [hasUnsavedTailoring, setHasUnsavedTailoring] = useState(false);
   const [processingJobId, setProcessingJobId] = useState<string | null>(null);
   const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false);
-  const [latestGhostwriterDraft, setLatestGhostwriterDraft] = useState("");
   const saveTailoringRef = useRef<null | (() => Promise<void>)>(null);
   const previousSelectedJobIdRef = useRef<string | null>(null);
   const markAsAppliedMutation = useMarkAsAppliedMutation();
   const skipJobMutation = useSkipJobMutation();
+  const unapplyJobMutation = useUnapplyJobMutation();
 
   const { personName } = useProfile();
 
@@ -105,40 +116,6 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   useEffect(() => {
     return () => onPauseRefreshChange?.(false);
   }, [onPauseRefreshChange]);
-
-  useEffect(() => {
-    if (!selectedJob?.id) {
-      setLatestGhostwriterDraft("");
-      return;
-    }
-
-    let cancelled = false;
-    api
-      .listJobGhostwriterMessages(selectedJob.id, { limit: 100 })
-      .then((data) => {
-        if (cancelled) return;
-        const latestAssistant = [...data.messages]
-          .reverse()
-          .find((message) => message.role === "assistant");
-        setLatestGhostwriterDraft(latestAssistant?.content?.trim() || "");
-      })
-      .catch(() => {
-        if (!cancelled) setLatestGhostwriterDraft("");
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedJob?.id]);
-
-  const parseJsonSafe = <T,>(value: string | null | undefined, fallback: T): T => {
-    if (!value) return fallback;
-    try {
-      return JSON.parse(value) as T;
-    } catch {
-      return fallback;
-    }
-  };
 
   const description = useMemo(() => {
     if (!selectedJob?.jobDescription) return "No description available.";
@@ -185,17 +162,30 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     }
   };
 
-  const tailoringAudit = useMemo(() => ({
-    experienceEdits: parseJsonSafe<Array<{ id: string; bullets: string[] }>>(selectedJob?.tailoredExperienceEdits, []),
-    layoutDirectives: parseJsonSafe<{ sectionOrder?: string[]; hiddenSections?: string[]; hiddenProjectIds?: string[]; hiddenExperienceIds?: string[] }>(selectedJob?.tailoredLayoutDirectives, {}),
-    sectionRationale: selectedJob?.tailoredSectionRationale || "",
-    omissionRationale: selectedJob?.tailoredOmissionRationale || "",
-  }), [selectedJob]);
+  const tailoringAudit = useMemo(
+    () => ({
+      experienceEdits: parseJsonSafe<Array<{ id: string; bullets: string[] }>>(
+        selectedJob?.tailoredExperienceEdits,
+        [],
+      ),
+      layoutDirectives: parseJsonSafe<{
+        sectionOrder?: string[];
+        hiddenSections?: string[];
+        hiddenProjectIds?: string[];
+        hiddenExperienceIds?: string[];
+      }>(selectedJob?.tailoredLayoutDirectives, {}),
+      sectionRationale: selectedJob?.tailoredSectionRationale || "",
+      omissionRationale: selectedJob?.tailoredOmissionRationale || "",
+    }),
+    [selectedJob],
+  );
 
   const sectionOrder = tailoringAudit.layoutDirectives.sectionOrder ?? [];
   const hiddenSections = tailoringAudit.layoutDirectives.hiddenSections ?? [];
-  const hiddenProjectIds = tailoringAudit.layoutDirectives.hiddenProjectIds ?? [];
-  const hiddenExperienceIds = tailoringAudit.layoutDirectives.hiddenExperienceIds ?? [];
+  const hiddenProjectIds =
+    tailoringAudit.layoutDirectives.hiddenProjectIds ?? [];
+  const hiddenExperienceIds =
+    tailoringAudit.layoutDirectives.hiddenExperienceIds ?? [];
 
   const hasUnsavedDescription =
     !!selectedJob &&
@@ -346,6 +336,31 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     }
   };
 
+  const handleMoveBackToReady = async () => {
+    if (!selectedJob) return;
+    try {
+      await unapplyJobMutation.mutateAsync(selectedJob.id);
+      trackProductEvent("jobs_job_action_completed", {
+        action: "move_to_ready",
+        result: "success",
+        from_status: selectedJob.status,
+        to_status: "ready",
+      });
+      toast.success("Moved back to ready");
+      await onJobUpdated();
+    } catch (error) {
+      trackProductEvent("jobs_job_action_completed", {
+        action: "move_to_ready",
+        result: "error",
+        from_status: selectedJob.status,
+        to_status: "ready",
+      });
+      const message =
+        error instanceof Error ? error.message : "Failed to move back to ready";
+      toast.error(message);
+    }
+  };
+
   const handleMoveToInProgress = async () => {
     if (!selectedJob) return;
     try {
@@ -386,13 +401,13 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   };
 
   const handleDownloadCoverLetter = useCallback(() => {
-    if (!selectedJob || !latestGhostwriterDraft) return;
+    if (!selectedJob) return;
     window.open(
       `/job/${selectedJob.id}/cover-letter?print=1`,
       "_blank",
       "noopener,noreferrer",
     );
-  }, [latestGhostwriterDraft, selectedJob]);
+  }, [selectedJob]);
 
   const handleJobMoved = useCallback(
     (jobId: string) => {
@@ -405,9 +420,7 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   );
 
   const selectedHasPdf = !!selectedJob?.pdfPath;
-  const selectedJobLink = selectedJob
-    ? selectedJob.applicationLink || selectedJob.jobUrl
-    : "#";
+  const selectedJobLink = selectedJob ? getJobListingUrl(selectedJob) : "#";
   const selectedPdfHref = selectedJob
     ? `/pdfs/resume_${selectedJob.id}.pdf?v=${encodeURIComponent(selectedJob.updatedAt)}`
     : "#";
@@ -526,7 +539,12 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
             </Button>
           ))}
 
-        <Button asChild size="sm" variant="ghost" className="h-8 gap-1.5 text-xs">
+        <Button
+          asChild
+          size="sm"
+          variant="ghost"
+          className="h-8 gap-1.5 text-xs"
+        >
           <a
             href={`/job/${selectedJob.id}/cover-letter`}
             target="_blank"
@@ -541,7 +559,6 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
           size="sm"
           variant="ghost"
           className="h-8 gap-1.5 text-xs"
-          disabled={!latestGhostwriterDraft}
           onClick={handleDownloadCoverLetter}
         >
           <Download className="h-3.5 w-3.5" />
@@ -577,14 +594,25 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
         )}
 
         {canMoveToInProgress && (
-          <Button
-            size="sm"
-            className="h-8 gap-1.5 text-xs bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600/30 border border-cyan-500/30"
-            onClick={handleMoveToInProgress}
-          >
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            Move to In Progress
-          </Button>
+          <>
+            <Button
+              size="sm"
+              className="h-8 gap-1.5 text-xs bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600/30 border border-cyan-500/30"
+              onClick={handleMoveToInProgress}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Move to In Progress
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5 text-xs"
+              onClick={handleMoveBackToReady}
+            >
+              <RefreshCcw className="h-3.5 w-3.5" />
+              Move Back To Ready
+            </Button>
+          </>
         )}
 
         <DropdownMenu>
@@ -661,6 +689,15 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
                 </DropdownMenuItem>
               </>
             )}
+            {selectedJob?.status === "applied" && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => void handleMoveBackToReady()}>
+                  <RefreshCcw className="mr-2 h-4 w-4" />
+                  Move back to ready
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -685,21 +722,33 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
           <TailoredSummary job={selectedJob} />
 
           <div className="rounded-lg border border-border/60 bg-muted/10 p-3 text-xs space-y-4">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">AI tailoring audit</div>
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              AI tailoring audit
+            </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-md border border-border/50 bg-background/70 p-3">
-                <div className="font-medium text-foreground/90">Section rationale</div>
-                <div className="mt-1 whitespace-pre-wrap text-muted-foreground">{tailoringAudit.sectionRationale || "-"}</div>
+                <div className="font-medium text-foreground/90">
+                  Section rationale
+                </div>
+                <div className="mt-1 whitespace-pre-wrap text-muted-foreground">
+                  {tailoringAudit.sectionRationale || "-"}
+                </div>
               </div>
               <div className="rounded-md border border-border/50 bg-background/70 p-3">
-                <div className="font-medium text-foreground/90">Omission rationale</div>
-                <div className="mt-1 whitespace-pre-wrap text-muted-foreground">{tailoringAudit.omissionRationale || "-"}</div>
+                <div className="font-medium text-foreground/90">
+                  Omission rationale
+                </div>
+                <div className="mt-1 whitespace-pre-wrap text-muted-foreground">
+                  {tailoringAudit.omissionRationale || "-"}
+                </div>
               </div>
             </div>
 
             <div className="rounded-md border border-border/50 bg-background/70 p-3 space-y-2">
-              <div className="font-medium text-foreground/90">Section order</div>
+              <div className="font-medium text-foreground/90">
+                Section order
+              </div>
               {sectionOrder.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {sectionOrder.map((sectionId, index) => (
@@ -712,13 +761,17 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
                   ))}
                 </div>
               ) : (
-                <div className="text-muted-foreground">No section reordering suggested.</div>
+                <div className="text-muted-foreground">
+                  No section reordering suggested.
+                </div>
               )}
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-md border border-border/50 bg-background/70 p-3">
-                <div className="font-medium text-foreground/90">Hidden sections</div>
+                <div className="font-medium text-foreground/90">
+                  Hidden sections
+                </div>
                 {hiddenSections.length > 0 ? (
                   <ul className="mt-1 list-disc pl-4 text-muted-foreground">
                     {hiddenSections.map((item) => (
@@ -730,7 +783,9 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
                 )}
               </div>
               <div className="rounded-md border border-border/50 bg-background/70 p-3">
-                <div className="font-medium text-foreground/90">Hidden projects</div>
+                <div className="font-medium text-foreground/90">
+                  Hidden projects
+                </div>
                 {hiddenProjectIds.length > 0 ? (
                   <ul className="mt-1 list-disc pl-4 text-muted-foreground">
                     {hiddenProjectIds.map((item) => (
@@ -742,7 +797,9 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
                 )}
               </div>
               <div className="rounded-md border border-border/50 bg-background/70 p-3">
-                <div className="font-medium text-foreground/90">Hidden experience</div>
+                <div className="font-medium text-foreground/90">
+                  Hidden experience
+                </div>
                 {hiddenExperienceIds.length > 0 ? (
                   <ul className="mt-1 list-disc pl-4 text-muted-foreground">
                     {hiddenExperienceIds.map((item) => (
@@ -756,14 +813,18 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
             </div>
 
             <div className="space-y-3">
-              <div className="font-medium text-foreground/90">Experience edits</div>
+              <div className="font-medium text-foreground/90">
+                Experience edits
+              </div>
               {tailoringAudit.experienceEdits.length > 0 ? (
                 tailoringAudit.experienceEdits.map((edit) => (
                   <div
                     key={edit.id}
                     className="rounded-md border border-border/50 bg-background/70 p-3 space-y-2"
                   >
-                    <div className="text-[11px] font-medium text-foreground/90">{edit.id}</div>
+                    <div className="text-[11px] font-medium text-foreground/90">
+                      {edit.id}
+                    </div>
                     <ul className="list-disc pl-4 space-y-1 text-muted-foreground">
                       {edit.bullets.map((bullet, index) => (
                         <li key={`${edit.id}-${index}`}>{bullet}</li>

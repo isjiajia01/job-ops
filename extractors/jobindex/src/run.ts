@@ -1,9 +1,9 @@
+import { normalizeCountryKey } from "@shared/location-support.js";
 import {
   matchesRequestedCity,
   resolveSearchCities,
   shouldApplyStrictCityFilter,
 } from "@shared/search-cities.js";
-import { normalizeCountryKey } from "@shared/location-support.js";
 import type { CreateJobInput } from "@shared/types/jobs";
 
 const BASE_URL = "https://www.jobindex.dk";
@@ -145,7 +145,9 @@ function extractResultsArray(page: string): JobindexRawResult[] {
       depth -= 1;
       if (depth === 0) {
         try {
-          return JSON.parse(page.slice(arrayStart, index + 1)) as JobindexRawResult[];
+          return JSON.parse(
+            page.slice(arrayStart, index + 1),
+          ) as JobindexRawResult[];
         } catch {
           return [];
         }
@@ -162,7 +164,9 @@ function extractApplicationLink(html: string | undefined): string | undefined {
   return toAbsoluteUrl(match?.[1]);
 }
 
-function extractDescriptionSnippet(html: string | undefined): string | undefined {
+function extractDescriptionSnippet(
+  html: string | undefined,
+): string | undefined {
   if (!html) return undefined;
   const paragraphs = Array.from(html.matchAll(/<p>(.*?)<\/p>/gi))
     .map((match) => stripHtml(match[1] ?? ""))
@@ -199,9 +203,9 @@ function mapJobindexResult(result: JobindexRawResult): CreateJobInput | null {
     employerUrl: toAbsoluteUrl(result.company?.homeurl),
     jobUrl,
     applicationLink:
-      toAbsoluteUrl(result.app_apply_url ?? result.apply_url)
-      || extractApplicationLink(result.html)
-      || jobUrl,
+      toAbsoluteUrl(result.app_apply_url ?? result.apply_url) ||
+      extractApplicationLink(result.html) ||
+      jobUrl,
     location: location || undefined,
     deadline: normalizeText(result.apply_deadline) || undefined,
     datePosted: normalizeText(result.firstdate) || undefined,

@@ -146,10 +146,7 @@ describe("selectJobsStep", () => {
       mergedConfig: { ...baseConfig, topN: 2 },
     });
 
-    expect(selected.map((job) => job.id)).toEqual([
-      "demand-a",
-      "logistics-a",
-    ]);
+    expect(selected.map((job) => job.id)).toEqual(["demand-a", "logistics-a"]);
   });
 
   it("does not force diversity when the alternative is far below the top score", () => {

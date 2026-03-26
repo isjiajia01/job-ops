@@ -9,6 +9,9 @@ import type {
   ApplicationTask,
   AppSettings,
   BackupInfo,
+  CandidateKnowledgeBase,
+  CandidateKnowledgeFact,
+  CandidateKnowledgeProject,
   DemoInfoResponse,
   Job,
   JobActionRequest,
@@ -37,7 +40,6 @@ import type {
   ProfileStatusResponse,
   ResumeProfile,
   ResumeProjectCatalogItem,
-  RxResumeMode,
   StageEvent,
   StageEventMetadata,
   StageTransitionTarget,
@@ -657,6 +659,24 @@ export async function streamJobGhostwriterMessage(
   );
 }
 
+export async function sendJobGhostwriterMessage(
+  jobId: string,
+  input: { content: string },
+): Promise<{
+  userMessage: JobChatMessage;
+  assistantMessage: JobChatMessage | null;
+  runId: string;
+}> {
+  return fetchApi<{
+    userMessage: JobChatMessage;
+    assistantMessage: JobChatMessage | null;
+    runId: string;
+  }>(`/jobs/${jobId}/chat/messages`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export async function cancelJobChatRun(
   jobId: string,
   threadId: string,
@@ -800,6 +820,12 @@ export async function checkSponsor(id: string): Promise<Job> {
 
 export async function markAsApplied(id: string): Promise<Job> {
   return fetchApi<Job>(`/jobs/${id}/apply`, {
+    method: "POST",
+  });
+}
+
+export async function unapplyJob(id: string): Promise<Job> {
+  return fetchApi<Job>(`/jobs/${id}/unapply`, {
     method: "POST",
   });
 }
@@ -1251,24 +1277,82 @@ export async function getProfileProjects(): Promise<
 export async function getResumeProjectsCatalog(): Promise<
   ResumeProjectCatalogItem[]
 > {
-  try {
-    const settings = await getSettings();
-    if (settings.rxresumeBaseResumeId) {
-      return await getRxResumeProjects(
-        settings.rxresumeBaseResumeId,
-        undefined,
-        settings.rxresumeMode?.value,
-      );
-    }
-  } catch {
-    // fall through to profile-based projects
-  }
-
   return getProfileProjects();
 }
 
 export async function getProfile(): Promise<ResumeProfile> {
   return fetchApi<ResumeProfile>("/profile");
+}
+
+export async function getInternalProfile(): Promise<ResumeProfile> {
+  return fetchApi<ResumeProfile>("/profile/internal");
+}
+
+export async function saveInternalProfile(
+  input: ResumeProfile,
+): Promise<ResumeProfile> {
+  return fetchApi<ResumeProfile>("/profile/internal", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getCandidateKnowledgeBase(): Promise<CandidateKnowledgeBase> {
+  return fetchApi<CandidateKnowledgeBase>("/profile/knowledge");
+}
+
+export async function saveCandidateKnowledgeBase(
+  input: CandidateKnowledgeBase,
+): Promise<CandidateKnowledgeBase> {
+  return fetchApi<CandidateKnowledgeBase>("/profile/knowledge", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function addCandidateKnowledgeFact(input: {
+  title: string;
+  detail: string;
+}): Promise<CandidateKnowledgeFact> {
+  return fetchApi<CandidateKnowledgeFact>("/profile/knowledge/facts", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteCandidateKnowledgeFact(
+  id: string,
+): Promise<{ deleted: boolean }> {
+  return fetchApi<{ deleted: boolean }>(
+    `/profile/knowledge/facts/${encodeURIComponent(id)}`,
+    {
+      method: "DELETE",
+    },
+  );
+}
+
+export async function addCandidateKnowledgeProject(input: {
+  name: string;
+  summary: string;
+  keywords?: string[];
+  role?: string | null;
+  impact?: string | null;
+}): Promise<CandidateKnowledgeProject> {
+  return fetchApi<CandidateKnowledgeProject>("/profile/knowledge/projects", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteCandidateKnowledgeProject(
+  id: string,
+): Promise<{ deleted: boolean }> {
+  return fetchApi<{ deleted: boolean }>(
+    `/profile/knowledge/projects/${encodeURIComponent(id)}`,
+    {
+      method: "DELETE",
+    },
+  );
 }
 
 export async function getProfileStatus(): Promise<ProfileStatusResponse> {
@@ -1292,19 +1376,6 @@ export async function validateLlm(input: {
   });
 }
 
-export async function validateRxresume(input?: {
-  mode?: "v4" | "v5";
-  email?: string;
-  password?: string;
-  apiKey?: string;
-  baseUrl?: string;
-}): Promise<ValidationResult> {
-  return fetchApi<ValidationResult>("/onboarding/validate/rxresume", {
-    method: "POST",
-    body: JSON.stringify(input ?? {}),
-  });
-}
-
 export async function validateResumeConfig(): Promise<ValidationResult> {
   return fetchApi<ValidationResult>("/onboarding/validate/resume");
 }
@@ -1316,29 +1387,6 @@ export async function updateSettings(
     method: "PATCH",
     body: JSON.stringify(update),
   });
-}
-
-export async function getRxResumes(
-  mode?: RxResumeMode,
-): Promise<{ id: string; name: string }[]> {
-  const query = mode ? `?mode=${encodeURIComponent(mode)}` : "";
-  const data = await fetchApi<{ resumes: { id: string; name: string }[] }>(
-    `/settings/rx-resumes${query}`,
-  );
-  return data.resumes;
-}
-
-export async function getRxResumeProjects(
-  resumeId: string,
-  signal?: AbortSignal,
-  mode?: RxResumeMode,
-): Promise<ResumeProjectCatalogItem[]> {
-  const query = mode ? `?mode=${encodeURIComponent(mode)}` : "";
-  const data = await fetchApi<{ projects: ResumeProjectCatalogItem[] }>(
-    `/settings/rx-resumes/${encodeURIComponent(resumeId)}/projects${query}`,
-    { signal },
-  );
-  return data.projects;
 }
 
 // Database API

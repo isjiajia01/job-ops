@@ -46,6 +46,10 @@ vi.mock("./pages/OrchestratorPage", () => ({
   OrchestratorPage: () => null,
 }));
 
+vi.mock("./pages/ProfileHubPage", () => ({
+  ProfileHubPage: () => <div>profile hub</div>,
+}));
+
 vi.mock("./pages/SettingsPage", () => ({
   SettingsPage: () => null,
 }));
@@ -130,5 +134,24 @@ describe("App demo banner", () => {
     expect(localStorage.getItem("jobops.demoWaitlistBannerDismissed")).toBe(
       "1",
     );
+  });
+
+  it("redirects legacy profile hub routes to the current profile hub page", () => {
+    vi.mocked(useDemoInfo).mockReturnValue({
+      demoMode: false,
+      resetCadenceHours: 6,
+      lastResetAt: null,
+      nextResetAt: null,
+      baselineVersion: null,
+      baselineName: null,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/profilehub"]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("profile hub")).toBeInTheDocument();
   });
 });

@@ -151,6 +151,57 @@ describe.sequential("Application Tracking Service", () => {
     expect(jobCheck?.outcome).toBeNull();
   });
 
+  it("undoes the latest applied event and restores ready state", async () => {
+    const job = await jobsRepo.createJob({
+      source: "manual",
+      title: "Planner",
+      employer: "Ops Co",
+      jobUrl: "https://example.com/job/undo-applied",
+      status: "ready",
+    });
+
+    applicationTracking.transitionStage(job.id, "applied", undefined, {
+      actor: "system",
+      eventLabel: "Applied",
+    });
+
+    let events = await applicationTracking.getStageEvents(job.id);
+    expect(events).toHaveLength(1);
+    expect(events[0].toStage).toBe("applied");
+
+    applicationTracking.undoAppliedStage(job.id);
+
+    const jobCheck = await db
+      .select()
+      .from(schema.jobs)
+      .where(eq(schema.jobs.id, job.id))
+      .get();
+    expect(jobCheck?.status).toBe("ready");
+    expect(jobCheck?.appliedAt).toBeNull();
+
+    events = await applicationTracking.getStageEvents(job.id);
+    expect(events).toHaveLength(0);
+  });
+
+  it("rejects undo when the latest applied event was not system-created", async () => {
+    const job = await jobsRepo.createJob({
+      source: "manual",
+      title: "Buyer",
+      employer: "Procurement Co",
+      jobUrl: "https://example.com/job/user-applied",
+      status: "ready",
+    });
+
+    applicationTracking.transitionStage(job.id, "applied", undefined, {
+      actor: "user",
+      eventLabel: "Applied",
+    });
+
+    expect(() => applicationTracking.undoAppliedStage(job.id)).toThrow(
+      /No latest applied stage event to undo/,
+    );
+  });
+
   it('handles "no_change" transitions (notes)', async () => {
     const job = await jobsRepo.createJob({
       source: "manual",

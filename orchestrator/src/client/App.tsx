@@ -12,12 +12,14 @@ import { Toaster } from "@/components/ui/sonner";
 import { BasicAuthPrompt } from "./components/BasicAuthPrompt";
 import { OnboardingGate } from "./components/OnboardingGate";
 import { useDemoInfo } from "./hooks/useDemoInfo";
+import { CoverLetterPage } from "./pages/CoverLetterPage";
+import { CvPage } from "./pages/CvPage";
 import { GmailOauthCallbackPage } from "./pages/GmailOauthCallbackPage";
 import { HomePage } from "./pages/HomePage";
 import { InProgressBoardPage } from "./pages/InProgressBoardPage";
-import { CoverLetterPage } from "./pages/CoverLetterPage";
 import { JobPage } from "./pages/JobPage";
 import { OrchestratorPage } from "./pages/OrchestratorPage";
+import { ProfileHubPage } from "./pages/ProfileHubPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TracerLinksPage } from "./pages/TracerLinksPage";
 import { TrackingInboxPage } from "./pages/TrackingInboxPage";
@@ -27,6 +29,8 @@ import { VisaSponsorsPage } from "./pages/VisaSponsorsPage";
 const REDIRECTS: Array<{ from: string; to: string }> = [
   { from: "/", to: "/jobs/ready" },
   { from: "/home", to: "/overview" },
+  { from: "/profilehub", to: "/profile-hub" },
+  { from: "/profile", to: "/profile-hub" },
   { from: "/ready", to: "/jobs/ready" },
   { from: "/ready/:jobId", to: "/jobs/ready/:jobId" },
   { from: "/discovered", to: "/jobs/discovered" },
@@ -140,11 +144,13 @@ export const App: React.FC = () => {
                   path="/job/:id/cover-letter"
                   element={<CoverLetterPage />}
                 />
+                <Route path="/job/:id/cv" element={<CvPage />} />
                 <Route path="/job/:id" element={<JobPage />} />
                 <Route
                   path="/applications/in-progress"
                   element={<InProgressBoardPage />}
                 />
+                <Route path="/profile-hub" element={<ProfileHubPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/tracer-links" element={<TracerLinksPage />} />
                 <Route path="/visa-sponsors" element={<VisaSponsorsPage />} />

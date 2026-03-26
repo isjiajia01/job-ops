@@ -30,7 +30,12 @@ export const Composer: React.FC<ComposerProps> = ({
     const content = value.trim();
     if (!content || disabled) return;
     setValue("");
-    await onSend(content);
+    try {
+      await onSend(content);
+    } catch (error) {
+      setValue(content);
+      throw error;
+    }
   };
 
   return (

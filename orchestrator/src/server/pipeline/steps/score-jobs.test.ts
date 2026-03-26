@@ -59,7 +59,8 @@ describe("scoreJobsStep auto-skip behavior", () => {
         status: "discovered",
         suitabilityScore: null,
         suitabilityReason: null,
-        jobDescription: "Forecasting, planning, and KPI follow-up for supply chain decisions.",
+        jobDescription:
+          "Forecasting, planning, and KPI follow-up for supply chain decisions.",
       }),
     ]);
     vi.mocked(jobsRepo.updateJob).mockResolvedValue(null);
@@ -173,7 +174,8 @@ describe("scoreJobsStep auto-skip behavior", () => {
         employer: "Acme Corp",
         suitabilityScore: null,
         suitabilityReason: null,
-        jobDescription: "Forecasting, planning, and KPI follow-up for supply chain decisions.",
+        jobDescription:
+          "Forecasting, planning, and KPI follow-up for supply chain decisions.",
       }),
     ]);
 
@@ -233,8 +235,8 @@ describe("scoreJobsStep auto-skip behavior", () => {
 
     expect(jobDedupe.suppressDuplicateDiscoveredJobs).toHaveBeenCalledTimes(1);
     expect(
-      vi.mocked(jobDedupe.suppressDuplicateDiscoveredJobs)
-        .mock.invocationCallOrder[0],
+      vi.mocked(jobDedupe.suppressDuplicateDiscoveredJobs).mock
+        .invocationCallOrder[0],
     ).toBeLessThan(
       vi.mocked(jobsRepo.getUnscoredDiscoveredJobs).mock.invocationCallOrder[0],
     );

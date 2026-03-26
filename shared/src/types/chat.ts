@@ -46,6 +46,26 @@ export interface JobChatMessage {
   updatedAt: string;
 }
 
+export interface GhostwriterSkillGroup {
+  name: string;
+  keywords: string[];
+}
+
+export interface GhostwriterResumePatch {
+  tailoredSummary: string | null;
+  tailoredHeadline: string | null;
+  tailoredSkills: GhostwriterSkillGroup[] | null;
+}
+
+export type GhostwriterCoverLetterKind = "letter" | "email";
+
+export interface GhostwriterAssistantPayload {
+  response: string;
+  coverLetterDraft: string | null;
+  coverLetterKind: GhostwriterCoverLetterKind | null;
+  resumePatch: GhostwriterResumePatch | null;
+}
+
 export interface JobChatRun {
   id: string;
   threadId: string;

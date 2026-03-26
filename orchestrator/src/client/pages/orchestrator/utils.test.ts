@@ -21,6 +21,10 @@ describe("orchestrator utils", () => {
     expect(getEnabledSources(createAppSettings())).toContain("startupjobs");
   });
 
+  it("enables thehub without credentials", () => {
+    expect(getEnabledSources(createAppSettings())).toContain("thehub");
+  });
+
   it("counts processing jobs in ready and discovered tabs", () => {
     const jobs = [
       createJob({ id: "ready", status: "ready", closedAt: null }),

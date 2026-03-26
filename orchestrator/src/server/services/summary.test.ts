@@ -113,9 +113,7 @@ describe("generateTailoring", () => {
       'Keep "headline" in the exact original job-title wording from the JD.',
     );
     expect(request?.messages?.[0]?.content).not.toContain("Test User");
-    expect(request?.messages?.[0]?.content).toContain(
-      '"id": "project-1"',
-    );
+    expect(request?.messages?.[0]?.content).toContain('"id": "project-1"');
     expect(request?.messages?.[0]?.content).toContain(
       "Use only ids that appear in the provided projects list.",
     );
@@ -146,7 +144,8 @@ describe("generateTailoring", () => {
     await generateTailoring(
       {
         jobTitle: "Disponent",
-        jobDescription: "Brøndby-based disponent role responsible for dispatch planning.",
+        jobDescription:
+          "Brøndby-based disponent role responsible for dispatch planning.",
       },
       {
         basics: {

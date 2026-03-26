@@ -5,6 +5,7 @@ import { discoverJobsStep } from "./discover-jobs";
 
 vi.mock("@server/repositories/settings", () => ({
   getAllSettings: vi.fn(),
+  setSetting: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@server/repositories/jobs", () => ({
@@ -549,11 +550,74 @@ describe("discoverJobsStep", () => {
 
     expect(thehubManifest.run).toHaveBeenCalledWith(
       expect.objectContaining({
-        searchTerms: [
-          "operations",
-          "analyst",
-          "business analyst",
-        ],
+        searchTerms: ["operations", "business analyst"],
+      }),
+    );
+    expect(settingsRepo.setSetting).toHaveBeenCalledWith(
+      "thehubTermTelemetry",
+      expect.any(String),
+    );
+  });
+
+  it("prunes repeatedly dead thehub terms using stored telemetry", async () => {
+    const settingsRepo = await import("@server/repositories/settings");
+    const registryModule = await import("@server/extractors/registry");
+
+    const futureIso = new Date(
+      Date.now() + 7 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const thehubManifest = {
+      id: "thehub",
+      displayName: "The Hub",
+      providesSources: ["thehub"],
+      run: vi.fn().mockResolvedValue({
+        success: true,
+        jobs: [],
+        termHitCounts: {
+          operations: 0,
+        },
+      }),
+    };
+
+    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
+      searchTerms: JSON.stringify([
+        "Demand Planner",
+        "Supply Planner",
+        "Inventory Planner",
+        "Disponent",
+      ]),
+      jobspyCountryIndeed: "denmark",
+      thehubTermTelemetry: JSON.stringify({
+        "business analyst": {
+          attempts: 3,
+          zeroHits: 3,
+          positiveRuns: 0,
+          jobsFound: 0,
+          consecutiveZeroHits: 3,
+          lastAttemptedAt: "2026-03-01T00:00:00.000Z",
+          lastHitAt: null,
+          lastZeroAt: "2026-03-20T00:00:00.000Z",
+          cooldownUntil: futureIso,
+        },
+      }),
+    } as any);
+
+    vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
+      manifests: new Map([["thehub", thehubManifest as any]]),
+      manifestBySource: new Map([["thehub", thehubManifest as any]]),
+      availableSources: ["thehub"],
+    } as any);
+
+    await discoverJobsStep({
+      mergedConfig: {
+        ...baseConfig,
+        sources: ["thehub"] as any,
+      },
+    });
+
+    expect(thehubManifest.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        searchTerms: ["operations"],
       }),
     );
   });

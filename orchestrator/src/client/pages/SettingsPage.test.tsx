@@ -16,7 +16,6 @@ const render = (ui: Parameters<typeof renderWithQueryClient>[0]) =>
 vi.mock("../api", () => ({
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
-  validateRxresume: vi.fn(),
   clearDatabase: vi.fn(),
   deleteJobsByStatus: vi.fn(),
   getTracerReadiness: vi.fn(),
@@ -88,10 +87,6 @@ describe("SettingsPage", () => {
       checkedAt: Date.now(),
       lastSuccessAt: Date.now(),
       reason: null,
-    });
-    vi.mocked(api.validateRxresume).mockResolvedValue({
-      valid: false,
-      message: "Missing credentials",
     });
   });
 
@@ -241,71 +236,6 @@ describe("SettingsPage", () => {
     );
     fireEvent.click(sponsorCheckbox);
     await waitFor(() => expect(saveButton).toBeEnabled());
-  });
-
-  it("allows saving when both Reactive Resume v4 and v5 credentials are present", async () => {
-    const settingsWithBothRxResumeAuth = createAppSettings({
-      rxresumeEmail: "resume@example.com",
-      rxresumePasswordHint: "pass",
-      rxresumeApiKeyHint: "api_",
-    });
-    vi.mocked(api.getSettings).mockResolvedValue(settingsWithBothRxResumeAuth);
-    vi.mocked(api.updateSettings).mockResolvedValue(
-      settingsWithBothRxResumeAuth,
-    );
-
-    renderPage();
-
-    const displayTrigger = await screen.findByRole("button", {
-      name: /display settings/i,
-    });
-    fireEvent.click(displayTrigger);
-    const sponsorCheckbox = screen.getByLabelText(
-      /show visa sponsor information/i,
-    );
-    fireEvent.click(sponsorCheckbox);
-
-    const saveButton = screen.getByRole("button", { name: /^save$/i });
-    await waitFor(() => expect(saveButton).toBeEnabled());
-    fireEvent.click(saveButton);
-
-    await waitFor(() => expect(api.updateSettings).toHaveBeenCalled());
-    expect(toast.error).not.toHaveBeenCalledWith(
-      "Choose one Reactive Resume auth method",
-      expect.anything(),
-    );
-  });
-
-  it("saves a shared RxResume URL from the Reactive Resume section", async () => {
-    vi.mocked(api.getSettings).mockResolvedValue(baseSettings);
-    vi.mocked(api.updateSettings).mockResolvedValue({
-      ...baseSettings,
-      rxresumeUrl: "https://resume.example.com",
-    });
-
-    renderPage();
-
-    const reactiveResumeTrigger = await screen.findByRole("button", {
-      name: /reactive resume/i,
-    });
-    fireEvent.click(reactiveResumeTrigger);
-
-    const urlInput = screen.getByLabelText(/rxresume url/i);
-    await waitFor(() => expect(urlInput).toBeEnabled());
-    fireEvent.change(urlInput, {
-      target: { value: "https://resume.example.com" },
-    });
-
-    const saveButton = screen.getByRole("button", { name: /^save$/i });
-    await waitFor(() => expect(saveButton).toBeEnabled());
-    fireEvent.click(saveButton);
-
-    await waitFor(() => expect(api.updateSettings).toHaveBeenCalled());
-    expect(api.updateSettings).toHaveBeenCalledWith(
-      expect.objectContaining({
-        rxresumeUrl: "https://resume.example.com",
-      }),
-    );
   });
 
   it("saves the writing language mode through the settings page", async () => {

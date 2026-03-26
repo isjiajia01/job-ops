@@ -28,7 +28,9 @@ const NEGATIVE_TITLE_GROUPS: PatternGroup[] = [
     score: 10,
     reason:
       "Title is communications, recruiting, or employer-brand work rather than planning-oriented supply chain work.",
-    patterns: [/\b(kommunikat[oø]r|communication|communications|recruit(?:er|ing)|talent acquisition)\b/i],
+    patterns: [
+      /\b(kommunikat[oø]r|communication|communications|recruit(?:er|ing)|talent acquisition)\b/i,
+    ],
   },
   {
     score: 5,
@@ -48,7 +50,9 @@ const NEGATIVE_TITLE_GROUPS: PatternGroup[] = [
     score: 8,
     reason:
       "Title is project, product, or general program management rather than the planning roles currently targeted.",
-    patterns: [/\b(project manager|product manager|project lead|program manager)\b/i],
+    patterns: [
+      /\b(project manager|product manager|project lead|program manager)\b/i,
+    ],
   },
   {
     score: 10,
@@ -85,7 +89,9 @@ const NEGATIVE_TITLE_GROUPS: PatternGroup[] = [
     score: 18,
     reason:
       "Title signals a senior or management profile beyond the current junior-to-mid planning target.",
-    patterns: [/\b(senior|manager|director|head|lead|principal|staff|vp|vice president|chief|afdelingsleder|driftsleder)\b/i],
+    patterns: [
+      /\b(senior|manager|director|head|lead|principal|staff|vp|vice president|chief|afdelingsleder|driftsleder)\b/i,
+    ],
   },
 ];
 
@@ -156,7 +162,12 @@ const NEGATIVE_CONTENT_GROUPS: PatternGroup[] = [
     score: 10,
     reason:
       "Job content is dominated by procurement, sourcing, or category work rather than planning-oriented supply chain work.",
-    patterns: [/procurement/i, /strategic sourcing/i, /purchasing/i, /category management/i],
+    patterns: [
+      /procurement/i,
+      /strategic sourcing/i,
+      /purchasing/i,
+      /category management/i,
+    ],
   },
   {
     score: 12,
@@ -202,7 +213,7 @@ function buildJobText(job: Job): string {
     job.jobDescription,
     job.skills,
   ]
-    .filter((value): value is string => Boolean(value && value.trim()))
+    .filter((value): value is string => Boolean(value?.trim()))
     .join("\n");
 }
 
@@ -229,7 +240,10 @@ function evaluateTitleRule(job: Job): JobPrefilterDecision | null {
     }
   }
 
-  if (matchesAny(title, AMBIGUOUS_TITLE_PATTERNS) && !hasStrongPositiveSignals(job)) {
+  if (
+    matchesAny(title, AMBIGUOUS_TITLE_PATTERNS) &&
+    !hasStrongPositiveSignals(job)
+  ) {
     return {
       score: 15,
       status: "skipped",
@@ -264,8 +278,10 @@ export function evaluateJobPrefilter(
   job: Job,
   context: JobPrefilterContext,
 ): JobPrefilterDecision | null {
-  const strictCities = parseSearchCitiesSetting(context.searchCitiesSetting).filter(
-    (city) => shouldApplyStrictCityFilter(city, context.selectedCountry ?? ""),
+  const strictCities = parseSearchCitiesSetting(
+    context.searchCitiesSetting,
+  ).filter((city) =>
+    shouldApplyStrictCityFilter(city, context.selectedCountry ?? ""),
   );
 
   if (strictCities.length > 0 && job.location?.trim()) {

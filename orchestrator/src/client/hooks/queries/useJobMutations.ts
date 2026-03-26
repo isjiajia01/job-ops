@@ -43,6 +43,34 @@ export function useMarkAsAppliedMutation() {
   });
 }
 
+export function useUnapplyJobMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.unapplyJob(id),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.jobs.detail(id) });
+      const previousJob = queryClient.getQueryData<Job>(
+        queryKeys.jobs.detail(id),
+      );
+      queryClient.setQueryData<Job>(queryKeys.jobs.detail(id), (current) =>
+        current ? { ...current, status: "ready", appliedAt: null } : current,
+      );
+      return { previousJob, id };
+    },
+    onError: (_error, _id, context) => {
+      if (context?.id) {
+        queryClient.setQueryData(
+          queryKeys.jobs.detail(context.id),
+          context.previousJob,
+        );
+      }
+    },
+    onSettled: async (_data, _error, id) => {
+      await invalidateJobData(queryClient, id);
+    },
+  });
+}
+
 export function useSkipJobMutation() {
   const queryClient = useQueryClient();
   return useMutation({

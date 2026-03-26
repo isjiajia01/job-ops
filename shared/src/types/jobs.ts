@@ -330,7 +330,7 @@ export interface UpdateJobInput {
   selectedProjectIds?: string;
   pdfPath?: string;
   tracerLinksEnabled?: boolean;
-  appliedAt?: string;
+  appliedAt?: string | null;
   sponsorMatchScore?: number;
   sponsorMatchNames?: string;
 }

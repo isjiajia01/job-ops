@@ -1,4 +1,5 @@
 import type { JobChatMessage } from "@shared/types";
+import { parseGhostwriterAssistantContent } from "@shared/utils/ghostwriter";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -22,6 +23,9 @@ const mocks = vi.hoisted(() => ({
   settings: {
     getAllSettings: vi.fn(),
   },
+  jobs: {
+    updateJob: vi.fn(),
+  },
 }));
 
 vi.mock("@infra/logger", () => ({
@@ -42,6 +46,10 @@ vi.mock("./ghostwriter-context", () => ({
 
 vi.mock("../repositories/settings", () => ({
   getAllSettings: mocks.settings.getAllSettings,
+}));
+
+vi.mock("../repositories/jobs", () => ({
+  updateJob: mocks.jobs.updateJob,
 }));
 
 vi.mock("../repositories/ghostwriter", () => ({
@@ -186,6 +194,7 @@ describe("ghostwriter service", () => {
       success: true,
       data: { response: "Thanks for your question." },
     });
+    mocks.jobs.updateJob.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -238,6 +247,135 @@ describe("ghostwriter service", () => {
           message.role !== "system" && message.role !== "user",
       ),
     ).toEqual([{ role: "assistant", content: "Draft response" }]);
+  });
+
+  it("applies resumePatch updates to the job and stores structured content", async () => {
+    const assistantPartial: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-structured",
+      content: "",
+      status: "partial",
+    };
+    const assistantComplete: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-structured",
+      status: "complete",
+      content: "",
+    };
+
+    mocks.repo.createMessage
+      .mockResolvedValueOnce(baseUserMessage)
+      .mockResolvedValueOnce(assistantPartial);
+    mocks.repo.updateMessage.mockImplementation(async (_id, update) => ({
+      ...assistantComplete,
+      content: update.content ?? "",
+      tokensIn: update.tokensIn ?? null,
+      tokensOut: update.tokensOut ?? null,
+    }));
+    mocks.repo.getMessageById.mockImplementation(async () => {
+      const [, update] = mocks.repo.updateMessage.mock.calls.at(-1) ?? [];
+      return {
+        ...assistantComplete,
+        content: update?.content ?? "",
+      };
+    });
+    mocks.llmCallJson.mockResolvedValue({
+      success: true,
+      data: {
+        response: "I refreshed the current CV draft for this role.",
+        resumePatch: {
+          tailoredSummary: "Sharper summary",
+          tailoredHeadline: "Demand Planner",
+          tailoredSkills: [{ name: "Planning", keywords: ["forecasting"] }],
+        },
+      },
+    });
+
+    const result = await sendMessageForJob({
+      jobId: "job-1",
+      content: "Update my CV for this role",
+    });
+
+    expect(mocks.jobs.updateJob).toHaveBeenCalledWith(
+      "job-1",
+      expect.objectContaining({
+        tailoredSummary: "Sharper summary",
+        tailoredHeadline: "Demand Planner",
+        tailoredSkills: JSON.stringify([
+          { name: "Planning", keywords: ["forecasting"] },
+        ]),
+      }),
+    );
+
+    const parsed = parseGhostwriterAssistantContent(
+      result.assistantMessage?.content ?? "",
+    );
+    expect(parsed.response).toBe(
+      "I refreshed the current CV draft for this role.",
+    );
+    expect(parsed.resumePatch).toEqual({
+      tailoredSummary: "Sharper summary",
+      tailoredHeadline: "Demand Planner",
+      tailoredSkills: [{ name: "Planning", keywords: ["forecasting"] }],
+    });
+  });
+
+  it("normalizes looser payload shapes instead of failing the request", async () => {
+    const assistantPartial: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-loose",
+      content: "",
+      status: "partial",
+    };
+    const assistantComplete: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-loose",
+      status: "complete",
+      content: "",
+    };
+
+    mocks.repo.createMessage
+      .mockResolvedValueOnce(baseUserMessage)
+      .mockResolvedValueOnce(assistantPartial);
+    mocks.repo.updateMessage.mockImplementation(async (_id, update) => ({
+      ...assistantComplete,
+      content: update.content ?? "",
+    }));
+    mocks.repo.getMessageById.mockImplementation(async () => {
+      const [, update] = mocks.repo.updateMessage.mock.calls.at(-1) ?? [];
+      return {
+        ...assistantComplete,
+        content: update?.content ?? "",
+      };
+    });
+    mocks.llmCallJson.mockResolvedValue({
+      success: true,
+      data: {
+        content: "Here is a stronger draft.",
+        draft: "Dear Team,\n\nThis is the letter body.",
+        resumePatch: {
+          summary: "Refined summary only",
+        },
+      },
+    });
+
+    const result = await sendMessageForJob({
+      jobId: "job-1",
+      content: "Rewrite this for me",
+    });
+
+    const parsed = parseGhostwriterAssistantContent(
+      result.assistantMessage?.content ?? "",
+    );
+    expect(parsed.response).toBe("Here is a stronger draft.");
+    expect(parsed.coverLetterDraft).toBe(
+      "Dear Team,\n\nThis is the letter body.",
+    );
+    expect(parsed.resumePatch).toEqual({
+      tailoredSummary: "Refined summary only",
+      tailoredHeadline: null,
+      tailoredSkills: null,
+    });
   });
 
   it("rejects empty message content", async () => {

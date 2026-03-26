@@ -1,8 +1,9 @@
 import { badRequest, notFound } from "@infra/errors";
 import { logger } from "@infra/logger";
 import { sanitizeUnknown } from "@infra/sanitize";
-import type { Job, ResumeProfile } from "@shared/types";
+import type { CandidateKnowledgeBase, Job, ResumeProfile } from "@shared/types";
 import * as jobsRepo from "../repositories/jobs";
+import { getCandidateKnowledgeBase } from "./candidate-knowledge";
 import {
   getWritingLanguageLabel,
   resolveWritingOutputLanguage,
@@ -28,6 +29,8 @@ const MAX_SKILLS = 18;
 const MAX_PROJECTS = 6;
 const MAX_EXPERIENCE = 5;
 const MAX_ITEM_TEXT = 320;
+const MAX_PERSONAL_FACTS = 12;
+const MAX_CUSTOM_PROJECTS = 8;
 
 function truncate(value: string | null | undefined, max: number): string {
   if (!value) return "";
@@ -66,7 +69,10 @@ function buildJobSnapshot(job: Job): string {
   return JSON.stringify(snapshot, null, 2);
 }
 
-function buildProfileSnapshot(profile: ResumeProfile): string {
+function buildProfileSnapshot(
+  profile: ResumeProfile,
+  knowledgeBase: CandidateKnowledgeBase,
+): string {
   const summary =
     truncate(profile?.sections?.summary?.content, MAX_PROFILE_SUMMARY) ||
     truncate(profile?.basics?.summary, MAX_PROFILE_SUMMARY);
@@ -94,13 +100,38 @@ function buildProfileSnapshot(profile: ResumeProfile): string {
         `${item.position} @ ${item.company} (${item.date || "n/a"}): ${truncate(item.summary, MAX_ITEM_TEXT)}`,
     );
 
+  const personalFacts = (knowledgeBase.personalFacts ?? [])
+    .slice(0, MAX_PERSONAL_FACTS)
+    .map((item) => `${item.title}: ${truncate(item.detail, MAX_ITEM_TEXT)}`);
+
+  const customProjects = (knowledgeBase.projects ?? [])
+    .slice(0, MAX_CUSTOM_PROJECTS)
+    .map((item) =>
+      compactJoin([
+        `${item.name}${item.role ? ` (${item.role})` : ""}: ${truncate(item.summary, MAX_ITEM_TEXT)}`,
+        item.impact ? `Impact: ${truncate(item.impact, MAX_ITEM_TEXT)}` : null,
+        item.keywords.length > 0
+          ? `Keywords: ${item.keywords.slice(0, 8).join(", ")}`
+          : null,
+      ]),
+    );
+
   return compactJoin([
     `Name: ${profile?.basics?.name || "Unknown"}`,
     `Headline: ${truncate(profile?.basics?.headline || profile?.basics?.label, 200) || ""}`,
+    profile?.basics?.location?.city || profile?.basics?.location?.region
+      ? `Location: ${[profile?.basics?.location?.city, profile?.basics?.location?.region].filter(Boolean).join(", ")}`
+      : null,
     summary ? `Summary:\n${summary}` : null,
     skills.length > 0 ? `Skills:\n- ${skills.join("\n- ")}` : null,
     projects.length > 0 ? `Projects:\n- ${projects.join("\n- ")}` : null,
     experience.length > 0 ? `Experience:\n- ${experience.join("\n- ")}` : null,
+    personalFacts.length > 0
+      ? `Shared personal facts:\n- ${personalFacts.join("\n- ")}`
+      : null,
+    customProjects.length > 0
+      ? `Shared project notes:\n- ${customProjects.join("\n- ")}`
+      : null,
   ]);
 }
 
@@ -118,13 +149,18 @@ function buildSystemPrompt(
   );
 
   return compactJoin([
-    "You are Ghostwriter, a job-application writing assistant for a single job.",
+    "You are JobOps AI Copilot, a job-application writing assistant for a single job.",
     "Use only the provided job and profile context unless the user gives extra details.",
-    "Do not claim actions were executed. You are read-only and advisory.",
     "If details are missing, say what is missing before making assumptions.",
     "Avoid exposing private profile details that are unrelated to the user request.",
-    'Always return valid JSON in the shape {"response":"..."} and put all user-visible output inside the "response" string.',
+    'Always return valid JSON with this exact shape: {"response":"...","coverLetterDraft":null,"coverLetterKind":null,"resumePatch":null}.',
     "Do not return markdown fences or any text outside that JSON object.",
+    'Put all user-visible chat text inside "response". Keep it concise, direct, and useful.',
+    'When the user asks for a cover letter or application email, put the final ready-to-use document body in "coverLetterDraft". Keep "response" short and do not duplicate the whole document there.',
+    'Use "coverLetterKind":"letter" for full cover letters and "coverLetterKind":"email" for short application emails. Otherwise return null.',
+    'When the user asks to update the current tailored CV for this job, return a "resumePatch" object with any fields you want the system to apply automatically: "tailoredSummary", "tailoredHeadline", and "tailoredSkills". Leave untouched fields as null.',
+    'When the user does not ask to update the CV, return "resumePatch": null.',
+    "Treat current job tailoring fields as editable working draft state for this job.",
     "Follow the user's requested output language exactly when they specify one.",
     `When the user does not request a language, default to writing user-visible resume or application content in ${outputLanguage}.`,
     `When suggesting a headline or job title, preserve the original wording instead of translating it.`,
@@ -140,6 +176,9 @@ function buildSystemPrompt(
     "For Denmark-local cover letters, keep the tone direct, employer-need driven, and restrained rather than highly enthusiastic or self-promotional.",
     "For Denmark-local cover letters, prefer a local, non-template opening and avoid generic salutations when a more specific opening is possible.",
     "For Denmark-local cover letters, keep the closing short and useful, with more emphasis on how the candidate can contribute and less on formal courtesy language.",
+    "Write with conviction and sincerity: concrete verbs, concrete evidence, and honest ambition.",
+    "Avoid empty intensity. Do not use generic hype, vague passion claims, or inflated adjectives when a sharper concrete statement is possible.",
+    "Prefer sentences that sound lived-in and specific over polished-but-generic recruiter language.",
     "Use concrete day-to-day detail from the supplied profile or job context when it makes the writing feel more lived-in and specific, but do not invent personal-life detail, stories, or unsupported facts.",
     'Avoid formulaic openings such as "I am writing to express my interest" unless the user explicitly asks for a more traditional letter style.',
     'Avoid stock motivation phrases such as "I am looking for a role where...", "This role fits me because...", or "I am excited to apply..." when a more concrete and specific opening is possible.',
@@ -165,6 +204,10 @@ export async function buildJobChatPromptContext(
   const style = await getWritingStyle();
 
   let profile: ResumeProfile = {};
+  let knowledgeBase: CandidateKnowledgeBase = {
+    personalFacts: [],
+    projects: [],
+  };
   try {
     profile = await getProfile();
   } catch (error) {
@@ -174,7 +217,16 @@ export async function buildJobChatPromptContext(
     });
   }
 
-  const profileSnapshot = buildProfileSnapshot(profile);
+  try {
+    knowledgeBase = await getCandidateKnowledgeBase();
+  } catch (error) {
+    logger.warn("Failed to load shared candidate knowledge for job chat", {
+      jobId,
+      error: sanitizeUnknown(error),
+    });
+  }
+
+  const profileSnapshot = buildProfileSnapshot(profile, knowledgeBase);
   const systemPrompt = buildSystemPrompt(style, profile);
   const jobSnapshot = buildJobSnapshot(job);
 

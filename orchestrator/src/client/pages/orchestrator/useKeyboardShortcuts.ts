@@ -9,7 +9,7 @@ import { SHORTCUTS } from "@client/lib/shortcut-map";
 import type { JobAction, JobListItem } from "@shared/types.js";
 import { useCallback, useRef } from "react";
 import { toast } from "sonner";
-import { safeFilenamePart } from "@/lib/utils";
+import { getJobListingUrl, safeFilenamePart } from "@/lib/utils";
 import type { FilterTab } from "./constants";
 import { tabs } from "./constants";
 
@@ -242,7 +242,7 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
 
       [SHORTCUTS.openListing.key]: () => {
         if (!selectedJob) return;
-        const link = selectedJob.applicationLink || selectedJob.jobUrl;
+        const link = getJobListingUrl(selectedJob);
         if (link) window.open(link, "_blank", "noopener,noreferrer");
       },
 

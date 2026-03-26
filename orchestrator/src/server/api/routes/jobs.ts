@@ -23,6 +23,7 @@ import {
   getTasks,
   stageEventMetadataSchema,
   transitionStage,
+  undoAppliedStage,
   updateStageEvent,
 } from "@server/services/applicationTracking";
 import {
@@ -32,8 +33,8 @@ import {
   simulateRescoreJob,
   simulateSummarizeJob,
 } from "@server/services/demo-simulator";
-import { getProfile } from "@server/services/profile";
 import { evaluateJobPrefilter } from "@server/services/job-prefilter";
+import { getProfile } from "@server/services/profile";
 import { scoreJobSuitability } from "@server/services/scorer";
 import { getTracerReadiness } from "@server/services/tracer-links";
 import * as visaSponsors from "@server/services/visa-sponsors/index";
@@ -174,6 +175,7 @@ const updateJobSchema = z.object({
   selectedProjectIds: z.string().optional(),
   pdfPath: z.string().optional(),
   tracerLinksEnabled: z.boolean().optional(),
+  appliedAt: z.string().trim().max(100).nullable().optional(),
   sponsorMatchScore: z.number().min(0).max(100).optional(),
   sponsorMatchNames: z.string().optional(),
 });
@@ -440,11 +442,12 @@ async function executeJobActionForJob(
           return rawProfile as Record<string, unknown>;
         })();
 
-    const [searchCitiesSetting, selectedCountry, autoSkipThresholdRaw] = await Promise.all([
-      settingsRepo.getSetting("searchCities"),
-      settingsRepo.getSetting("jobspyCountryIndeed"),
-      settingsRepo.getSetting("autoSkipScoreThreshold"),
-    ]);
+    const [searchCitiesSetting, selectedCountry, autoSkipThresholdRaw] =
+      await Promise.all([
+        settingsRepo.getSetting("searchCities"),
+        settingsRepo.getSetting("jobspyCountryIndeed"),
+        settingsRepo.getSetting("autoSkipScoreThreshold"),
+      ]);
     const autoSkipThreshold = autoSkipThresholdRaw
       ? parseInt(autoSkipThresholdRaw, 10)
       : null;
@@ -1312,6 +1315,47 @@ jobsRouter.post("/:id/apply", async (req: Request, res: Response) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     res.status(500).json({ success: false, error: message });
+  }
+});
+
+/**
+ * POST /api/jobs/:id/unapply - Undo an accidental applied mark and restore ready state
+ */
+jobsRouter.post("/:id/unapply", async (req: Request, res: Response) => {
+  try {
+    if (isDemoMode()) {
+      const updatedJob = await jobsRepo.updateJob(req.params.id, {
+        status: "ready",
+        appliedAt: null,
+      });
+      if (!updatedJob) {
+        return fail(res, notFound("Job not found"));
+      }
+      return okWithMeta(res, updatedJob, { simulated: true });
+    }
+
+    const job = await jobsRepo.getJobById(req.params.id);
+    if (!job) {
+      return fail(res, notFound("Job not found"));
+    }
+    if (job.status !== "applied") {
+      return fail(
+        res,
+        badRequest("Only applied jobs can be moved back to ready"),
+      );
+    }
+
+    undoAppliedStage(job.id);
+
+    const updatedJob = await jobsRepo.getJobById(job.id);
+    if (!updatedJob) {
+      return fail(res, notFound("Job not found"));
+    }
+
+    return ok(res, updatedJob);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return fail(res, badRequest(message));
   }
 });
 

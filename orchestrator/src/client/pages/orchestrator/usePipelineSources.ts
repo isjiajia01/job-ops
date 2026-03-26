@@ -6,6 +6,8 @@ import {
   PIPELINE_SOURCES_STORAGE_KEY,
 } from "./constants";
 
+const THEHUB_DEFAULT_MIGRATION_KEY = "jobops.pipeline.thehub-default.v1";
+
 const resolveAllowedSources = (enabledSources?: readonly JobSource[]) =>
   enabledSources && enabledSources.length > 0
     ? (enabledSources as JobSource[])
@@ -23,6 +25,10 @@ const sourcesMatch = (left: JobSource[], right: JobSource[]) =>
   left.length === right.length &&
   left.every((value, index) => value === right[index]);
 
+const shouldAutoIncludeTheHub = (allowedSources: JobSource[]) =>
+  allowedSources.includes("thehub") &&
+  localStorage.getItem(THEHUB_DEFAULT_MIGRATION_KEY) !== "done";
+
 export const usePipelineSources = (enabledSources?: readonly JobSource[]) => {
   const allowedSources = useMemo(
     () => resolveAllowedSources(enabledSources),
@@ -38,7 +44,14 @@ export const usePipelineSources = (enabledSources?: readonly JobSource[]) => {
       const next = parsed.filter((value): value is JobSource =>
         orderedSources.includes(value as JobSource),
       );
-      return normalizeSources(next, allowedSources);
+      const normalized = normalizeSources(next, allowedSources);
+      if (
+        shouldAutoIncludeTheHub(allowedSources) &&
+        !normalized.includes("thehub")
+      ) {
+        return [...normalized, "thehub"];
+      }
+      return normalized;
     } catch {
       return normalizeSources(allowedSources, allowedSources);
     }
@@ -49,6 +62,18 @@ export const usePipelineSources = (enabledSources?: readonly JobSource[]) => {
       const normalized = normalizeSources(current, allowedSources);
       return sourcesMatch(current, normalized) ? current : normalized;
     });
+  }, [allowedSources]);
+
+  useEffect(() => {
+    if (!shouldAutoIncludeTheHub(allowedSources)) return;
+    setPipelineSources((current) =>
+      current.includes("thehub") ? current : [...current, "thehub"],
+    );
+    try {
+      localStorage.setItem(THEHUB_DEFAULT_MIGRATION_KEY, "done");
+    } catch {
+      // Ignore localStorage errors
+    }
   }, [allowedSources]);
 
   useEffect(() => {

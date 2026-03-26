@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
+import { getJobListingUrl } from "@/lib/utils";
 import { FitAssessment, JobHeader, TailoredSummary } from "..";
 import { KbdHint } from "../KbdHint";
 import { OpenJobListingButton } from "../OpenJobListingButton";
@@ -45,7 +46,7 @@ export const DecideMode: React.FC<DecideModeProps> = ({
   onCheckSponsor,
 }) => {
   const [showDescription, setShowDescription] = useState(false);
-  const jobLink = job.applicationLink || job.jobUrl;
+  const jobLink = getJobListingUrl(job);
 
   const description = useMemo(
     () => getPlainDescription(job.jobDescription),

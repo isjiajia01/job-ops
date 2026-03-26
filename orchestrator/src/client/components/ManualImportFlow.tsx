@@ -1,21 +1,31 @@
 import * as api from "@client/api";
-import type { ManualJobDraft } from "@shared/types.js";
+import type { Job, ManualJobDraft } from "@shared/types.js";
+import { getGhostwriterCoverLetterDraft } from "@shared/utils/ghostwriter";
 import {
   ArrowLeft,
+  CheckCircle2,
   ClipboardPaste,
+  Download,
+  ExternalLink,
+  FileText,
   Link,
   Loader2,
+  RefreshCcw,
   Sparkles,
 } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { downloadCoverLetterPdfForJob } from "@/client/lib/cover-letter-pdf";
+import { downloadCvPdfForJob } from "@/client/lib/cv-pdf";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { COVER_LETTER_PROMPTS } from "./ghostwriter/prompt-presets";
 
-type ManualImportStep = "paste" | "loading" | "review";
+type ManualImportStep = "paste" | "loading" | "review" | "preparing" | "ready";
 
 type ManualJobDraftState = {
   title: string;
@@ -55,13 +65,23 @@ const STEP_INDEX_BY_ID: Record<ManualImportStep, number> = {
   paste: 0,
   loading: 1,
   review: 2,
+  preparing: 2,
+  ready: 3,
 };
 
 const STEP_LABEL_BY_ID: Record<ManualImportStep, string> = {
   paste: "Paste JD",
   loading: "Infer details",
   review: "Review & import",
+  preparing: "Generate kit",
+  ready: "Downloads ready",
 };
+
+const DEFAULT_COVER_LETTER_PROMPT_ID =
+  COVER_LETTER_PROMPTS.find((preset) => preset.id === "cover-letter-denmark")
+    ?.id ??
+  COVER_LETTER_PROMPTS[0]?.id ??
+  "cover-letter-standard";
 
 const normalizeDraft = (
   draft?: ManualJobDraft | null,
@@ -119,6 +139,7 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
   onImported,
   onClose,
 }) => {
+  const navigate = useNavigate();
   const [step, setStep] = useState<ManualImportStep>("paste");
   const [rawDescription, setRawDescription] = useState("");
   const [fetchUrl, setFetchUrl] = useState("");
@@ -127,6 +148,14 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
   const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [selectedCoverLetterPromptId, setSelectedCoverLetterPromptId] =
+    useState(DEFAULT_COVER_LETTER_PROMPT_ID);
+  const [preparedJob, setPreparedJob] = useState<Job | null>(null);
+  const [coverLetterDraft, setCoverLetterDraft] = useState("");
+  const [preparationWarning, setPreparationWarning] = useState<string | null>(
+    null,
+  );
+  const [isRetryingCoverLetter, setIsRetryingCoverLetter] = useState(false);
 
   useEffect(() => {
     if (active) return;
@@ -138,10 +167,22 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
     setWarning(null);
     setError(null);
     setIsImporting(false);
+    setSelectedCoverLetterPromptId(DEFAULT_COVER_LETTER_PROMPT_ID);
+    setPreparedJob(null);
+    setCoverLetterDraft("");
+    setPreparationWarning(null);
+    setIsRetryingCoverLetter(false);
   }, [active]);
 
   const stepIndex = STEP_INDEX_BY_ID[step];
   const stepLabel = STEP_LABEL_BY_ID[step];
+  const selectedCoverLetterPrompt = useMemo(
+    () =>
+      COVER_LETTER_PROMPTS.find(
+        (preset) => preset.id === selectedCoverLetterPromptId,
+      ) ?? COVER_LETTER_PROMPTS[0],
+    [selectedCoverLetterPromptId],
+  );
 
   const canAnalyze = rawDescription.trim().length > 0 && step !== "loading";
   const canFetch =
@@ -154,6 +195,33 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
       draft.jobDescription.trim().length > 0
     );
   }, [draft, step]);
+  const preparedPdfHref = preparedJob?.pdfPath
+    ? `/pdfs/resume_${preparedJob.id}.pdf?v=${encodeURIComponent(preparedJob.updatedAt)}`
+    : null;
+  const preparedCvHref = preparedJob ? `/job/${preparedJob.id}/cv` : null;
+  const preparedCoverLetterHref = preparedJob
+    ? `/job/${preparedJob.id}/cover-letter`
+    : null;
+  const checklistItems = useMemo(
+    () => [
+      {
+        id: "imported",
+        label: "Imported",
+        done: Boolean(preparedJob),
+      },
+      {
+        id: "cv",
+        label: "CV ready",
+        done: Boolean(preparedJob),
+      },
+      {
+        id: "cover-letter",
+        label: "Cover letter ready",
+        done: Boolean(coverLetterDraft.trim()),
+      },
+    ],
+    [coverLetterDraft, preparedJob],
+  );
 
   const handleFetch = async () => {
     if (!fetchUrl.trim()) return;
@@ -241,18 +309,117 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
     }
   };
 
+  const handleCreateApplicationKit = async () => {
+    if (!canImport) return;
+
+    let createdJob: Job | null = null;
+    try {
+      setError(null);
+      setPreparationWarning(null);
+      setIsImporting(true);
+      setStep("preparing");
+
+      const payload = toPayload(draft);
+      createdJob = await api.importManualJob({ job: payload });
+      setPreparedJob(createdJob);
+      await onImported(createdJob.id);
+
+      const coverLetterResult = await api.sendJobGhostwriterMessage(
+        createdJob.id,
+        {
+          content: selectedCoverLetterPrompt.prompt,
+        },
+      );
+
+      const refreshedJob = await api
+        .getJob(createdJob.id)
+        .catch(() => createdJob);
+      setPreparedJob(refreshedJob);
+      setCoverLetterDraft(
+        getGhostwriterCoverLetterDraft(
+          coverLetterResult.assistantMessage?.content,
+        ),
+      );
+      setStep("ready");
+
+      toast.success("Application kit ready", {
+        description: "Tailored CV and cover letter are ready for download.",
+      });
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to prepare application kit";
+      setError(message);
+      if (createdJob) {
+        setPreparationWarning(
+          "The CV kit is ready, but cover-letter generation did not complete. You can still open the imported job and retry Ghostwriter.",
+        );
+        setStep("ready");
+      } else {
+        setPreparationWarning(
+          "The manual job may already be imported even though cover-letter generation did not complete.",
+        );
+        setStep("review");
+      }
+      toast.error(message);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const openHref = (href: string | null) => {
+    if (!href) return;
+    window.open(href, "_blank", "noopener,noreferrer");
+  };
+
+  const handleRetryCoverLetter = async () => {
+    if (!preparedJob) return;
+
+    try {
+      setError(null);
+      setIsRetryingCoverLetter(true);
+      const coverLetterResult = await api.sendJobGhostwriterMessage(
+        preparedJob.id,
+        {
+          content: selectedCoverLetterPrompt.prompt,
+        },
+      );
+      setCoverLetterDraft(
+        getGhostwriterCoverLetterDraft(
+          coverLetterResult.assistantMessage?.content,
+        ),
+      );
+      setPreparationWarning(null);
+      toast.success("Cover letter regenerated", {
+        description: "The latest draft is now available below.",
+      });
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to regenerate cover letter";
+      setPreparationWarning(
+        "The CV is still ready, but cover-letter generation failed again.",
+      );
+      toast.error(message);
+    } finally {
+      setIsRetryingCoverLetter(false);
+    }
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="space-y-4">
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Step {stepIndex + 1} of 3</span>
+            <span>Step {stepIndex + 1} of 4</span>
             <span>{stepLabel}</span>
           </div>
           <div className="h-1 rounded-full bg-muted/40">
             <div
               className="h-1 rounded-full bg-primary/60 transition-all"
-              style={{ width: `${((stepIndex + 1) / 3) * 100}%` }}
+              style={{ width: `${((stepIndex + 1) / 4) * 100}%` }}
             />
           </div>
         </div>
@@ -366,6 +533,19 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
             </div>
             <p className="text-xs text-muted-foreground max-w-xs">
               Extracting title, company, location, and other details.
+            </p>
+          </div>
+        )}
+
+        {step === "preparing" && (
+          <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <div className="text-sm font-semibold">
+              Preparing application kit
+            </div>
+            <p className="max-w-sm text-xs text-muted-foreground">
+              Importing the JD, tailoring your CV, generating the PDF, and
+              drafting a {selectedCoverLetterPrompt.label.toLowerCase()}.
             </p>
           </div>
         )}
@@ -535,18 +715,259 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
               />
             </div>
 
-            <Button
-              onClick={() => void handleImport()}
-              disabled={!canImport || isImporting}
-              className="w-full h-10 gap-2"
-            >
-              {isImporting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
-              {isImporting ? "Importing..." : "Import job"}
-            </Button>
+            <div className="space-y-3 rounded-lg border border-border/50 bg-muted/10 p-4">
+              <div className="space-y-1">
+                <div className="text-sm font-medium">Cover letter style</div>
+                <p className="text-xs text-muted-foreground">
+                  Used by the one-click application-kit flow.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {COVER_LETTER_PROMPTS.map((preset) => (
+                  <Button
+                    key={preset.id}
+                    type="button"
+                    size="sm"
+                    variant={
+                      preset.id === selectedCoverLetterPromptId
+                        ? "default"
+                        : "outline"
+                    }
+                    onClick={() => setSelectedCoverLetterPromptId(preset.id)}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {selectedCoverLetterPrompt.description}
+              </p>
+            </div>
+
+            {preparationWarning ? (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                {preparationWarning}
+              </div>
+            ) : null}
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleImport()}
+                disabled={!canImport || isImporting}
+                className="flex-1 h-10 gap-2"
+              >
+                {isImporting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ClipboardPaste className="h-4 w-4" />
+                )}
+                {isImporting ? "Importing..." : "Import only"}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void handleCreateApplicationKit()}
+                disabled={!canImport || isImporting}
+                className="flex-1 h-10 gap-2"
+              >
+                {isImporting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                {isImporting ? "Preparing..." : "Create application kit"}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === "ready" && preparedJob && (
+          <div className="space-y-4 pb-4">
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-emerald-300/90">
+                    Application Kit
+                  </div>
+                  <div className="text-base font-semibold text-emerald-100">
+                    {preparedJob.title}
+                  </div>
+                  <p className="text-sm text-emerald-100/90">
+                    {preparedJob.employer}
+                    {preparedJob.location ? ` • ${preparedJob.location}` : ""}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="shrink-0 border-emerald-400/30 bg-emerald-500/5 text-emerald-100 hover:bg-emerald-500/10"
+                  onClick={() => navigate(`/job/${preparedJob.id}`)}
+                >
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Open in JobOps
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border/50 bg-muted/10 p-4">
+              <div className="mb-3 text-sm font-medium">Progress</div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {checklistItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-2 rounded-lg border border-border/50 bg-background/40 px-3 py-2 text-sm"
+                  >
+                    <CheckCircle2
+                      className={
+                        item.done
+                          ? "h-4 w-4 text-emerald-400"
+                          : "h-4 w-4 text-muted-foreground/40"
+                      }
+                    />
+                    <span
+                      className={
+                        item.done ? "text-foreground" : "text-muted-foreground"
+                      }
+                    >
+                      {item.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+              <div className="space-y-4">
+                <div className="rounded-xl border border-border/50 bg-muted/10 p-4">
+                  <div className="mb-3 text-sm font-medium">Downloads</div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="justify-start gap-2"
+                      onClick={() =>
+                        openHref(preparedPdfHref || preparedCvHref)
+                      }
+                      disabled={!preparedJob}
+                    >
+                      <FileText className="h-4 w-4" />
+                      View CV
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="justify-start gap-2"
+                      onClick={() => openHref(preparedCoverLetterHref)}
+                      disabled={!preparedCoverLetterHref}
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      View Cover Letter
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="justify-start gap-2"
+                      onClick={() => {
+                        if (!preparedJob) return;
+                        if (preparedPdfHref) {
+                          openHref(preparedPdfHref);
+                          return;
+                        }
+                        void downloadCvPdfForJob(preparedJob.id).catch(
+                          (error) => {
+                            const message =
+                              error instanceof Error
+                                ? error.message
+                                : "Failed to download CV PDF";
+                            toast.error(message);
+                          },
+                        );
+                      }}
+                      disabled={!preparedJob}
+                    >
+                      <Download className="h-4 w-4" />
+                      Download CV PDF
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="justify-start gap-2"
+                      onClick={() => {
+                        if (!preparedJob) return;
+                        void downloadCoverLetterPdfForJob(preparedJob.id).catch(
+                          (error) => {
+                            const message =
+                              error instanceof Error
+                                ? error.message
+                                : "Failed to download cover letter PDF";
+                            toast.error(message);
+                          },
+                        );
+                      }}
+                      disabled={!preparedJob}
+                    >
+                      <Download className="h-4 w-4" />
+                      Download Cover Letter PDF
+                    </Button>
+                  </div>
+                </div>
+
+                {preparationWarning ? (
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                    {preparationWarning}
+                  </div>
+                ) : null}
+
+                {!coverLetterDraft.trim() || preparationWarning ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-center gap-2"
+                    onClick={() => void handleRetryCoverLetter()}
+                    disabled={isRetryingCoverLetter}
+                  >
+                    {isRetryingCoverLetter ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCcw className="h-4 w-4" />
+                    )}
+                    {isRetryingCoverLetter
+                      ? "Retrying..."
+                      : "Retry cover letter"}
+                  </Button>
+                ) : null}
+              </div>
+
+              <div className="rounded-xl border border-border/50 bg-muted/10 p-4">
+                <div className="mb-2 text-sm font-medium">
+                  Generated cover letter draft
+                </div>
+                <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+                  {coverLetterDraft ||
+                    "The cover letter page is available, but no assistant draft text was returned here."}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="justify-center gap-2"
+                onClick={() => navigate(`/jobs/ready/${preparedJob.id}`)}
+              >
+                <ExternalLink className="h-4 w-4" />
+                Go To Ready Column
+              </Button>
+              <Button
+                type="button"
+                onClick={onClose}
+                className="justify-center gap-2"
+              >
+                Done
+              </Button>
+            </div>
           </div>
         )}
       </div>

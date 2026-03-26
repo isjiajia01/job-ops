@@ -29,6 +29,7 @@ export interface ExtractorRunResult {
   success: boolean;
   jobs: CreateJobInput[];
   error?: string;
+  termHitCounts?: Record<string, number>;
 }
 
 export interface ExtractorManifest {

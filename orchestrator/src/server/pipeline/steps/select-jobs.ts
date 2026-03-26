@@ -73,17 +73,20 @@ function inferRoleFamily(job: ScoredJob): string {
 }
 
 function compareSelectedJobs(left: ScoredJob, right: ScoredJob): number {
-  const scoreDiff = (right.suitabilityScore ?? 0) - (left.suitabilityScore ?? 0);
+  const scoreDiff =
+    (right.suitabilityScore ?? 0) - (left.suitabilityScore ?? 0);
   if (scoreDiff !== 0) return scoreDiff;
 
-  const sponsorDiff = (right.sponsorMatchScore ?? 0) - (left.sponsorMatchScore ?? 0);
+  const sponsorDiff =
+    (right.sponsorMatchScore ?? 0) - (left.sponsorMatchScore ?? 0);
   if (sponsorDiff !== 0) return sponsorDiff;
 
   const sourceDiff =
     (SOURCE_PRIORITY[right.source] ?? 0) - (SOURCE_PRIORITY[left.source] ?? 0);
   if (sourceDiff !== 0) return sourceDiff;
 
-  const postedDiff = parseTimestamp(right.datePosted) - parseTimestamp(left.datePosted);
+  const postedDiff =
+    parseTimestamp(right.datePosted) - parseTimestamp(left.datePosted);
   if (postedDiff !== 0) return postedDiff;
 
   const discoveredDiff =

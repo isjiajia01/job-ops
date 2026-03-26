@@ -7,8 +7,15 @@ import {
 } from "@infra/errors";
 import { logger } from "@infra/logger";
 import { getRequestId } from "@infra/request-context";
+import { sanitizeUnknown } from "@infra/sanitize";
 import type { JobChatMessage, JobChatRun } from "@shared/types";
+import {
+  getGhostwriterDisplayText,
+  normalizeGhostwriterAssistantPayload,
+  serializeGhostwriterAssistantPayload,
+} from "@shared/utils/ghostwriter";
 import * as jobChatRepo from "../repositories/ghostwriter";
+import * as jobsRepo from "../repositories/jobs";
 import * as settingsRepo from "../repositories/settings";
 import { buildJobChatPromptContext } from "./ghostwriter-context";
 import { LlmService } from "./llm/service";
@@ -30,6 +37,44 @@ const CHAT_RESPONSE_SCHEMA: JsonSchemaDefinition = {
     properties: {
       response: {
         type: "string",
+      },
+      coverLetterDraft: {
+        type: ["string", "null"],
+      },
+      coverLetterKind: {
+        type: ["string", "null"],
+        enum: ["letter", "email", null],
+      },
+      resumePatch: {
+        type: ["object", "null"],
+        properties: {
+          tailoredSummary: {
+            type: ["string", "null"],
+          },
+          tailoredHeadline: {
+            type: ["string", "null"],
+          },
+          tailoredSkills: {
+            type: ["array", "null"],
+            items: {
+              type: "object",
+              properties: {
+                name: {
+                  type: "string",
+                },
+                keywords: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                  },
+                },
+              },
+              required: ["name", "keywords"],
+              additionalProperties: false,
+            },
+          },
+        },
+        additionalProperties: false,
       },
     },
     required: ["response"],
@@ -100,7 +145,10 @@ async function buildConversationMessages(
     .filter((message) => message.status !== "failed")
     .map((message) => ({
       role: message.role,
-      content: message.content,
+      content:
+        message.role === "assistant"
+          ? getGhostwriterDisplayText(message.content)
+          : message.content,
     }));
 }
 
@@ -187,6 +235,21 @@ export async function listMessagesForJob(input: {
   });
 }
 
+async function applyResumePatchToJob(
+  jobId: string,
+  payload: NonNullable<ReturnType<typeof normalizeGhostwriterAssistantPayload>>,
+): Promise<void> {
+  if (!payload.resumePatch) return;
+
+  await jobsRepo.updateJob(jobId, {
+    tailoredSummary: payload.resumePatch.tailoredSummary ?? undefined,
+    tailoredHeadline: payload.resumePatch.tailoredHeadline ?? undefined,
+    tailoredSkills: payload.resumePatch.tailoredSkills
+      ? JSON.stringify(payload.resumePatch.tailoredSkills)
+      : undefined,
+  });
+}
+
 async function runAssistantReply(
   options: GenerateReplyOptions,
 ): Promise<{ runId: string; messageId: string; message: string }> {
@@ -265,7 +328,7 @@ async function runAssistantReply(
       apiKey: llmConfig.apiKey,
     });
 
-    const llmResult = await llm.callJson<{ response: string }>({
+    const llmResult = await llm.callJson({
       model: llmConfig.model,
       messages: [
         {
@@ -302,8 +365,18 @@ async function runAssistantReply(
       });
     }
 
-    const finalText = (llmResult.data.response || "").trim();
-    const chunks = chunkText(finalText);
+    const payload = normalizeGhostwriterAssistantPayload(llmResult.data);
+    if (!payload) {
+      logger.warn("Ghostwriter payload normalization failed", {
+        jobId: options.jobId,
+        threadId: options.threadId,
+        llmPayload: sanitizeUnknown(llmResult.data),
+      });
+      throw upstreamError("LLM returned an invalid Ghostwriter payload");
+    }
+
+    const responseText = (payload.response || "").trim();
+    const chunks = chunkText(responseText);
 
     for (const chunk of chunks) {
       if (controller.signal.aborted) {
@@ -334,13 +407,20 @@ async function runAssistantReply(
       });
     }
 
+    await applyResumePatchToJob(options.jobId, payload);
+
+    const storedContent = serializeGhostwriterAssistantPayload({
+      ...payload,
+      response: responseText,
+    });
+
     const completedMessage = await jobChatRepo.updateMessage(
       assistantMessage.id,
       {
-        content: accumulated,
+        content: storedContent,
         status: "complete",
         tokensIn: estimateTokenCount(options.prompt),
-        tokensOut: estimateTokenCount(accumulated),
+        tokensOut: estimateTokenCount(responseText),
       },
     );
 
@@ -356,7 +436,7 @@ async function runAssistantReply(
     return {
       runId: run.id,
       messageId: assistantMessage.id,
-      message: accumulated,
+      message: storedContent,
     };
   } catch (error) {
     const appError = error instanceof Error ? error : new Error(String(error));

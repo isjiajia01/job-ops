@@ -187,6 +187,10 @@ export const getEnabledSources = (
       enabled.push(source);
       continue;
     }
+    if (source === "thehub") {
+      enabled.push(source);
+      continue;
+    }
     if (source === "ukvisajobs") {
       if (hasUkVisaJobsAuth) enabled.push(source);
       continue;

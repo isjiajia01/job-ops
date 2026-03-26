@@ -96,4 +96,30 @@ describe("usePipelineSources", () => {
 
     expect(result.current.pipelineSources).toEqual(["gradcracker"]);
   });
+
+  it("auto-includes thehub once when it becomes available", () => {
+    ensureStorage().setItem(
+      PIPELINE_SOURCES_STORAGE_KEY,
+      JSON.stringify(["indeed", "jobindex", "linkedin"]),
+    );
+
+    const enabledSources = [
+      "indeed",
+      "jobindex",
+      "thehub",
+      "linkedin",
+    ] as const;
+
+    const { result } = renderHook(() => usePipelineSources(enabledSources));
+
+    expect(result.current.pipelineSources).toEqual([
+      "indeed",
+      "jobindex",
+      "linkedin",
+      "thehub",
+    ]);
+    expect(localStorage.getItem("jobops.pipeline.thehub-default.v1")).toBe(
+      "done",
+    );
+  });
 });

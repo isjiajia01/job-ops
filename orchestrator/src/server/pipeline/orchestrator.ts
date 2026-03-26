@@ -267,8 +267,12 @@ export async function summarizeJob(
           tailoredSummary = tailoringResult.data.summary;
           tailoredHeadline = tailoringResult.data.headline;
           tailoredSkills = JSON.stringify(tailoringResult.data.skills);
-          tailoredExperienceEdits = JSON.stringify(tailoringResult.data.experienceEdits);
-          tailoredLayoutDirectives = JSON.stringify(tailoringResult.data.layoutDirectives);
+          tailoredExperienceEdits = JSON.stringify(
+            tailoringResult.data.experienceEdits,
+          );
+          tailoredLayoutDirectives = JSON.stringify(
+            tailoringResult.data.layoutDirectives,
+          );
           tailoredSectionRationale = tailoringResult.data.sectionRationale;
           tailoredOmissionRationale = tailoringResult.data.omissionRationale;
         } else if (options?.force || !tailoredSummary || !tailoredHeadline) {

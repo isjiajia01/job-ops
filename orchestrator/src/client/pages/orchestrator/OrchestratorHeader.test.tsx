@@ -31,6 +31,7 @@ const renderHeader = (
     isCancelling: false,
     pipelineSources: ["gradcracker"],
     onOpenAutomaticRun: vi.fn(),
+    onOpenManualImport: vi.fn(),
     onCancelPipeline: vi.fn(),
     ...overrides,
   };
@@ -52,11 +53,10 @@ describe("OrchestratorHeader", () => {
     expect(props.onOpenAutomaticRun).toHaveBeenCalled();
   });
 
-  it("does not render manual import button", () => {
-    renderHeader();
-    expect(
-      screen.queryByRole("button", { name: /manual import/i }),
-    ).not.toBeInTheDocument();
+  it("opens manual import from the paste jd button", () => {
+    const { props } = renderHeader();
+    fireEvent.click(screen.getByRole("button", { name: /paste jd/i }));
+    expect(props.onOpenManualImport).toHaveBeenCalled();
   });
 
   it("renders cancel button while running and triggers cancel", () => {

@@ -1,5 +1,6 @@
 import {
   Columns3,
+  ContactRound,
   Home,
   Inbox,
   LayoutDashboard,
@@ -33,6 +34,12 @@ export const NAV_LINKS: NavLink[] = [
     label: "In Progress",
     icon: Columns3,
     activePaths: ["/applications/in-progress"],
+  },
+  {
+    to: "/profile-hub",
+    label: "Profile Hub",
+    icon: ContactRound,
+    activePaths: ["/profile-hub"],
   },
   { to: "/tracking-inbox", label: "Tracking Inbox", icon: Inbox },
   {

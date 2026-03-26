@@ -65,7 +65,8 @@ const TAILORING_SCHEMA: JsonSchemaDefinition = {
       },
       experienceEdits: {
         type: "array",
-        description: "Structured rewrites for resume experience bullet lists keyed by experience id",
+        description:
+          "Structured rewrites for resume experience bullet lists keyed by experience id",
         items: {
           type: "object",
           properties: {
@@ -84,11 +85,24 @@ const TAILORING_SCHEMA: JsonSchemaDefinition = {
           hiddenProjectIds: { type: "array", items: { type: "string" } },
           hiddenExperienceIds: { type: "array", items: { type: "string" } },
         },
-        required: ["sectionOrder", "hiddenSections", "hiddenProjectIds", "hiddenExperienceIds"],
+        required: [
+          "sectionOrder",
+          "hiddenSections",
+          "hiddenProjectIds",
+          "hiddenExperienceIds",
+        ],
         additionalProperties: false,
       },
-      sectionRationale: { type: "string", description: "Short explanation of why the chosen section ordering and emphasis fit this JD" },
-      omissionRationale: { type: "string", description: "Short explanation of any hidden sections, projects, or experience items for this JD" },
+      sectionRationale: {
+        type: "string",
+        description:
+          "Short explanation of why the chosen section ordering and emphasis fit this JD",
+      },
+      omissionRationale: {
+        type: "string",
+        description:
+          "Short explanation of any hidden sections, projects, or experience items for this JD",
+      },
       skills: {
         type: "array",
         description: "Skills sections with keywords tailored to the job",
@@ -110,7 +124,15 @@ const TAILORING_SCHEMA: JsonSchemaDefinition = {
         },
       },
     },
-    required: ["headline", "summary", "skills", "experienceEdits", "layoutDirectives", "sectionRationale", "omissionRationale"],
+    required: [
+      "headline",
+      "summary",
+      "skills",
+      "experienceEdits",
+      "layoutDirectives",
+      "sectionRationale",
+      "omissionRationale",
+    ],
     additionalProperties: false,
   },
 };
@@ -158,7 +180,15 @@ export async function generateTailoring(
     };
   }
 
-  const { summary, headline, skills, experienceEdits, layoutDirectives, sectionRationale, omissionRationale } = result.data;
+  const {
+    summary,
+    headline,
+    skills,
+    experienceEdits,
+    layoutDirectives,
+    sectionRationale,
+    omissionRationale,
+  } = result.data;
 
   // Basic validation
   if (!summary || !headline || !Array.isArray(skills)) {
@@ -369,15 +399,18 @@ function sanitizeText(text: string): string {
     .trim();
 }
 
-
 function stripHtmlToText(text: string | null | undefined): string {
   if (!text) return "";
-  return text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return text
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function extractExperienceBullets(item: Record<string, unknown>): string[] {
   const candidates = [item.summary, item.description].filter(
-    (value): value is string => typeof value === "string" && value.trim().length > 0,
+    (value): value is string =>
+      typeof value === "string" && value.trim().length > 0,
   );
   for (const candidate of candidates) {
     const matches = [...candidate.matchAll(/<li>([\s\S]*?)<\/li>/gi)]
@@ -410,7 +443,6 @@ function sanitizeExperienceEdits(
   return out;
 }
 
-
 function sanitizeStringArray(value: unknown, limit = 20): string[] {
   if (!Array.isArray(value)) return [];
   const out: string[] = [];
@@ -433,6 +465,9 @@ function sanitizeLayoutDirectives(
     sectionOrder: sanitizeStringArray(directives.sectionOrder, 20),
     hiddenSections: sanitizeStringArray(directives.hiddenSections, 20),
     hiddenProjectIds: sanitizeStringArray(directives.hiddenProjectIds, 50),
-    hiddenExperienceIds: sanitizeStringArray(directives.hiddenExperienceIds, 50),
+    hiddenExperienceIds: sanitizeStringArray(
+      directives.hiddenExperienceIds,
+      50,
+    ),
   };
 }

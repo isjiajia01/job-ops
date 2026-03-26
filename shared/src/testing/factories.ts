@@ -151,6 +151,16 @@ export const createAppSettings = (
     },
     override: null,
   },
+  candidateKnowledgeBase: {
+    value: { personalFacts: [], projects: [] },
+    default: { personalFacts: [], projects: [] },
+    override: null,
+  },
+  candidateResumeProfile: {
+    value: {},
+    default: {},
+    override: null,
+  },
   rxresumeBaseResumeId: null,
   rxresumeBaseResumeIdV4: null,
   rxresumeBaseResumeIdV5: null,

@@ -1,10 +1,10 @@
-import { Script, createContext } from "node:vm";
+import { createContext, Script } from "node:vm";
+import { normalizeCountryKey } from "@shared/location-support.js";
 import {
   matchesRequestedCity,
   resolveSearchCities,
   shouldApplyStrictCityFilter,
 } from "@shared/search-cities.js";
-import { normalizeCountryKey } from "@shared/location-support.js";
 import type { CreateJobInput } from "@shared/types/jobs";
 
 const BASE_URL = "https://thehub.io";
@@ -45,6 +45,7 @@ type TheHubJobDetails = TheHubJobCard & {
   salary?: string;
   publishedAt?: string;
   expirationDate?: string;
+  employmentTypeLabels?: string[];
 };
 
 type TheHubJobsPage = {
@@ -53,6 +54,40 @@ type TheHubJobsPage = {
   page?: number;
   pages?: number;
   docs?: TheHubJobCard[];
+};
+
+type JsonLdNode = {
+  "@type"?: string | string[];
+  title?: string;
+  description?: string;
+  datePosted?: string;
+  validThrough?: string;
+  employmentType?: string | string[];
+  jobLocationType?: string;
+  hiringOrganization?: {
+    name?: string;
+    sameAs?: string;
+    url?: string;
+  };
+  jobLocation?:
+    | {
+        address?:
+          | string
+          | {
+              streetAddress?: string;
+              addressLocality?: string;
+              addressCountry?: string | { name?: string };
+            };
+      }
+    | Array<{
+        address?:
+          | string
+          | {
+              streetAddress?: string;
+              addressLocality?: string;
+              addressCountry?: string | { name?: string };
+            };
+      }>;
 };
 
 type TheHubProgressEvent =
@@ -116,7 +151,7 @@ function matchesSearchTerm(text: string, searchTerm: string): boolean {
   return tokens.every((token) => normalizedText.includes(token));
 }
 
-function toAbsoluteUrl(path: string | null | undefined): string | undefined {
+function _toAbsoluteUrl(path: string | null | undefined): string | undefined {
   const normalized = normalizeText(path);
   if (!normalized) return undefined;
   if (/^https?:\/\//i.test(normalized)) return normalized;
@@ -139,6 +174,51 @@ function extractNuxtState(html: string): unknown {
   return sandbox.window.__NUXT__;
 }
 
+function parseJsonLdPayload(raw: string): unknown[] {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) return parsed;
+    return [parsed];
+  } catch {
+    return [];
+  }
+}
+
+function flattenJsonLdNodes(input: unknown): unknown[] {
+  if (!input || typeof input !== "object") return [];
+  const record = input as { "@graph"?: unknown[] };
+  if (Array.isArray(record["@graph"])) return record["@graph"];
+  return [input];
+}
+
+function isJobPostingNode(node: unknown): node is JsonLdNode {
+  if (!node || typeof node !== "object") return false;
+  const typeValue = (node as JsonLdNode)["@type"];
+  const types = Array.isArray(typeValue) ? typeValue : [typeValue];
+  return types.some((value) => value === "JobPosting");
+}
+
+function extractJobPostingJsonLd(html: string): JsonLdNode | null {
+  const matches = html.matchAll(
+    /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi,
+  );
+
+  for (const match of matches) {
+    const payload = match[1]?.trim();
+    if (!payload) continue;
+
+    for (const parsed of parseJsonLdPayload(payload)) {
+      for (const node of flattenJsonLdNodes(parsed)) {
+        if (isJobPostingNode(node)) {
+          return node;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 function getJobsPageFromNuxtState(state: unknown): TheHubJobsPage {
   const record = state as {
     state?: { jobs?: { jobs?: TheHubJobsPage } };
@@ -151,6 +231,91 @@ function getJobFromNuxtState(state: unknown): TheHubJobDetails | null {
     state?: { jobs?: { job?: TheHubJobDetails } };
   };
   return record?.state?.jobs?.job ?? null;
+}
+
+function normalizeEmploymentTypeLabels(
+  value: string | string[] | undefined,
+): string[] | undefined {
+  const labels = (Array.isArray(value) ? value : [value])
+    .map((item) => normalizeText(item))
+    .filter(Boolean);
+  return labels.length > 0 ? labels : undefined;
+}
+
+function formatJsonLdAddress(
+  value:
+    | string
+    | {
+        streetAddress?: string;
+        addressLocality?: string;
+        addressCountry?: string | { name?: string };
+      }
+    | undefined,
+): { address?: string; locality?: string; country?: string } {
+  if (!value) return {};
+  if (typeof value === "string") {
+    const normalized = normalizeText(value);
+    return normalized ? { address: normalized } : {};
+  }
+
+  const countryValue =
+    typeof value.addressCountry === "string"
+      ? value.addressCountry
+      : value.addressCountry?.name;
+  return {
+    address: normalizeText(value.streetAddress) || undefined,
+    locality: normalizeText(value.addressLocality) || undefined,
+    country: normalizeText(countryValue) || undefined,
+  };
+}
+
+function mapJsonLdJobToDetails(
+  jobPosting: JsonLdNode,
+): TheHubJobDetails | null {
+  const title = normalizeText(jobPosting.title);
+  const employer = normalizeText(jobPosting.hiringOrganization?.name);
+  if (!title || !employer) return null;
+
+  const firstLocation = Array.isArray(jobPosting.jobLocation)
+    ? jobPosting.jobLocation[0]
+    : jobPosting.jobLocation;
+  const location = formatJsonLdAddress(firstLocation?.address);
+
+  return {
+    title,
+    description: normalizeText(jobPosting.description) || undefined,
+    publishedAt: normalizeText(jobPosting.datePosted) || undefined,
+    expirationDate: normalizeText(jobPosting.validThrough) || undefined,
+    isRemote:
+      normalizeText(jobPosting.jobLocationType).toUpperCase() === "TELECOMMUTE"
+        ? true
+        : undefined,
+    employmentTypeLabels: normalizeEmploymentTypeLabels(
+      jobPosting.employmentType,
+    ),
+    company: {
+      name: employer,
+      website:
+        normalizeText(jobPosting.hiringOrganization?.sameAs) ||
+        normalizeText(jobPosting.hiringOrganization?.url) ||
+        undefined,
+    },
+    location,
+  };
+}
+
+function extractJobDetailsFromHtml(html: string): TheHubJobDetails | null {
+  try {
+    const detailState = extractNuxtState(html);
+    const details = getJobFromNuxtState(detailState);
+    if (details) return details;
+  } catch {
+    // Fall back to JSON-LD when embedded Nuxt state is absent or changes shape.
+  }
+
+  const jobPosting = extractJobPostingJsonLd(html);
+  if (!jobPosting) return null;
+  return mapJsonLdJobToDetails(jobPosting);
 }
 
 async function fetchHtml(url: string): Promise<string> {
@@ -183,6 +348,13 @@ function mapPositionTypes(ids: string[] | undefined): string | undefined {
   return labels.length > 0 ? labels.join(", ") : undefined;
 }
 
+function formatJobType(details: TheHubJobDetails): string | undefined {
+  if (details.employmentTypeLabels?.length) {
+    return details.employmentTypeLabels.join(", ");
+  }
+  return mapPositionTypes(details.jobPositionTypes);
+}
+
 function matchesRequestedLocations(args: {
   details: TheHubJobDetails;
   requestedLocations: string[];
@@ -213,10 +385,9 @@ function mapTheHubJob(details: TheHubJobDetails): CreateJobInput | null {
 
   const jobPath = `/jobs/${id}`;
   const jobUrl = new URL(jobPath, BASE_URL).toString();
-  const companyUrl =
-    details.company?.key
-      ? new URL(`/startups/${details.company.key}`, BASE_URL).toString()
-      : undefined;
+  const companyUrl = details.company?.key
+    ? new URL(`/startups/${details.company.key}`, BASE_URL).toString()
+    : undefined;
   const location =
     normalizeText(details.location?.address) ||
     normalizeText(
@@ -239,7 +410,7 @@ function mapTheHubJob(details: TheHubJobDetails): CreateJobInput | null {
     datePosted: normalizeText(details.publishedAt) || undefined,
     jobDescription: normalizeText(details.description) || undefined,
     salary: normalizeText(details.salary) || undefined,
-    jobType: mapPositionTypes(details.jobPositionTypes),
+    jobType: formatJobType(details),
     isRemote: details.isRemote ?? undefined,
     companyUrlDirect: normalizeText(details.company?.website) || undefined,
     companyDescription: normalizeText(details.company?.whatWeDo) || undefined,
@@ -269,7 +440,8 @@ export async function runTheHub(
   const preferredPages = Math.max(1, options.preferredPages ?? 8);
 
   try {
-    const countryCode = COUNTRY_CODE_BY_KEY[selectedCountry || "denmark"] || "DK";
+    const countryCode =
+      COUNTRY_CODE_BY_KEY[selectedCountry || "denmark"] || "DK";
     const firstHtml = await fetchHtml(
       `${BASE_URL}/jobs?countryCode=${countryCode}&page=1`,
     );
@@ -340,8 +512,7 @@ export async function runTheHub(
         if (!id) continue;
 
         const detailHtml = await fetchHtml(`${BASE_URL}/jobs/${id}`);
-        const detailState = extractNuxtState(detailHtml);
-        const details = getJobFromNuxtState(detailState);
+        const details = extractJobDetailsFromHtml(detailHtml);
         if (!details) continue;
 
         if (
@@ -395,7 +566,14 @@ export async function runTheHub(
     return {
       success: false,
       jobs: [],
-      error: error instanceof Error ? error.message : "The Hub extractor failed.",
+      error:
+        error instanceof Error ? error.message : "The Hub extractor failed.",
     };
   }
 }
+
+export const __testOnly = {
+  extractJobPostingJsonLd,
+  extractJobDetailsFromHtml,
+  mapJsonLdJobToDetails,
+};

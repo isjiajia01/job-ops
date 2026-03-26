@@ -1,9 +1,9 @@
 import { logger } from "@infra/logger";
 import * as jobsRepo from "@server/repositories/jobs";
 import * as settingsRepo from "@server/repositories/settings";
+import { suppressDuplicateDiscoveredJobs } from "@server/services/job-dedupe";
 import { evaluateJobPrefilter } from "@server/services/job-prefilter";
 import { scoreJobSuitability } from "@server/services/scorer";
-import { suppressDuplicateDiscoveredJobs } from "@server/services/job-dedupe";
 import * as visaSponsors from "@server/services/visa-sponsors/index";
 import { asyncPool } from "@server/utils/async-pool";
 import type { Job } from "@shared/types";

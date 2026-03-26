@@ -8,6 +8,7 @@ export const queryKeys = {
   profile: {
     all: ["profile"] as const,
     current: () => [...queryKeys.profile.all, "current"] as const,
+    knowledge: () => [...queryKeys.profile.all, "knowledge"] as const,
   },
   tracer: {
     all: ["tracer"] as const,

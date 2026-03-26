@@ -5,11 +5,7 @@ import type { AppSettings } from "@shared/types";
 import { getEnvSettingsData } from "./envSettings";
 import { getProfile } from "./profile";
 import { resolveResumeProjectsSettings } from "./resumeProjects";
-import {
-  extractProjectsFromResume,
-  getResume,
-  RxResumeAuthConfigError,
-} from "./rxresume";
+import { extractProjectsFromResume } from "./rxresume";
 import { resolveRxResumeBaseResumeIdForMode } from "./rxresume/baseResumeId";
 
 function resolveDefaultLlmBaseUrl(provider: string): string {
@@ -40,38 +36,10 @@ export async function getEffectiveSettings(): Promise<AppSettings> {
     rxresumeBaseResumeIdV4: overrides.rxresumeBaseResumeIdV4 ?? null,
     rxresumeBaseResumeIdV5: overrides.rxresumeBaseResumeIdV5 ?? null,
   });
-  let profile: Record<string, unknown> = {};
-
-  if (rxresumeBaseResumeId) {
-    try {
-      const resume = await getResume(rxresumeBaseResumeId);
-      if (resume.data && typeof resume.data === "object") {
-        profile = resume.data as Record<string, unknown>;
-      }
-    } catch (error) {
-      if (error instanceof RxResumeAuthConfigError) {
-        logger.warn(
-          "Reactive Resume credentials missing during settings load",
-          {
-            resumeId: rxresumeBaseResumeId,
-            error,
-          },
-        );
-      } else {
-        logger.warn("Failed to load Reactive Resume base resume for settings", {
-          resumeId: rxresumeBaseResumeId,
-          error,
-        });
-      }
-    }
-  }
-
-  if (Object.keys(profile).length === 0) {
-    profile = await getProfile().catch((error) => {
-      logger.warn("Failed to load base resume profile for settings", { error });
-      return {};
-    });
-  }
+  const profile = await getProfile().catch((error) => {
+    logger.warn("Failed to load base resume profile for settings", { error });
+    return {};
+  });
 
   const envSettings = await getEnvSettingsData(overrides);
 

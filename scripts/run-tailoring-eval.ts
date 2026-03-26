@@ -18,21 +18,41 @@ type Fixture = {
 };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const fixturePath = path.join(__dirname, "tailoring-eval-fixtures", "denmark-planning.json");
+const fixturePath = path.join(
+  __dirname,
+  "tailoring-eval-fixtures",
+  "denmark-planning.json",
+);
 
 function containsKeyword(text: string, keyword: string): boolean {
   return text.toLowerCase().includes(keyword.toLowerCase());
 }
 
-function flattenTailoring(result: Awaited<ReturnType<typeof generateTailoring>>["data"]): string {
+function flattenTailoring(
+  result: Awaited<ReturnType<typeof generateTailoring>>["data"],
+): string {
   if (!result) return "";
-  const skills = (result.skills ?? []).flatMap((group) => [group.name, ...(group.keywords ?? [])]);
-  const bullets = (result.experienceEdits ?? []).flatMap((edit) => edit.bullets ?? []);
+  const skills = (result.skills ?? []).flatMap((group) => [
+    group.name,
+    ...(group.keywords ?? []),
+  ]);
+  const bullets = (result.experienceEdits ?? []).flatMap(
+    (edit) => edit.bullets ?? [],
+  );
   const directives = result.layoutDirectives?.sectionOrder ?? [];
-  return [result.headline, result.summary, ...skills, ...bullets, ...directives].join("\n");
+  return [
+    result.headline,
+    result.summary,
+    ...skills,
+    ...bullets,
+    ...directives,
+  ].join("\n");
 }
 
-function scoreFixture(fixture: Fixture, data: NonNullable<Awaited<ReturnType<typeof generateTailoring>>["data"]>) {
+function scoreFixture(
+  fixture: Fixture,
+  data: NonNullable<Awaited<ReturnType<typeof generateTailoring>>["data"]>,
+) {
   let score = 0;
   const notes: string[] = [];
   const blob = flattenTailoring(data);
@@ -47,8 +67,13 @@ function scoreFixture(fixture: Fixture, data: NonNullable<Awaited<ReturnType<typ
     notes.push("headline weak");
   }
 
-  const requiredHits = fixture.expected.requiredKeywords.filter((kw) => containsKeyword(blob, kw));
-  if (requiredHits.length >= Math.max(2, Math.ceil(fixture.expected.requiredKeywords.length / 2))) {
+  const requiredHits = fixture.expected.requiredKeywords.filter((kw) =>
+    containsKeyword(blob, kw),
+  );
+  if (
+    requiredHits.length >=
+    Math.max(2, Math.ceil(fixture.expected.requiredKeywords.length / 2))
+  ) {
     score += 2;
     notes.push(`required keywords ok (${requiredHits.length})`);
   } else if (requiredHits.length > 0) {
@@ -58,7 +83,9 @@ function scoreFixture(fixture: Fixture, data: NonNullable<Awaited<ReturnType<typ
     notes.push("required keywords weak");
   }
 
-  const forbiddenHits = fixture.expected.forbiddenKeywords.filter((kw) => containsKeyword(blob, kw));
+  const forbiddenHits = fixture.expected.forbiddenKeywords.filter((kw) =>
+    containsKeyword(blob, kw),
+  );
   if (forbiddenHits.length === 0) {
     score += 2;
     notes.push("no forbidden claims");
@@ -79,18 +106,22 @@ function scoreFixture(fixture: Fixture, data: NonNullable<Awaited<ReturnType<typ
 
   const actualOrder = data.layoutDirectives?.sectionOrder ?? [];
   const expectedPrefix = fixture.expected.preferredSectionOrderPrefix;
-  const prefixMatches = expectedPrefix.every((value, index) => actualOrder[index] === value);
+  const prefixMatches = expectedPrefix.every(
+    (value, index) => actualOrder[index] === value,
+  );
   if (prefixMatches) {
     score += 2;
     notes.push("section order aligned");
   } else if (actualOrder.length > 0) {
     score += 1;
-    notes.push(`section order partial: ${actualOrder.join(' > ')}`);
+    notes.push(`section order partial: ${actualOrder.join(" > ")}`);
   } else {
     notes.push("missing section order");
   }
 
-  const rationaleOk = Boolean(data.sectionRationale?.trim()) && Boolean(data.omissionRationale?.trim())
+  const rationaleOk =
+    Boolean(data.sectionRationale?.trim()) &&
+    Boolean(data.omissionRationale?.trim());
   if (rationaleOk) {
     score += 2;
     notes.push("rationales present");
@@ -124,7 +155,10 @@ async function main(): Promise<void> {
     console.log("score=", scored.score, "/ 12");
     console.log("notes=", scored.notes.join(" | "));
     console.log("headline=", result.data.headline);
-    console.log("sectionOrder=", result.data.layoutDirectives?.sectionOrder ?? []);
+    console.log(
+      "sectionOrder=",
+      result.data.layoutDirectives?.sectionOrder ?? [],
+    );
     console.log("experienceEdits=", result.data.experienceEdits?.length ?? 0);
   }
 }

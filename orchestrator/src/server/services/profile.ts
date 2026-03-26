@@ -1,10 +1,11 @@
 import { logger } from "@infra/logger";
 import type { ResumeProfile } from "@shared/types";
+import { getInternalProfile } from "./internal-profile";
 import { getResume, RxResumeAuthConfigError } from "./rxresume";
 import { getConfiguredRxResumeBaseResumeId } from "./rxresume/baseResumeId";
 
 let cachedProfile: ResumeProfile | null = null;
-let cachedResumeId: string | null = null;
+let cachedProfileSource: string | null = null;
 
 /**
  * Get the base resume profile from RxResume.
@@ -16,6 +17,17 @@ let cachedResumeId: string | null = null;
  * @throws Error if rxresumeBaseResumeId is not configured or API call fails.
  */
 export async function getProfile(forceRefresh = false): Promise<ResumeProfile> {
+  const internalProfile = await getInternalProfile();
+  if (internalProfile) {
+    if (cachedProfile && cachedProfileSource === "internal" && !forceRefresh) {
+      return cachedProfile;
+    }
+
+    cachedProfile = internalProfile;
+    cachedProfileSource = "internal";
+    return internalProfile;
+  }
+
   const { resumeId: rxresumeBaseResumeId } =
     await getConfiguredRxResumeBaseResumeId();
 
@@ -28,7 +40,7 @@ export async function getProfile(forceRefresh = false): Promise<ResumeProfile> {
   // Return cached profile if valid
   if (
     cachedProfile &&
-    cachedResumeId === rxresumeBaseResumeId &&
+    cachedProfileSource === rxresumeBaseResumeId &&
     !forceRefresh
   ) {
     return cachedProfile;
@@ -45,7 +57,7 @@ export async function getProfile(forceRefresh = false): Promise<ResumeProfile> {
     }
 
     cachedProfile = resume.data as unknown as ResumeProfile;
-    cachedResumeId = rxresumeBaseResumeId;
+    cachedProfileSource = rxresumeBaseResumeId;
     logger.info("Profile loaded from Reactive Resume", {
       resumeId: rxresumeBaseResumeId,
     });
@@ -75,5 +87,5 @@ export async function getPersonName(): Promise<string> {
  */
 export function clearProfileCache(): void {
   cachedProfile = null;
-  cachedResumeId = null;
+  cachedProfileSource = null;
 }

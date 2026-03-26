@@ -138,6 +138,18 @@ export const formatJobForWebhook = (job: Job) => {
   );
 };
 
+export function getJobListingUrl(
+  job: Pick<Job, "source" | "jobUrl" | "applicationLink"> & {
+    jobUrlDirect?: string | null;
+  },
+): string {
+  if (job.source === "jobindex") {
+    return job.jobUrlDirect || job.jobUrl;
+  }
+
+  return job.applicationLink || job.jobUrl;
+}
+
 export const sourceLabel: Record<Job["source"], string> =
   EXTRACTOR_SOURCE_IDS.reduce(
     (acc, source) => {

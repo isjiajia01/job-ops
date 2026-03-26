@@ -1,11 +1,15 @@
 import { z } from "zod";
 import {
+  type CandidateKnowledgeBase,
   CHAT_STYLE_LANGUAGE_MODE_VALUES,
   CHAT_STYLE_MANUAL_LANGUAGE_VALUES,
   type ChatStyleLanguageMode,
   type ChatStyleManualLanguage,
+  type ResumeProfile,
   type ResumeProjectsSettings,
 } from "./types/settings";
+import { candidateKnowledgeBaseSchema } from "./utils/ghostwriter";
+import { createEmptyResumeProfile, resumeProfileSchema } from "./utils/profile";
 
 function parseNonEmptyStringOrNull(raw: string | undefined): string | null {
   return raw === undefined || raw === "" ? null : raw;
@@ -173,6 +177,40 @@ export const settingsRegistry = {
     ): string | null => {
       return value ? JSON.stringify(value) : null;
     },
+  },
+  candidateKnowledgeBase: {
+    kind: "typed" as const,
+    schema: candidateKnowledgeBaseSchema,
+    default: (): CandidateKnowledgeBase => ({
+      personalFacts: [],
+      projects: [],
+    }),
+    parse: (raw: string | undefined): CandidateKnowledgeBase | null => {
+      if (!raw) return null;
+      try {
+        return candidateKnowledgeBaseSchema.parse(JSON.parse(raw));
+      } catch {
+        return null;
+      }
+    },
+    serialize: (
+      value: CandidateKnowledgeBase | null | undefined,
+    ): string | null => (value ? JSON.stringify(value) : null),
+  },
+  candidateResumeProfile: {
+    kind: "typed" as const,
+    schema: resumeProfileSchema,
+    default: (): ResumeProfile => createEmptyResumeProfile() as ResumeProfile,
+    parse: (raw: string | undefined): ResumeProfile | null => {
+      if (!raw) return null;
+      try {
+        return resumeProfileSchema.parse(JSON.parse(raw)) as ResumeProfile;
+      } catch {
+        return null;
+      }
+    },
+    serialize: (value: ResumeProfile | null | undefined): string | null =>
+      value ? JSON.stringify(value) : null,
   },
   rxresumeMode: {
     kind: "typed" as const,
@@ -469,6 +507,10 @@ export const settingsRegistry = {
   rxresumeBaseResumeIdV5: {
     kind: "string" as const,
     schema: z.string().trim().max(200),
+  },
+  thehubTermTelemetry: {
+    kind: "string" as const,
+    schema: z.string().trim().max(20000),
   },
   rxresumeEmail: {
     kind: "string" as const,

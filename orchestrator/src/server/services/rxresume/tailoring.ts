@@ -519,14 +519,18 @@ function parseTailoredLayoutDirectives(
   hiddenExperienceIds: string[];
 } | null {
   if (!directives) return null;
-  const parsed = typeof directives === "string"
-    ? (JSON.parse(directives) as unknown)
-    : directives;
+  const parsed =
+    typeof directives === "string"
+      ? (JSON.parse(directives) as unknown)
+      : directives;
   const record = asRecord(parsed);
   if (!record) return null;
   const arr = (value: unknown) =>
     Array.isArray(value)
-      ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean)
+      ? value
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.trim())
+          .filter(Boolean)
       : [];
   return {
     sectionOrder: arr(record.sectionOrder),
@@ -566,9 +570,12 @@ function reorderSections(
   const current = [...currentMain, ...currentSidebar];
   const existing = new Set(current);
   const prioritized = requestedOrder.filter(
-    (sectionId, index) => existing.has(sectionId) && requestedOrder.indexOf(sectionId) === index,
+    (sectionId, index) =>
+      existing.has(sectionId) && requestedOrder.indexOf(sectionId) === index,
   );
-  const remainder = current.filter((sectionId) => !prioritized.includes(sectionId));
+  const remainder = current.filter(
+    (sectionId) => !prioritized.includes(sectionId),
+  );
   const ordered = [...prioritized, ...remainder];
   return {
     main: ordered.slice(0, currentMain.length),
@@ -618,9 +625,17 @@ function applySectionLayoutDirectives(args: {
     const main = asArray(page?.main);
     const sidebar = asArray(page?.sidebar);
     if (!page || !main || !sidebar) return;
-    const currentMain = main.filter((value): value is string => typeof value === "string");
-    const currentSidebar = sidebar.filter((value): value is string => typeof value === "string");
-    const next = reorderSections(currentMain, currentSidebar, directives.sectionOrder);
+    const currentMain = main.filter(
+      (value): value is string => typeof value === "string",
+    );
+    const currentSidebar = sidebar.filter(
+      (value): value is string => typeof value === "string",
+    );
+    const next = reorderSections(
+      currentMain,
+      currentSidebar,
+      directives.sectionOrder,
+    );
     page.main = next.main;
     page.sidebar = next.sidebar;
     return;
@@ -629,15 +644,23 @@ function applySectionLayoutDirectives(args: {
   const layout = asArray(metadata.layout);
   const firstPage = layout && layout.length > 0 ? asArray(layout[0]) : null;
   const main = firstPage && firstPage.length > 0 ? asArray(firstPage[0]) : null;
-  const sidebar = firstPage && firstPage.length > 1 ? asArray(firstPage[1]) : null;
+  const sidebar =
+    firstPage && firstPage.length > 1 ? asArray(firstPage[1]) : null;
   if (!firstPage || !main || !sidebar) return;
-  const currentMain = main.filter((value): value is string => typeof value === "string");
-  const currentSidebar = sidebar.filter((value): value is string => typeof value === "string");
-  const next = reorderSections(currentMain, currentSidebar, directives.sectionOrder);
+  const currentMain = main.filter(
+    (value): value is string => typeof value === "string",
+  );
+  const currentSidebar = sidebar.filter(
+    (value): value is string => typeof value === "string",
+  );
+  const next = reorderSections(
+    currentMain,
+    currentSidebar,
+    directives.sectionOrder,
+  );
   firstPage[0] = next.main;
   firstPage[1] = next.sidebar;
 }
-
 
 export function applyTailoredChunks(args: {
   mode: RxResumeMode;
