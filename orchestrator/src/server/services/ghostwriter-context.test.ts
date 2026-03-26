@@ -114,6 +114,16 @@ describe("buildJobChatPromptContext", () => {
     expect(context.systemPrompt).toContain(
       "Use soft personal notes only to tune tone and emphasis, not as hard factual evidence.",
     );
+    expect(context.systemPrompt).toContain("Preflight self-check:");
+    expect(context.systemPrompt).toContain(
+      "1. Overclaiming check: did you add any tool, ownership, scope, metric, seniority, or certainty that is not supported by the supplied job or profile context?",
+    );
+    expect(context.systemPrompt).toContain(
+      "2. Specificity check: does each important claim have concrete support, or is it still generic?",
+    );
+    expect(context.systemPrompt).toContain(
+      "3. Task-fit check: does the output match the user's actual request type, or did you drift into cover letter, CV rewrite, or strategy advice they did not ask for?",
+    );
     expect(context.systemPrompt).toContain(
       "When suggesting a headline or job title, preserve the original wording instead of translating it.",
     );
