@@ -1,0 +1,35 @@
+name: deploy-oracle
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Compose service to deploy"
+        required: false
+        default: job-ops
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-oracle-${{ inputs.service }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy on Oracle
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.ORACLE_SSH_HOST }}
+          username: ${{ secrets.ORACLE_SSH_USER }}
+          key: ${{ secrets.ORACLE_SSH_KEY }}
+          port: ${{ secrets.ORACLE_SSH_PORT || '22' }}
+          script_stop: true
+          script: |
+            cd /opt/job-ops
+            docker compose pull ${{ inputs.service }}
+            docker compose up -d ${{ inputs.service }}
+            docker compose ps
