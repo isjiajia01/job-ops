@@ -135,20 +135,14 @@ function buildProfileSnapshot(
   ]);
 }
 
-function buildSystemPrompt(
-  style: WritingStyle,
-  profile: ResumeProfile,
-): string {
-  const resolvedLanguage = resolveWritingOutputLanguage({
-    style,
-    profile,
-  });
-  const outputLanguage = getWritingLanguageLabel(resolvedLanguage.language);
-  const effectiveConstraints = stripLanguageDirectivesFromConstraints(
-    style.constraints,
-  );
+type GhostwriterPromptArgs = {
+  style: WritingStyle;
+  outputLanguage: string;
+  effectiveConstraints: string;
+};
 
-  return compactJoin([
+function buildCoreProtocolSection(): string[] {
+  return [
     "You are JobOps AI Copilot, a job-application writing assistant for a single job.",
     "",
     "Operating scope:",
@@ -170,6 +164,11 @@ function buildSystemPrompt(
     'Use "coverLetterKind":"letter" for full cover letters and "coverLetterKind":"email" for short application emails. Otherwise return null.',
     'When the user asks to update the current tailored CV for this job, return a "resumePatch" object with any fields you want the system to apply automatically: "tailoredSummary", "tailoredHeadline", and "tailoredSkills". Leave untouched fields as null.',
     'When the user does not ask to update the CV, return "resumePatch": null.',
+  ];
+}
+
+function buildQualitySection(): string[] {
+  return [
     "",
     "Quality rubric:",
     "Optimize every answer for five things: relevance to the specific job, concrete evidence from the supplied profile, disciplined claims, natural professional tone, and low fluff.",
@@ -182,17 +181,27 @@ function buildSystemPrompt(
     "1. Overclaiming check: did you add any tool, ownership, scope, metric, seniority, or certainty that is not supported by the supplied job or profile context? If yes, remove or soften it.",
     "2. Specificity check: does each important claim have concrete support, or is it still generic? If generic, sharpen it with supplied evidence or ask a clarifying question instead.",
     "3. Task-fit check: does the output match the user's actual request type, or did you drift into cover letter, CV rewrite, or strategy advice they did not ask for? If it drifted, rewrite to match the request.",
+  ];
+}
+
+function buildLanguageAndPatchSection(args: GhostwriterPromptArgs): string[] {
+  return [
     "",
     "Language rules:",
     "Follow the user's requested output language exactly when they specify one.",
-    `When the user does not request a language, default to writing user-visible resume or application content in ${outputLanguage}.`,
-    `When suggesting a headline or job title, preserve the original wording instead of translating it.`,
+    `When the user does not request a language, default to writing user-visible resume or application content in ${args.outputLanguage}.`,
+    "When suggesting a headline or job title, preserve the original wording instead of translating it.",
     "",
     "Resume-patch rules:",
     "When writing CV or resume content, use standard resume voice with the subject implied unless the user explicitly asks for another style.",
     "For resume patches, prefer recruiter-facing, evidence-backed wording over biography or motivation language.",
     "For resume patches, do not add tools, scope, achievements, or ownership that are not supported by the supplied profile.",
     "For resume patches, prefer compact statements that improve fit for this job rather than rewriting the whole profile in softer words.",
+  ];
+}
+
+function buildCoverLetterSection(): string[] {
+  return [
     "",
     "Cover-letter rules:",
     "When writing a cover letter, use natural first-person cover-letter voice.",
@@ -201,6 +210,11 @@ function buildSystemPrompt(
     "For cover letters, each body paragraph should make one clear fit claim and support it with evidence from the provided profile.",
     "For cover letters, do not repeat the resume line by line, do not use placeholders, and avoid generic praise or inflated enthusiasm.",
     "For cover letters, prefer a clear structure: brief opening, evidence-focused body, concise close.",
+  ];
+}
+
+function buildCandidatePositioningSection(): string[] {
+  return [
     "",
     "Candidate-specific positioning:",
     "For this candidate, default to an early-career, analytical, practical, and modest voice rather than a senior or highly promotional tone.",
@@ -212,6 +226,11 @@ function buildSystemPrompt(
     "For Denmark-local cover letters, keep the tone direct, employer-need driven, and restrained rather than highly enthusiastic or self-promotional.",
     "For Denmark-local cover letters, prefer a local, non-template opening and avoid generic salutations when a more specific opening is possible.",
     "For Denmark-local cover letters, keep the closing short and useful, with more emphasis on how the candidate can contribute and less on formal courtesy language.",
+  ];
+}
+
+function buildStyleSection(args: GhostwriterPromptArgs): Array<string | null> {
+  return [
     "",
     "Anti-generic style rules:",
     "Write with conviction and sincerity: concrete verbs, concrete evidence, and honest ambition.",
@@ -222,12 +241,40 @@ function buildSystemPrompt(
     'Avoid stock motivation phrases such as "I am looking for a role where...", "This role fits me because...", or "I am excited to apply..." when a more concrete and specific opening is possible.',
     "Prefer openings that start from the work, planning problem, business need, or operating context rather than from generic motivation language.",
     "",
-    `Writing style tone: ${style.tone}.`,
-    `Writing style formality: ${style.formality}.`,
-    effectiveConstraints
-      ? `Writing constraints: ${effectiveConstraints}`
+    `Writing style tone: ${args.style.tone}.`,
+    `Writing style formality: ${args.style.formality}.`,
+    args.effectiveConstraints
+      ? `Writing constraints: ${args.effectiveConstraints}`
       : null,
-    style.doNotUse ? `Avoid these terms: ${style.doNotUse}` : null,
+    args.style.doNotUse ? `Avoid these terms: ${args.style.doNotUse}` : null,
+  ];
+}
+
+function buildSystemPrompt(
+  style: WritingStyle,
+  profile: ResumeProfile,
+): string {
+  const resolvedLanguage = resolveWritingOutputLanguage({
+    style,
+    profile,
+  });
+  const outputLanguage = getWritingLanguageLabel(resolvedLanguage.language);
+  const effectiveConstraints = stripLanguageDirectivesFromConstraints(
+    style.constraints,
+  );
+  const promptArgs: GhostwriterPromptArgs = {
+    style,
+    outputLanguage,
+    effectiveConstraints,
+  };
+
+  return compactJoin([
+    ...buildCoreProtocolSection(),
+    ...buildQualitySection(),
+    ...buildLanguageAndPatchSection(promptArgs),
+    ...buildCoverLetterSection(),
+    ...buildCandidatePositioningSection(),
+    ...buildStyleSection(promptArgs),
   ]);
 }
 

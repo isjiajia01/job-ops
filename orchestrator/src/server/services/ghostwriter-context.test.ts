@@ -245,4 +245,42 @@ describe("buildJobChatPromptContext", () => {
       status: 404,
     } satisfies Partial<AppError>);
   });
+
+  it("keeps prompt sections in a stable high-level order", async () => {
+    const job = createJob({ id: "job-ctx-5" });
+    vi.mocked(getJobById).mockResolvedValue(job);
+    vi.mocked(getProfile).mockResolvedValue({});
+
+    const context = await buildJobChatPromptContext(job.id);
+
+    const operatingScopeIndex =
+      context.systemPrompt.indexOf("Operating scope:");
+    const taskRoutingIndex = context.systemPrompt.indexOf("Task routing:");
+    const outputContractIndex =
+      context.systemPrompt.indexOf("Output contract:");
+    const qualityRubricIndex = context.systemPrompt.indexOf("Quality rubric:");
+    const languageRulesIndex = context.systemPrompt.indexOf("Language rules:");
+    const resumePatchRulesIndex = context.systemPrompt.indexOf(
+      "Resume-patch rules:",
+    );
+    const coverLetterRulesIndex = context.systemPrompt.indexOf(
+      "Cover-letter rules:",
+    );
+    const candidatePositioningIndex = context.systemPrompt.indexOf(
+      "Candidate-specific positioning:",
+    );
+    const antiGenericIndex = context.systemPrompt.indexOf(
+      "Anti-generic style rules:",
+    );
+
+    expect(operatingScopeIndex).toBeGreaterThan(-1);
+    expect(taskRoutingIndex).toBeGreaterThan(operatingScopeIndex);
+    expect(outputContractIndex).toBeGreaterThan(taskRoutingIndex);
+    expect(qualityRubricIndex).toBeGreaterThan(outputContractIndex);
+    expect(languageRulesIndex).toBeGreaterThan(qualityRubricIndex);
+    expect(resumePatchRulesIndex).toBeGreaterThan(languageRulesIndex);
+    expect(coverLetterRulesIndex).toBeGreaterThan(resumePatchRulesIndex);
+    expect(candidatePositioningIndex).toBeGreaterThan(coverLetterRulesIndex);
+    expect(antiGenericIndex).toBeGreaterThan(candidatePositioningIndex);
+  });
 });
