@@ -110,13 +110,15 @@ describe("Backup Service", () => {
       // Only fake Date to keep async I/O (used by better-sqlite3 backup) real.
       vi.useFakeTimers({ toFake: ["Date"] });
       try {
-        vi.setSystemTime(new Date("2026-01-15T12:30:45Z"));
+        const fixedDate = new Date("2026-01-15T12:30:45Z");
+        vi.setSystemTime(fixedDate);
+        const localHours = String(fixedDate.getHours()).padStart(2, "0");
 
         const first = await backup.createBackup("manual");
         const second = await backup.createBackup("manual");
 
-        expect(first).toBe("jobs_manual_2026_01_15_12_30_45.db");
-        expect(second).toBe("jobs_manual_2026_01_15_12_30_45_1.db");
+        expect(first).toBe(`jobs_manual_2026_01_15_${localHours}_30_45.db`);
+        expect(second).toBe(`jobs_manual_2026_01_15_${localHours}_30_45_1.db`);
         expect(fs.existsSync(path.join(tempDir, second))).toBe(true);
       } finally {
         vi.useRealTimers();

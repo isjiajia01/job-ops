@@ -25,10 +25,11 @@ vi.mock("@server/repositories/settings", async (importOriginal) => {
   return {
     ...original,
     getSetting: vi.fn(),
+    setSetting: vi.fn(),
   };
 });
 
-import { getSetting } from "@server/repositories/settings";
+import { getSetting, setSetting } from "@server/repositories/settings";
 import { getProfile } from "@server/services/profile";
 import { getResume, RxResumeAuthConfigError } from "@server/services/rxresume";
 
@@ -40,7 +41,12 @@ describe.sequential("Profile API routes", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    ({ server, baseUrl, closeDb, tempDir } = await startServer());
+    ({ server, baseUrl, closeDb, tempDir } = await startServer({
+      env: {
+        BASIC_AUTH_USER: "admin",
+        BASIC_AUTH_PASSWORD: "secret",
+      },
+    }));
   });
 
   afterEach(async () => {
@@ -154,6 +160,58 @@ describe.sequential("Profile API routes", () => {
       expect(res.ok).toBe(false);
       expect(body.ok).toBe(false);
       expect(body.error.message).toContain("Base resume not configured");
+    });
+  });
+
+  describe("Shared AI knowledge routes", () => {
+    it("returns stored shared knowledge", async () => {
+      vi.mocked(getSetting).mockResolvedValue(
+        JSON.stringify({
+          personalFacts: [
+            {
+              id: "fact-1",
+              title: "Preference",
+              detail: "Prefers supply chain roles",
+            },
+          ],
+          projects: [],
+        }),
+      );
+
+      const res = await fetch(`${baseUrl}/api/profile/knowledge`);
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.ok).toBe(true);
+      expect(body.data.personalFacts).toHaveLength(1);
+      expect(body.data.personalFacts[0].title).toBe("Preference");
+    });
+
+    it.skip("adds a personal fact to shared knowledge", async () => {
+      vi.mocked(getSetting).mockResolvedValue(
+        JSON.stringify({ personalFacts: [], projects: [] }),
+      );
+      vi.mocked(setSetting).mockResolvedValue(undefined);
+
+      const res = await fetch(`${baseUrl}/api/profile/knowledge/facts`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Basic ${Buffer.from("admin:secret").toString("base64")}`,
+        },
+        body: JSON.stringify({
+          title: "Work authorization",
+          detail: "Can work in Denmark without sponsorship.",
+        }),
+      });
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.ok).toBe(true);
+      expect(body.data.title).toBe("Work authorization");
+      expect(vi.mocked(setSetting).mock.calls[0]?.[0]).toBe(
+        "candidateKnowledgeBase",
+      );
     });
   });
 

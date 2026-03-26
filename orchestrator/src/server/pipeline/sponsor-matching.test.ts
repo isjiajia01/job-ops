@@ -20,10 +20,15 @@ vi.mock("../services/scorer", () => ({
   scoreJobSuitability: vi.fn(),
 }));
 
+vi.mock("../services/job-prefilter", () => ({
+  evaluateJobPrefilter: vi.fn(() => null),
+}));
+
 // Mock the jobs repository
 vi.mock("../repositories/jobs", () => ({
   updateJob: vi.fn(),
   getUnscoredDiscoveredJobs: vi.fn(),
+  getAllJobs: vi.fn().mockResolvedValue([]),
   getJobById: vi.fn(),
   createJobs: vi.fn(),
   getAllJobUrls: vi.fn(),
@@ -46,10 +51,10 @@ const createJob = (overrides: Partial<Job> = {}): Job =>
   createBaseJob({
     id: "test-job-1",
     source: "gradcracker",
-    title: "Software Engineer",
+    title: "Supply Chain Planner",
     employer: "Acme Corporation Ltd",
     location: "London",
-    jobDescription: "Looking for a TypeScript developer.",
+    jobDescription: "Looking for a planning-oriented supply chain candidate.",
     status: "discovered",
     suitabilityScore: null,
     suitabilityReason: null,
@@ -65,6 +70,7 @@ describe("Sponsor Match Calculation", () => {
   let scoreJobSuitability: ReturnType<typeof vi.fn>;
   let updateJob: ReturnType<typeof vi.fn>;
   let getUnscoredDiscoveredJobs: ReturnType<typeof vi.fn>;
+  let getAllJobs: ReturnType<typeof vi.fn>;
   let createJobs: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
@@ -84,12 +90,14 @@ describe("Sponsor Match Calculation", () => {
     updateJob = jobsRepo.updateJob as ReturnType<typeof vi.fn>;
     getUnscoredDiscoveredJobs =
       jobsRepo.getUnscoredDiscoveredJobs as ReturnType<typeof vi.fn>;
+    getAllJobs = jobsRepo.getAllJobs as ReturnType<typeof vi.fn>;
     createJobs = jobsRepo.createJobs as ReturnType<typeof vi.fn>;
 
     // Default mock implementations
     scoreJobSuitability.mockResolvedValue({ score: 75, reason: "Good match" });
     createJobs.mockResolvedValue({ created: 0, skipped: 0 });
     updateJob.mockResolvedValue(undefined);
+    getAllJobs.mockResolvedValue([]);
 
     calculateSponsorMatchSummary.mockImplementation((results: any[]) => {
       if (results.length === 0)

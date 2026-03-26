@@ -98,7 +98,10 @@ describe("buildJobChatPromptContext", () => {
       "When the user does not request a language, default to writing user-visible resume or application content in German.",
     );
     expect(context.systemPrompt).toContain(
-      'Always return valid JSON in the shape {"response":"..."} and put all user-visible output inside the "response" string.',
+      'Always return valid JSON with this exact shape: {"response":"...","coverLetterDraft":null,"coverLetterKind":null,"resumePatch":null}.',
+    );
+    expect(context.systemPrompt).toContain(
+      'Put all user-visible chat text inside "response". Keep it concise, direct, and useful.',
     );
     expect(context.systemPrompt).toContain(
       "When suggesting a headline or job title, preserve the original wording instead of translating it.",

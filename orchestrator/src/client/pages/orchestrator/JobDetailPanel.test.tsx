@@ -120,6 +120,7 @@ vi.mock("@client/api", () => ({
   updateJob: vi.fn(),
   processJob: vi.fn(),
   generateJobPdf: vi.fn(),
+  listJobGhostwriterMessages: vi.fn().mockResolvedValue([]),
   markAsApplied: vi.fn(),
   skipJob: vi.fn(),
   getProfile: vi.fn().mockResolvedValue({}),
@@ -202,7 +203,8 @@ describe("JobDetailPanel", () => {
           hiddenProjectIds: ["project-old"],
           hiddenExperienceIds: ["experience-legacy"],
         }),
-        tailoredSectionRationale: "Put summary first to foreground planning fit.",
+        tailoredSectionRationale:
+          "Put summary first to foreground planning fit.",
         tailoredOmissionRationale: "Hide low-signal legacy items.",
       }),
       onSelectJobId: vi.fn(),
@@ -210,8 +212,12 @@ describe("JobDetailPanel", () => {
     });
 
     expect(screen.getByText(/AI tailoring audit/i)).toBeInTheDocument();
-    expect(screen.getByText(/Put summary first to foreground planning fit\./i)).toBeInTheDocument();
-    expect(screen.getByText(/Hide low-signal legacy items\./i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Put summary first to foreground planning fit\./i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Hide low-signal legacy items\./i),
+    ).toBeInTheDocument();
     expect(screen.getByText(/1\. summary/i)).toBeInTheDocument();
     expect(screen.getByText(/publications/i)).toBeInTheDocument();
     expect(screen.getByText(/project-old/i)).toBeInTheDocument();

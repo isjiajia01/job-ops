@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api";
@@ -16,6 +17,13 @@ vi.mock("sonner", () => ({
     error: vi.fn(),
   },
 }));
+
+const renderSheet = (props: React.ComponentProps<typeof ManualImportSheet>) =>
+  render(
+    <MemoryRouter>
+      <ManualImportSheet {...props} />
+    </MemoryRouter>,
+  );
 
 describe("ManualImportSheet", () => {
   beforeEach(() => {
@@ -36,13 +44,7 @@ describe("ManualImportSheet", () => {
     });
     vi.mocked(api.importManualJob).mockResolvedValue({ id: "job-1" } as any);
 
-    render(
-      <ManualImportSheet
-        open
-        onOpenChange={onOpenChange}
-        onImported={onImported}
-      />,
-    );
+    renderSheet({ open: true, onOpenChange, onImported });
 
     fireEvent.change(
       screen.getByPlaceholderText(
@@ -66,7 +68,7 @@ describe("ManualImportSheet", () => {
       target: { value: "  120k  " },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /import job/i }));
+    fireEvent.click(screen.getByRole("button", { name: /import only/i }));
 
     await waitFor(() => expect(api.importManualJob).toHaveBeenCalled());
     expect(api.importManualJob).toHaveBeenCalledWith({
@@ -97,9 +99,7 @@ describe("ManualImportSheet", () => {
       warning: "AI inference failed. Fill details manually.",
     });
 
-    render(
-      <ManualImportSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />,
-    );
+    renderSheet({ open: true, onOpenChange: vi.fn(), onImported: vi.fn() });
 
     fireEvent.change(
       screen.getByPlaceholderText(
@@ -111,7 +111,7 @@ describe("ManualImportSheet", () => {
 
     await screen.findByText("AI inference failed. Fill details manually.");
 
-    const importButton = screen.getByRole("button", { name: /import job/i });
+    const importButton = screen.getByRole("button", { name: /import only/i });
     expect(importButton).toBeDisabled();
 
     fireEvent.change(
@@ -134,9 +134,7 @@ describe("ManualImportSheet", () => {
       new Error("Inference failed"),
     );
 
-    render(
-      <ManualImportSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />,
-    );
+    renderSheet({ open: true, onOpenChange: vi.fn(), onImported: vi.fn() });
 
     fireEvent.change(
       screen.getByPlaceholderText(
@@ -168,13 +166,7 @@ describe("ManualImportSheet", () => {
 
     const onOpenChange = vi.fn();
 
-    render(
-      <ManualImportSheet
-        open
-        onOpenChange={onOpenChange}
-        onImported={vi.fn()}
-      />,
-    );
+    renderSheet({ open: true, onOpenChange, onImported: vi.fn() });
 
     fireEvent.change(
       screen.getByPlaceholderText(
@@ -186,20 +178,18 @@ describe("ManualImportSheet", () => {
 
     await screen.findByPlaceholderText("e.g. Junior Backend Engineer");
 
-    fireEvent.click(screen.getByRole("button", { name: /import job/i }));
+    fireEvent.click(screen.getByRole("button", { name: /import only/i }));
 
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith("Import failed"),
     );
     expect(onOpenChange).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: /import job/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /import only/i })).toBeEnabled();
   });
 
   describe("URL fetch functionality", () => {
     it("shows Paste button when URL field is empty, Fetch when URL is entered", async () => {
-      render(
-        <ManualImportSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />,
-      );
+      renderSheet({ open: true, onOpenChange: vi.fn(), onImported: vi.fn() });
 
       // Initially should show Paste button
       expect(
@@ -232,9 +222,7 @@ describe("ManualImportSheet", () => {
         },
       });
 
-      render(
-        <ManualImportSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />,
-      );
+      renderSheet({ open: true, onOpenChange: vi.fn(), onImported: vi.fn() });
 
       // Enter a URL
       fireEvent.change(
@@ -276,9 +264,7 @@ describe("ManualImportSheet", () => {
         },
       });
 
-      render(
-        <ManualImportSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />,
-      );
+      renderSheet({ open: true, onOpenChange: vi.fn(), onImported: vi.fn() });
 
       fireEvent.change(
         screen.getByPlaceholderText("https://example.com/job-posting"),
@@ -298,9 +284,7 @@ describe("ManualImportSheet", () => {
         new Error("Failed to fetch URL"),
       );
 
-      render(
-        <ManualImportSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />,
-      );
+      renderSheet({ open: true, onOpenChange: vi.fn(), onImported: vi.fn() });
 
       fireEvent.change(
         screen.getByPlaceholderText("https://example.com/job-posting"),
@@ -327,9 +311,7 @@ describe("ManualImportSheet", () => {
         new Error("Inference failed"),
       );
 
-      render(
-        <ManualImportSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />,
-      );
+      renderSheet({ open: true, onOpenChange: vi.fn(), onImported: vi.fn() });
 
       fireEvent.change(
         screen.getByPlaceholderText("https://example.com/job-posting"),

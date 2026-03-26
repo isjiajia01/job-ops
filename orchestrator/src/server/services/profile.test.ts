@@ -60,8 +60,9 @@ describe("getProfile", () => {
     await getProfile();
     await getProfile();
 
-    // The helper reads mode + legacy/per-mode resume-id settings each call.
-    expect(getSetting).toHaveBeenCalledTimes(8);
+    // The helper now also checks internal profile-backed settings before reading
+    // RxResume mode and resume-id configuration on each call.
+    expect(getSetting).toHaveBeenCalledTimes(10);
     // But getResume should only be called once due to caching
     expect(getResume).toHaveBeenCalledTimes(1);
   });

@@ -55,6 +55,7 @@ vi.mock("../hooks/useSettings", () => ({
 vi.mock("../api", () => ({
   rescoreJob: vi.fn(),
   getResumeProjectsCatalog: vi.fn().mockResolvedValue([]),
+  listJobGhostwriterMessages: vi.fn().mockResolvedValue([]),
   markAsApplied: vi.fn(),
   generateJobPdf: vi.fn(),
   checkSponsor: vi.fn(),
