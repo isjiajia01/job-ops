@@ -100,11 +100,26 @@ describe("buildJobChatPromptContext", () => {
     expect(context.systemPrompt).toContain(
       'Always return valid JSON with this exact shape: {"response":"...","coverLetterDraft":null,"coverLetterKind":null,"resumePatch":null}.',
     );
+    expect(context.systemPrompt).toContain("Task routing:");
+    expect(context.systemPrompt).toContain(
+      "Before writing, silently classify the user request as one of: direct_chat, cover_letter, application_email, resume_patch, or mixed.",
+    );
     expect(context.systemPrompt).toContain(
       'Put all user-visible chat text inside "response". Keep it concise, direct, and useful.',
     );
+    expect(context.systemPrompt).toContain("Quality rubric:");
+    expect(context.systemPrompt).toContain(
+      "Optimize every answer for five things: relevance to the specific job, concrete evidence from the supplied profile, disciplined claims, natural professional tone, and low fluff.",
+    );
+    expect(context.systemPrompt).toContain(
+      "Use soft personal notes only to tune tone and emphasis, not as hard factual evidence.",
+    );
     expect(context.systemPrompt).toContain(
       "When suggesting a headline or job title, preserve the original wording instead of translating it.",
+    );
+    expect(context.systemPrompt).toContain("Resume-patch rules:");
+    expect(context.systemPrompt).toContain(
+      "For resume patches, prefer recruiter-facing, evidence-backed wording over biography or motivation language.",
     );
     expect(context.systemPrompt).toContain(
       "When writing a cover letter, use natural first-person cover-letter voice.",
@@ -114,6 +129,9 @@ describe("buildJobChatPromptContext", () => {
     );
     expect(context.systemPrompt).toContain(
       "For cover letters, explain why this role and employer are a fit and support that case with 2-3 concrete examples from the provided profile.",
+    );
+    expect(context.systemPrompt).toContain(
+      "For cover letters, each body paragraph should make one clear fit claim and support it with evidence from the provided profile.",
     );
     expect(context.systemPrompt).toContain(
       "For this candidate, default to an early-career, analytical, practical, and modest voice rather than a senior or highly promotional tone.",
