@@ -151,6 +151,21 @@ const PROFILE_OVERLAP_STOPWORDS = new Set([
   "current",
   "draft",
 ]);
+const COVER_LETTER_OPENING_PATTERNS = [
+  /^\s*dear\s+(hiring manager|sir\/madam|sir or madam|recruiter|team)[,:-]?\s*/i,
+  /^\s*i am writing to express my interest\b[^.]*\.?\s*/i,
+  /^\s*i am excited to apply\b[^.]*\.?\s*/i,
+  /^\s*i am very excited to apply\b[^.]*\.?\s*/i,
+  /^\s*please accept my application\b[^.]*\.?\s*/i,
+  /^\s*with great enthusiasm[, ]+i am applying\b[^.]*\.?\s*/i,
+];
+const COVER_LETTER_GENERIC_OPENING_PREFIXES = [
+  "i am passionate about",
+  "i am highly motivated to",
+  "this role is a perfect fit",
+  "i believe i am a strong fit",
+  "i am confident that i would be a great fit",
+];
 
 function containsHighRiskPatchLanguage(
   value: string | null | undefined,
@@ -244,6 +259,50 @@ function hasEnoughProfileOverlap(
 
   const overlapCount = tokens.filter((token) => tokenSet.has(token)).length;
   return overlapCount >= 2;
+}
+
+function lintCoverLetterDraft(draft: string | null | undefined): {
+  sanitized: string | null;
+  removedPatterns: string[];
+} {
+  if (!draft) return { sanitized: null, removedPatterns: [] };
+
+  let next = draft.trim();
+  const removedPatterns: string[] = [];
+
+  for (const pattern of COVER_LETTER_OPENING_PATTERNS) {
+    if (pattern.test(next)) {
+      next = next.replace(pattern, "").trimStart();
+      removedPatterns.push(`opening:${pattern.source}`);
+    }
+  }
+
+  const firstParagraphBreak = next.search(/\n\s*\n/);
+  const firstParagraph =
+    firstParagraphBreak === -1 ? next : next.slice(0, firstParagraphBreak);
+  const normalizedOpening = firstParagraph.trim().toLowerCase();
+
+  for (const prefix of COVER_LETTER_GENERIC_OPENING_PREFIXES) {
+    if (normalizedOpening.startsWith(prefix) && next.length > 280) {
+      const remainder =
+        firstParagraphBreak === -1
+          ? ""
+          : next.slice(firstParagraphBreak).trimStart();
+      next = remainder || next;
+      removedPatterns.push(`generic-opening:${prefix}`);
+      break;
+    }
+  }
+
+  const sanitized = next.trim();
+  if (!sanitized || sanitized.length < 120) {
+    return { sanitized: draft.trim(), removedPatterns: [] };
+  }
+
+  return {
+    sanitized,
+    removedPatterns,
+  };
 }
 
 function sanitizeResumePatch(
@@ -609,6 +668,17 @@ async function runAssistantReply(
       });
       throw upstreamError("LLM returned an invalid Ghostwriter payload");
     }
+
+    const { sanitized: sanitizedCoverLetterDraft, removedPatterns } =
+      lintCoverLetterDraft(payload.coverLetterDraft);
+    if (removedPatterns.length > 0) {
+      logger.info("Ghostwriter cover letter draft lint adjusted opening", {
+        jobId: options.jobId,
+        threadId: options.threadId,
+        removedPatterns,
+      });
+    }
+    payload.coverLetterDraft = sanitizedCoverLetterDraft;
 
     const responseText = (payload.response || "").trim();
     const chunks = chunkText(responseText);

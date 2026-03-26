@@ -582,6 +582,111 @@ describe("ghostwriter service", () => {
     });
   });
 
+  it("removes obvious template cover-letter openings before storing the draft", async () => {
+    const assistantPartial: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-cover-letter",
+      content: "",
+      status: "partial",
+    };
+    const assistantComplete: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-cover-letter",
+      status: "complete",
+      content: "",
+    };
+
+    mocks.repo.createMessage
+      .mockResolvedValueOnce(baseUserMessage)
+      .mockResolvedValueOnce(assistantPartial);
+    mocks.repo.updateMessage.mockImplementation(async (_id, update) => ({
+      ...assistantComplete,
+      content: update.content ?? "",
+    }));
+    mocks.repo.getMessageById.mockImplementation(async () => {
+      const [, update] = mocks.repo.updateMessage.mock.calls.at(-1) ?? [];
+      return {
+        ...assistantComplete,
+        content: update?.content ?? "",
+      };
+    });
+    mocks.llmCallJson.mockResolvedValue({
+      success: true,
+      data: {
+        response: "I drafted a sharper cover letter.",
+        coverLetterDraft:
+          "I am writing to express my interest in this role. I recently worked on planning-oriented analysis with Python and Excel, translating operational data into decision-ready materials. That mix of structured analysis and practical business support is why this role feels relevant to me. I would be glad to contribute that mindset to your team.",
+        coverLetterKind: "letter",
+      },
+    });
+
+    const result = await sendMessageForJob({
+      jobId: "job-1",
+      content: "Write a cover letter for this role",
+    });
+
+    const parsed = parseGhostwriterAssistantContent(
+      result.assistantMessage?.content ?? "",
+    );
+    expect(parsed.coverLetterDraft).not.toContain(
+      "I am writing to express my interest",
+    );
+    expect(parsed.coverLetterDraft).toContain(
+      "I recently worked on planning-oriented analysis",
+    );
+  });
+
+  it("keeps short cover letter drafts intact instead of over-cleaning them", async () => {
+    const assistantPartial: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-short-cover-letter",
+      content: "",
+      status: "partial",
+    };
+    const assistantComplete: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-short-cover-letter",
+      status: "complete",
+      content: "",
+    };
+
+    mocks.repo.createMessage
+      .mockResolvedValueOnce(baseUserMessage)
+      .mockResolvedValueOnce(assistantPartial);
+    mocks.repo.updateMessage.mockImplementation(async (_id, update) => ({
+      ...assistantComplete,
+      content: update.content ?? "",
+    }));
+    mocks.repo.getMessageById.mockImplementation(async () => {
+      const [, update] = mocks.repo.updateMessage.mock.calls.at(-1) ?? [];
+      return {
+        ...assistantComplete,
+        content: update?.content ?? "",
+      };
+    });
+    mocks.llmCallJson.mockResolvedValue({
+      success: true,
+      data: {
+        response: "I drafted a short application email.",
+        coverLetterDraft:
+          "I am excited to apply for this role. My background in planning-oriented analysis and reporting would let me contribute quickly.",
+        coverLetterKind: "email",
+      },
+    });
+
+    const result = await sendMessageForJob({
+      jobId: "job-1",
+      content: "Write a short application email",
+    });
+
+    const parsed = parseGhostwriterAssistantContent(
+      result.assistantMessage?.content ?? "",
+    );
+    expect(parsed.coverLetterDraft).toContain(
+      "I am excited to apply for this role.",
+    );
+  });
+
   it("rejects empty message content", async () => {
     await expect(
       sendMessage({
