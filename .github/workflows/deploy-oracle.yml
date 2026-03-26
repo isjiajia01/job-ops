@@ -19,7 +19,100 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      OCI_CLI_USER: ${{ secrets.OCI_CLI_USER_OCID }}
+      OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY_OCID }}
+      OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+      OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+      OCI_SECURITY_LIST_ID: ${{ secrets.OCI_SECURITY_LIST_ID }}
     steps:
+      - name: Detect runner public IP
+        id: runner_ip
+        run: |
+          ip="$(curl -fsSL https://api.ipify.org)"
+          echo "ip=$ip" >> "$GITHUB_OUTPUT"
+
+      - name: Install OCI CLI
+        run: |
+          python3 -m pip install --user --upgrade pip
+          python3 -m pip install --user oci-cli
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Configure OCI CLI
+        env:
+          OCI_CLI_PRIVATE_KEY: ${{ secrets.OCI_CLI_PRIVATE_KEY }}
+        run: |
+          mkdir -p "$HOME/.oci"
+          chmod 700 "$HOME/.oci"
+          printf '%s\n' "$OCI_CLI_PRIVATE_KEY" > "$HOME/.oci/oci_api_key.pem"
+          chmod 600 "$HOME/.oci/oci_api_key.pem"
+          cat > "$HOME/.oci/config" <<EOF
+          [DEFAULT]
+          user=${OCI_CLI_USER}
+          fingerprint=${OCI_CLI_FINGERPRINT}
+          tenancy=${OCI_CLI_TENANCY}
+          region=${OCI_CLI_REGION}
+          key_file=$HOME/.oci/oci_api_key.pem
+          EOF
+
+      - name: Allow temporary SSH from GitHub runner
+        id: allow_ssh
+        env:
+          RUNNER_CIDR: ${{ steps.runner_ip.outputs.ip }}/32
+        run: |
+          oci network security-list get \
+            --security-list-id "$OCI_SECURITY_LIST_ID" \
+            --output json > current-security-list.json
+
+          rule_exists="$(
+            jq -r --arg cidr "$RUNNER_CIDR" '
+              [
+                .data["ingress-security-rules"][]
+                | select(
+                    .protocol == "6"
+                    and .source == $cidr
+                    and .["source-type"] == "CIDR_BLOCK"
+                    and .["tcp-options"]["destination-port-range"].min == 22
+                    and .["tcp-options"]["destination-port-range"].max == 22
+                  )
+              ] | length > 0
+            ' current-security-list.json
+          )"
+
+          if [ "$rule_exists" = "true" ]; then
+            echo "rule_added=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          jq --arg cidr "$RUNNER_CIDR" '
+            .data["ingress-security-rules"] + [
+              {
+                "description": "Temporary SSH access for GitHub Actions deploy",
+                "icmp-options": null,
+                "is-stateless": false,
+                "protocol": "6",
+                "source": $cidr,
+                "source-type": "CIDR_BLOCK",
+                "tcp-options": {
+                  "destination-port-range": {
+                    "max": 22,
+                    "min": 22
+                  },
+                  "source-port-range": null
+                },
+                "udp-options": null
+              }
+            ]
+          ' current-security-list.json > ingress-rules.json
+
+          oci network security-list update \
+            --security-list-id "$OCI_SECURITY_LIST_ID" \
+            --ingress-security-rules file://ingress-rules.json \
+            --force \
+            --wait-for-state AVAILABLE
+
+          echo "rule_added=true" >> "$GITHUB_OUTPUT"
+
       - name: Deploy on Oracle
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -33,3 +126,32 @@ jobs:
             docker compose pull ${{ inputs.service }}
             docker compose up -d ${{ inputs.service }}
             docker compose ps
+
+      - name: Revoke temporary SSH access
+        if: always() && steps.allow_ssh.outputs.rule_added == 'true'
+        env:
+          RUNNER_CIDR: ${{ steps.runner_ip.outputs.ip }}/32
+        run: |
+          oci network security-list get \
+            --security-list-id "$OCI_SECURITY_LIST_ID" \
+            --output json > current-security-list.json
+
+          jq --arg cidr "$RUNNER_CIDR" '
+            .data["ingress-security-rules"]
+            | map(
+                select(
+                  .source != $cidr
+                  or .protocol != "6"
+                  or .["source-type"] != "CIDR_BLOCK"
+                  or .["tcp-options"]["destination-port-range"].min != 22
+                  or .["tcp-options"]["destination-port-range"].max != 22
+                  or .description != "Temporary SSH access for GitHub Actions deploy"
+                )
+              )
+          ' current-security-list.json > ingress-rules.json
+
+          oci network security-list update \
+            --security-list-id "$OCI_SECURITY_LIST_ID" \
+            --ingress-security-rules file://ingress-rules.json \
+            --force \
+            --wait-for-state AVAILABLE
