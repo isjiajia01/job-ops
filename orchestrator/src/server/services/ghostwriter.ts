@@ -9,9 +9,11 @@ import { logger } from "@infra/logger";
 import { getRequestId } from "@infra/request-context";
 import { sanitizeUnknown } from "@infra/sanitize";
 import type {
+  CandidateKnowledgeBase,
   GhostwriterSkillGroup,
   JobChatMessage,
   JobChatRun,
+  ResumeProfile,
 } from "@shared/types";
 import {
   getGhostwriterDisplayText,
@@ -21,9 +23,11 @@ import {
 import * as jobChatRepo from "../repositories/ghostwriter";
 import * as jobsRepo from "../repositories/jobs";
 import * as settingsRepo from "../repositories/settings";
+import { getCandidateKnowledgeBase } from "./candidate-knowledge";
 import { buildJobChatPromptContext } from "./ghostwriter-context";
 import { LlmService } from "./llm/service";
 import type { JsonSchemaDefinition } from "./llm/types";
+import { getProfile } from "./profile";
 
 type LlmRuntimeSettings = {
   model: string;
@@ -117,6 +121,36 @@ const HIGH_RISK_PATCH_PATTERNS = [
   /\b(?:expert in|world-?class|industry-?leading|best-?in-?class)\b/i,
   /\b(?:sap ibp|kinaxis|o9|anaplan)\b/i,
 ];
+const PROFILE_OVERLAP_STOPWORDS = new Set([
+  "and",
+  "the",
+  "for",
+  "with",
+  "that",
+  "this",
+  "from",
+  "into",
+  "your",
+  "role",
+  "roles",
+  "work",
+  "team",
+  "teams",
+  "using",
+  "used",
+  "build",
+  "built",
+  "write",
+  "writing",
+  "strong",
+  "stronger",
+  "candidate",
+  "support",
+  "improve",
+  "improved",
+  "current",
+  "draft",
+]);
 
 function containsHighRiskPatchLanguage(
   value: string | null | undefined,
@@ -125,12 +159,100 @@ function containsHighRiskPatchLanguage(
   return HIGH_RISK_PATCH_PATTERNS.some((pattern) => pattern.test(value));
 }
 
+function tokenizeOverlapSource(value: string | null | undefined): string[] {
+  if (!value) return [];
+  return value
+    .toLowerCase()
+    .split(/[^a-z0-9+#./-]+/g)
+    .map((token) => token.trim())
+    .filter(
+      (token) =>
+        token.length >= 4 &&
+        !PROFILE_OVERLAP_STOPWORDS.has(token) &&
+        /[a-z]/.test(token),
+    );
+}
+
+function buildProfileEvidenceTokenSet(
+  profile: ResumeProfile,
+  knowledgeBase: CandidateKnowledgeBase,
+): Set<string> {
+  const tokenSet = new Set<string>();
+  const addTokens = (value: string | null | undefined) => {
+    for (const token of tokenizeOverlapSource(value)) {
+      tokenSet.add(token);
+    }
+  };
+
+  addTokens(profile.basics?.headline);
+  addTokens(profile.basics?.label);
+  addTokens(profile.basics?.summary);
+  addTokens(profile.sections?.summary?.content);
+
+  for (const item of profile.sections?.skills?.items ?? []) {
+    addTokens(item.name);
+    addTokens(item.description);
+    for (const keyword of item.keywords ?? []) addTokens(keyword);
+  }
+
+  for (const item of profile.sections?.experience?.items ?? []) {
+    addTokens(item.company);
+    addTokens(item.position);
+    addTokens(item.location);
+    addTokens(item.summary);
+  }
+
+  for (const item of profile.sections?.projects?.items ?? []) {
+    addTokens(item.name);
+    addTokens(item.description);
+    addTokens(item.summary);
+    for (const keyword of item.keywords ?? []) addTokens(keyword);
+  }
+
+  for (const fact of knowledgeBase.personalFacts ?? []) {
+    addTokens(fact.title);
+    addTokens(fact.detail);
+  }
+
+  for (const project of knowledgeBase.projects ?? []) {
+    addTokens(project.name);
+    addTokens(project.summary);
+    addTokens(project.role);
+    addTokens(project.impact);
+    for (const keyword of project.keywords ?? []) addTokens(keyword);
+  }
+
+  return tokenSet;
+}
+
+function hasEnoughProfileOverlap(
+  value: string | null | undefined,
+  tokenSet: Set<string>,
+): boolean {
+  if (!value) return true;
+
+  const tokens = tokenizeOverlapSource(value);
+  if (tokens.length === 0) return true;
+
+  if (tokens.length <= 2) {
+    return true;
+  }
+
+  if (tokens.length < 4) {
+    return tokens.some((token) => tokenSet.has(token));
+  }
+
+  const overlapCount = tokens.filter((token) => tokenSet.has(token)).length;
+  return overlapCount >= 2;
+}
+
 function sanitizeResumePatch(
   patch: NonNullable<
     NonNullable<
       ReturnType<typeof normalizeGhostwriterAssistantPayload>
     >["resumePatch"]
   >,
+  profileEvidenceTokens: Set<string>,
 ): {
   sanitized: typeof patch | null;
   removedFields: string[];
@@ -141,19 +263,35 @@ function sanitizeResumePatch(
   if (containsHighRiskPatchLanguage(tailoredSummary)) {
     removedFields.push("tailoredSummary");
     tailoredSummary = null;
+  } else if (!hasEnoughProfileOverlap(tailoredSummary, profileEvidenceTokens)) {
+    removedFields.push("tailoredSummary:low-overlap");
+    tailoredSummary = null;
   }
 
   let tailoredHeadline = patch.tailoredHeadline ?? null;
   if (containsHighRiskPatchLanguage(tailoredHeadline)) {
     removedFields.push("tailoredHeadline");
     tailoredHeadline = null;
+  } else if (
+    !hasEnoughProfileOverlap(tailoredHeadline, profileEvidenceTokens)
+  ) {
+    removedFields.push("tailoredHeadline:low-overlap");
+    tailoredHeadline = null;
   }
 
   const tailoredSkills =
     patch.tailoredSkills?.filter((skill: GhostwriterSkillGroup) => {
       const combined = [skill.name, ...(skill.keywords ?? [])].join(" ");
-      const isSafe = !containsHighRiskPatchLanguage(combined);
-      if (!isSafe) removedFields.push(`tailoredSkills:${skill.name}`);
+      const isSafe =
+        !containsHighRiskPatchLanguage(combined) &&
+        hasEnoughProfileOverlap(combined, profileEvidenceTokens);
+      if (!isSafe) {
+        removedFields.push(
+          containsHighRiskPatchLanguage(combined)
+            ? `tailoredSkills:${skill.name}`
+            : `tailoredSkills:${skill.name}:low-overlap`,
+        );
+      }
       return isSafe;
     }) ?? null;
 
@@ -311,7 +449,25 @@ async function applyResumePatchToJob(
 ): Promise<void> {
   if (!payload.resumePatch) return;
 
-  const { sanitized, removedFields } = sanitizeResumePatch(payload.resumePatch);
+  const [profile, knowledgeBase] = await Promise.all([
+    getProfile().catch(() => ({}) as ResumeProfile),
+    getCandidateKnowledgeBase().catch(
+      () =>
+        ({
+          personalFacts: [],
+          projects: [],
+        }) as CandidateKnowledgeBase,
+    ),
+  ]);
+  const profileEvidenceTokens = buildProfileEvidenceTokenSet(
+    profile,
+    knowledgeBase,
+  );
+
+  const { sanitized, removedFields } = sanitizeResumePatch(
+    payload.resumePatch,
+    profileEvidenceTokens,
+  );
   if (removedFields.length > 0) {
     logger.warn("Ghostwriter resumePatch fields removed by server-side guard", {
       jobId,

@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getRequestId: vi.fn(),
   buildJobChatPromptContext: vi.fn(),
+  getProfile: vi.fn(),
+  getCandidateKnowledgeBase: vi.fn(),
   llmCallJson: vi.fn(),
   repo: {
     getOrCreateThreadForJob: vi.fn(),
@@ -42,6 +44,14 @@ vi.mock("@infra/request-context", () => ({
 
 vi.mock("./ghostwriter-context", () => ({
   buildJobChatPromptContext: mocks.buildJobChatPromptContext,
+}));
+
+vi.mock("./profile", () => ({
+  getProfile: mocks.getProfile,
+}));
+
+vi.mock("./candidate-knowledge", () => ({
+  getCandidateKnowledgeBase: mocks.getCandidateKnowledgeBase,
 }));
 
 vi.mock("../repositories/settings", () => ({
@@ -137,6 +147,69 @@ describe("ghostwriter service", () => {
       systemPrompt: "system prompt",
       jobSnapshot: '{"job":"snapshot"}',
       profileSnapshot: "profile snapshot",
+    });
+    mocks.getProfile.mockResolvedValue({
+      basics: {
+        name: "Jiajia Zhang",
+        headline:
+          "Planning Analytics Candidate | Python, Excel, Operations Research, Decision Support",
+        summary:
+          "Strongest fit is in planning-oriented and analytics-heavy roles with Python and Excel analysis.",
+      },
+      sections: {
+        skills: {
+          items: [
+            {
+              id: "skill-1",
+              visible: true,
+              name: "Planning",
+              description: "",
+              level: 4,
+              keywords: ["forecasting", "excel", "python"],
+            },
+          ],
+        },
+        experience: {
+          items: [
+            {
+              id: "exp-1",
+              visible: true,
+              company: "Canton DaJiao Real Estate Development Co., Ltd",
+              position: "Business Analysis Intern",
+              location: "",
+              date: "2022 - 2023",
+              summary:
+                "Automated reporting workflows using Python and Excel and translated operational data into decision-ready materials.",
+            },
+          ],
+        },
+        projects: {
+          items: [
+            {
+              id: "project-1",
+              visible: true,
+              name: "Rolling-Horizon Planning for Last-Mile Delivery",
+              description: "",
+              date: "2025 - 2026",
+              summary:
+                "Multi-day planning problem in last-mile delivery with routing and operational constraints.",
+              keywords: ["planning", "routing", "operations research"],
+              url: "",
+            },
+          ],
+        },
+      },
+    });
+    mocks.getCandidateKnowledgeBase.mockResolvedValue({
+      personalFacts: [
+        {
+          id: "fact-1",
+          title: "Target roles",
+          detail:
+            "Targeting demand planning, supply planning, logistics planning, and planning analytics roles.",
+        },
+      ],
+      projects: [],
     });
 
     mocks.repo.getOrCreateThreadForJob.mockResolvedValue(thread);
@@ -379,6 +452,74 @@ describe("ghostwriter service", () => {
         tailoredSkills: JSON.stringify([
           { name: "Planning", keywords: ["forecasting"] },
         ]),
+      }),
+    );
+  });
+
+  it("drops low-overlap resumePatch fields that do not match profile evidence", async () => {
+    const assistantPartial: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-low-overlap",
+      content: "",
+      status: "partial",
+    };
+    const assistantComplete: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-low-overlap",
+      status: "complete",
+      content: "",
+    };
+
+    mocks.repo.createMessage
+      .mockResolvedValueOnce(baseUserMessage)
+      .mockResolvedValueOnce(assistantPartial);
+    mocks.repo.updateMessage.mockImplementation(async (_id, update) => ({
+      ...assistantComplete,
+      content: update.content ?? "",
+      tokensIn: update.tokensIn ?? null,
+      tokensOut: update.tokensOut ?? null,
+    }));
+    mocks.repo.getMessageById.mockImplementation(async () => {
+      const [, update] = mocks.repo.updateMessage.mock.calls.at(-1) ?? [];
+      return {
+        ...assistantComplete,
+        content: update?.content ?? "",
+      };
+    });
+    mocks.llmCallJson.mockResolvedValue({
+      success: true,
+      data: {
+        response: "I refreshed the current CV draft for this role.",
+        resumePatch: {
+          tailoredSummary:
+            "Pharmaceutical regulatory commercialization specialist for late-stage market access programs.",
+          tailoredHeadline: "Regulatory Commercialization Specialist",
+          tailoredSkills: [
+            {
+              name: "Market Access",
+              keywords: ["regulatory strategy", "commercial launch"],
+            },
+          ],
+        },
+      },
+    });
+
+    await sendMessageForJob({
+      jobId: "job-1",
+      content: "Update my CV for this role",
+    });
+
+    expect(mocks.jobs.updateJob).not.toHaveBeenCalledWith(
+      "job-1",
+      expect.objectContaining({
+        tailoredSummary:
+          "Pharmaceutical regulatory commercialization specialist for late-stage market access programs.",
+      }),
+    );
+    expect(mocks.jobs.updateJob).not.toHaveBeenCalledWith(
+      "job-1",
+      expect.objectContaining({
+        tailoredHeadline: "Regulatory Commercialization Specialist",
       }),
     );
   });
