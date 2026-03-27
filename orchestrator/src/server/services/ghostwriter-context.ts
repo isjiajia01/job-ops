@@ -1,9 +1,15 @@
 import { badRequest, notFound } from "@infra/errors";
 import { logger } from "@infra/logger";
 import { sanitizeUnknown } from "@infra/sanitize";
-import type { CandidateKnowledgeBase, Job, ResumeProfile } from "@shared/types";
+import type {
+  CandidateKnowledgeBase,
+  CompanyResearchNote,
+  Job,
+  ResumeProfile,
+} from "@shared/types";
 import * as jobsRepo from "../repositories/jobs";
 import { getCandidateKnowledgeBase } from "./candidate-knowledge";
+import { getCompanyResearchNoteForJob } from "./company-research";
 import { buildGhostwriterSystemPrompt } from "./ghostwriter-prompt";
 import { getProfile } from "./profile";
 import { getWritingStyle, type WritingStyle } from "./writing-style";
@@ -14,6 +20,7 @@ export type JobChatPromptContext = {
   systemPrompt: string;
   jobSnapshot: string;
   profileSnapshot: string;
+  companyResearchSnapshot: string;
 };
 
 const MAX_JOB_DESCRIPTION = 4000;
@@ -128,6 +135,17 @@ function buildProfileSnapshot(
   ]);
 }
 
+function buildCompanyResearchSnapshot(
+  note: CompanyResearchNote | null,
+): string {
+  if (!note) return "";
+  return compactJoin([
+    `Company: ${note.company}`,
+    note.source ? `Source: ${note.source}` : null,
+    `Research summary: ${truncate(note.summary, 1200)}`,
+  ]);
+}
+
 export async function buildJobChatPromptContext(
   jobId: string,
 ): Promise<JobChatPromptContext> {
@@ -142,7 +160,9 @@ export async function buildJobChatPromptContext(
   let knowledgeBase: CandidateKnowledgeBase = {
     personalFacts: [],
     projects: [],
+    companyResearchNotes: [],
   };
+  let companyResearchNote: CompanyResearchNote | null = null;
   try {
     profile = await getProfile();
   } catch (error) {
@@ -161,9 +181,20 @@ export async function buildJobChatPromptContext(
     });
   }
 
+  try {
+    companyResearchNote = await getCompanyResearchNoteForJob(jobId);
+  } catch (error) {
+    logger.warn("Failed to load company research for job chat", {
+      jobId,
+      error: sanitizeUnknown(error),
+    });
+  }
+
   const profileSnapshot = buildProfileSnapshot(profile, knowledgeBase);
   const systemPrompt = buildGhostwriterSystemPrompt(style, profile);
   const jobSnapshot = buildJobSnapshot(job);
+  const companyResearchSnapshot =
+    buildCompanyResearchSnapshot(companyResearchNote);
 
   if (!jobSnapshot.trim()) {
     throw badRequest("Unable to build job context");
@@ -176,6 +207,7 @@ export async function buildJobChatPromptContext(
       systemChars: systemPrompt.length,
       jobChars: jobSnapshot.length,
       profileChars: profileSnapshot.length,
+      companyResearchChars: companyResearchSnapshot.length,
     }),
   });
 
@@ -185,5 +217,6 @@ export async function buildJobChatPromptContext(
     systemPrompt,
     jobSnapshot,
     profileSnapshot,
+    companyResearchSnapshot,
   };
 }

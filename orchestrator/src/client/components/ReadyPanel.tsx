@@ -395,7 +395,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
             triggerClassName="h-9 w-full justify-center gap-1 px-2 text-xs"
           />
 
-          {/* Download PDF - primary artifact action */}
+          {/* Download CV - primary artifact action */}
           {job.pdfPath ? (
             <Button
               asChild
@@ -407,7 +407,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
                 download={`${safeFilenamePart(personName || "Unknown")}_${safeFilenamePart(job.employer || "Unknown")}.pdf`}
               >
                 <Download className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">Download PDF</span>
+                <span className="truncate">Download CV</span>
                 <KbdHint shortcut="d" className="ml-auto" />
               </a>
             </Button>
@@ -426,7 +426,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
               }}
             >
               <Download className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">Download PDF</span>
+              <span className="truncate">Download CV</span>
               <KbdHint shortcut="d" className="ml-auto" />
             </Button>
           )}

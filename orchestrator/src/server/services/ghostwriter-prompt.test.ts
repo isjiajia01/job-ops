@@ -71,6 +71,7 @@ describe("buildGhostwriterSystemPrompt", () => {
     expect(prompt).toContain("Preflight self-check:");
     expect(prompt).toContain("Resume-patch rules:");
     expect(prompt).toContain("Cover-letter rules:");
+    expect(prompt).toContain("Company-research rules:");
     expect(prompt).toContain(
       "Writing constraints: Keep responses under 120 words",
     );
@@ -125,5 +126,32 @@ describe("buildGhostwriterSystemPrompt", () => {
     expect(prompt).toContain("Preset: general-track");
     expect(prompt).not.toContain("Preset: planning-track");
     expect(prompt).not.toContain("Preset: denmark-local");
+  });
+
+  it("teaches the model how to use company research naturally", () => {
+    const prompt = buildGhostwriterSystemPrompt(
+      {
+        tone: "professional",
+        formality: "medium",
+        constraints: "",
+        doNotUse: "",
+        languageMode: "manual",
+        manualLanguage: "english",
+      },
+      {
+        basics: {
+          name: "Alex",
+          headline: "Strategy Analyst",
+          summary: "Operations and analytics profile.",
+        },
+      },
+    );
+
+    expect(prompt).toContain(
+      "When reliable company research context is provided, weave 1-2 concrete observations about the employer's business, product, or operating priorities into the fit case naturally.",
+    );
+    expect(prompt).toContain(
+      "For resume patches, use company understanding only to improve the tailored summary or headline when it helps position the candidate for this employer's real work.",
+    );
   });
 });

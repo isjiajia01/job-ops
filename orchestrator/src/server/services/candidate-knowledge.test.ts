@@ -33,10 +33,10 @@ describe("candidate-knowledge service", () => {
   it("returns the default knowledge base when nothing is stored", async () => {
     mocks.settings.getSetting.mockResolvedValue(null);
 
-    await expect(getCandidateKnowledgeBase()).resolves.toEqual({
-      personalFacts: [],
-      projects: [],
-    });
+    const result = await getCandidateKnowledgeBase();
+    expect(result.personalFacts).toEqual([]);
+    expect(result.projects).toEqual([]);
+    expect(result.companyResearchNotes ?? []).toEqual([]);
   });
 
   it("adds a personal fact and persists the updated knowledge base", async () => {
@@ -59,6 +59,7 @@ describe("candidate-knowledge service", () => {
       JSON.stringify({
         personalFacts: [fact],
         projects: [],
+        companyResearchNotes: [],
       }),
     );
   });

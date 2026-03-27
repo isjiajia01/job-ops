@@ -35,9 +35,16 @@ export const candidateKnowledgeProjectSchema = z.object({
   impact: z.string().trim().max(1200).nullable().default(null),
 });
 
+export const companyResearchNoteSchema = z.object({
+  company: z.string().trim().min(1).max(200),
+  source: z.string().trim().max(2000).nullable().default(null),
+  summary: z.string().trim().min(1).max(2400),
+});
+
 export const candidateKnowledgeBaseSchema = z.object({
   personalFacts: z.array(candidateKnowledgeFactSchema).max(200),
   projects: z.array(candidateKnowledgeProjectSchema).max(200),
+  companyResearchNotes: z.array(companyResearchNoteSchema).max(200).default([]),
 });
 
 export const ghostwriterAssistantPayloadSchema = z.object({

@@ -338,6 +338,14 @@ async function runAssistantReply(
           role: "system",
           content: `Profile Context:\n${context.profileSnapshot || "No profile context available."}`,
         },
+        ...(context.companyResearchSnapshot
+          ? [
+              {
+                role: "system" as const,
+                content: `Company Research Context:\n${context.companyResearchSnapshot}`,
+              },
+            ]
+          : []),
         ...history,
         {
           role: "user",

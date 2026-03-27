@@ -88,6 +88,19 @@ function buildCoverLetterSection(): string[] {
     "For cover letters, each body paragraph should make one clear fit claim and support it with evidence from the provided profile.",
     "For cover letters, do not repeat the resume line by line, do not use placeholders, and avoid generic praise or inflated enthusiasm.",
     "For cover letters, prefer a clear structure: brief opening, evidence-focused body, concise close.",
+    "When reliable company research context is provided, weave 1-2 concrete observations about the employer's business, product, or operating priorities into the fit case naturally.",
+    "Use company research only when it is specific and relevant to the role; do not force it into every paragraph and do not present uncertain research as a hard fact.",
+  ];
+}
+
+function buildCompanyResearchSection(): string[] {
+  return [
+    "",
+    "Company-research rules:",
+    "If company research context is provided, you may use it to sharpen the explanation of why the role and employer are a fit.",
+    "For cover letters, blend company understanding naturally into the opening or one evidence paragraph instead of sounding like copied company marketing.",
+    "For resume patches, use company understanding only to improve the tailored summary or headline when it helps position the candidate for this employer's real work.",
+    "Do not include company facts that are unsupported by the provided company-research context.",
   ];
 }
 
@@ -160,6 +173,7 @@ export function buildGhostwriterSystemPrompt(
     ...buildQualitySection(),
     ...buildLanguageAndPatchSection(promptArgs),
     ...buildCoverLetterSection(),
+    ...buildCompanyResearchSection(),
     ...buildCandidatePositioningSection(),
     ...buildPresetSection(profile),
     ...buildStyleSection(promptArgs),

@@ -11,6 +11,10 @@ vi.mock("./profile", () => ({
   getProfile: vi.fn(),
 }));
 
+vi.mock("./company-research", () => ({
+  getCompanyResearchNoteForJob: vi.fn(),
+}));
+
 vi.mock("./writing-style", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./writing-style")>();
 
@@ -21,6 +25,7 @@ vi.mock("./writing-style", async (importOriginal) => {
 });
 
 import { getJobById } from "../repositories/jobs";
+import { getCompanyResearchNoteForJob } from "./company-research";
 import { getProfile } from "./profile";
 import { getWritingStyle } from "./writing-style";
 
@@ -35,6 +40,7 @@ describe("buildJobChatPromptContext", () => {
       languageMode: "manual",
       manualLanguage: "english",
     });
+    vi.mocked(getCompanyResearchNoteForJob).mockResolvedValue(null);
   });
 
   it("builds context with style directives and snapshots", async () => {
@@ -165,6 +171,33 @@ describe("buildJobChatPromptContext", () => {
     expect(context.jobSnapshot.length).toBeLessThan(6000);
     expect(context.profileSnapshot).toContain("Name: Test User");
     expect(context.profileSnapshot).toContain("Skills:");
+    expect(context.companyResearchSnapshot).toBe("");
+  });
+
+  it("includes company research snapshot when available", async () => {
+    const job = createJob({
+      id: "job-ctx-research",
+      title: "Strategy Analyst",
+      employer: "Novo Nordisk",
+    });
+    vi.mocked(getJobById).mockResolvedValue(job);
+    vi.mocked(getProfile).mockResolvedValue({});
+    vi.mocked(getCompanyResearchNoteForJob).mockResolvedValue({
+      company: "Novo Nordisk",
+      source: "https://www.novonordisk.com",
+      summary:
+        "Novo Nordisk focuses on chronic disease care, large-scale manufacturing, and evidence-driven improvement across global operations.",
+    });
+
+    const context = await buildJobChatPromptContext(job.id);
+
+    expect(context.companyResearchSnapshot).toContain("Company: Novo Nordisk");
+    expect(context.companyResearchSnapshot).toContain(
+      "Source: https://www.novonordisk.com",
+    );
+    expect(context.companyResearchSnapshot).toContain(
+      "Research summary: Novo Nordisk focuses on chronic disease care",
+    );
   });
 
   it("falls back to empty profile snapshot when profile loading fails", async () => {

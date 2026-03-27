@@ -27,9 +27,16 @@ export interface CandidateKnowledgeProject {
   impact: string | null;
 }
 
+export interface CompanyResearchNote {
+  company: string;
+  source: string | null;
+  summary: string;
+}
+
 export interface CandidateKnowledgeBase {
   personalFacts: CandidateKnowledgeFact[];
   projects: CandidateKnowledgeProject[];
+  companyResearchNotes?: CompanyResearchNote[];
 }
 
 export type RxResumeMode = "v4" | "v5";

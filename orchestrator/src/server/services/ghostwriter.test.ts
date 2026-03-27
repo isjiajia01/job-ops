@@ -164,6 +164,8 @@ describe("ghostwriter service", () => {
       systemPrompt: "system prompt",
       jobSnapshot: '{"job":"snapshot"}',
       profileSnapshot: "profile snapshot",
+      companyResearchSnapshot:
+        "Company: ACME\nResearch summary: ACME is expanding its analytics-driven operations.",
     });
     mocks.getProfile.mockResolvedValue({
       basics: {
@@ -341,6 +343,16 @@ describe("ghostwriter service", () => {
     );
 
     const llmArg = mocks.llmCallJson.mock.calls[0][0];
+    expect(llmArg.messages.slice(0, 4)).toEqual([
+      { role: "system", content: "system prompt" },
+      { role: "system", content: 'Job Context (JSON):\n{"job":"snapshot"}' },
+      { role: "system", content: "Profile Context:\nprofile snapshot" },
+      {
+        role: "system",
+        content:
+          "Company Research Context:\nCompany: ACME\nResearch summary: ACME is expanding its analytics-driven operations.",
+      },
+    ]);
     expect(llmArg.messages.at(-1)).toMatchObject({
       role: "user",
       content: "Tell me about this role",
