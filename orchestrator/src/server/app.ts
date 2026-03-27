@@ -384,7 +384,16 @@ export function createApp() {
 
   // Health check
   app.get("/health", (_req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+    res.json({
+      status: "ok",
+      timestamp: new Date().toISOString(),
+      version: {
+        appVersion: process.env.APP_VERSION ?? "0.0.0",
+        gitSha: process.env.GIT_SHA ?? null,
+        imageTag: process.env.IMAGE_TAG ?? null,
+        deployedAt: process.env.DEPLOYED_AT ?? null,
+      },
+    });
   });
 
   // Serve client app in production

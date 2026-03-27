@@ -22,6 +22,13 @@ export type ApiResponse<T> =
       meta: ApiMeta;
     };
 
+export interface RuntimeVersionInfo {
+  appVersion: string;
+  gitSha: string | null;
+  imageTag: string | null;
+  deployedAt: string | null;
+}
+
 export interface TracerAnalyticsTimeseriesPoint {
   day: string; // YYYY-MM-DD
   clicks: number;

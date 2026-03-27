@@ -129,6 +129,9 @@ jobs:
           script: |
             cd /opt/job-ops
             IMAGE_TAG='${{ inputs.image_tag }}'
+            APP_VERSION="${IMAGE_TAG#v}"
+            DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            GIT_SHA="${{ github.sha }}"
             if [ -z "$IMAGE_TAG" ]; then
               IMAGE_TAG=latest
             fi
@@ -142,8 +145,24 @@ jobs:
             else
               printf 'JOBOPS_IMAGE=%s\n' "$JOBOPS_IMAGE" > .env
             fi
+            for kv in \
+              "APP_VERSION=$APP_VERSION" \
+              "GIT_SHA=$GIT_SHA" \
+              "IMAGE_TAG=$IMAGE_TAG" \
+              "DEPLOYED_AT=$DEPLOYED_AT"
+            do
+              key="${kv%%=*}"
+              value="${kv#*=}"
+              if grep -q "^${key}=" .env; then
+                sed -i.bak "s#^${key}=.*#${key}=${value}#" .env
+              else
+                printf '%s\n' "${key}=${value}" >> .env
+              fi
+            done
             rm -f .env.bak
             echo "Deploying image: $JOBOPS_IMAGE"
+            echo "App version: $APP_VERSION"
+            echo "Git SHA: $GIT_SHA"
             docker compose pull ${{ inputs.service }}
             docker compose up -d ${{ inputs.service }}
             docker compose ps
