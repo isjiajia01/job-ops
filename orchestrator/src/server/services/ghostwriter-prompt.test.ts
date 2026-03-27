@@ -14,7 +14,7 @@ describe("buildGhostwriterSystemPrompt", () => {
       },
       {
         basics: {
-          name: "Jiajia Zhang",
+          name: "Candidate Name",
           headline: "Planning Analytics Candidate",
           summary: "Planning-oriented analytical profile.",
         },
@@ -89,7 +89,7 @@ describe("buildGhostwriterSystemPrompt", () => {
       },
       {
         basics: {
-          name: "Jiajia Zhang",
+          name: "Candidate Name",
           headline: "Planning Analytics Candidate in Denmark",
           summary:
             "DTU candidate focused on planning, forecasting-adjacent analysis, and operations research in Copenhagen.",

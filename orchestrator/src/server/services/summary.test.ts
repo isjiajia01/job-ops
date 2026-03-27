@@ -113,7 +113,9 @@ describe("generateTailoring", () => {
       'Keep "headline" in the exact original job-title wording from the JD.',
     );
     expect(request?.messages?.[0]?.content).toContain("Test User");
-    expect(request?.messages?.[0]?.content).toContain('"name": "Planning Dashboard"');
+    expect(request?.messages?.[0]?.content).toContain(
+      '"name": "Planning Dashboard"',
+    );
   });
 
   it("pins the exact target job title when one is provided", async () => {

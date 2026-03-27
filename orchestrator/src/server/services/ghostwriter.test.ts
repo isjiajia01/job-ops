@@ -167,7 +167,7 @@ describe("ghostwriter service", () => {
     });
     mocks.getProfile.mockResolvedValue({
       basics: {
-        name: "Jiajia Zhang",
+        name: "Candidate Name",
         headline:
           "Planning Analytics Candidate | Python, Excel, Operations Research, Decision Support",
         summary:

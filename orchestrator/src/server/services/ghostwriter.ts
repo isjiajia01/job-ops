@@ -7,24 +7,24 @@ import {
 } from "@infra/errors";
 import { logger } from "@infra/logger";
 import { getRequestId } from "@infra/request-context";
+import type { BranchInfo, JobChatMessage, JobChatRun } from "@shared/types";
 import {
   getGhostwriterDisplayText,
   normalizeGhostwriterAssistantPayload,
   serializeGhostwriterAssistantPayload,
 } from "@shared/utils/ghostwriter";
-import type { BranchInfo, JobChatMessage, JobChatRun } from "@shared/types";
 import * as jobChatRepo from "../repositories/ghostwriter";
 import * as jobsRepo from "../repositories/jobs";
+import { getCandidateKnowledgeBase } from "./candidate-knowledge";
 import { buildJobChatPromptContext } from "./ghostwriter-context";
 import {
   lintCoverLetterDraft,
   sanitizeResumePatch,
 } from "./ghostwriter-output-guard";
-import { getCandidateKnowledgeBase } from "./candidate-knowledge";
-import { getProfile } from "./profile";
 import { LlmService } from "./llm/service";
 import type { JsonSchemaDefinition } from "./llm/types";
 import { resolveLlmRuntimeSettings as resolveRuntimeLlmSettings } from "./modelSelection";
+import { getProfile } from "./profile";
 
 type LlmRuntimeSettings = {
   model: string;

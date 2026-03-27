@@ -249,10 +249,10 @@ export async function summarizeJob(
       let tailoredSummary = job.tailoredSummary;
       let tailoredHeadline = job.tailoredHeadline;
       let tailoredSkills = job.tailoredSkills;
-      let tailoredExperienceEdits = job.tailoredExperienceEdits;
-      let tailoredLayoutDirectives = job.tailoredLayoutDirectives;
-      let tailoredSectionRationale = job.tailoredSectionRationale;
-      let tailoredOmissionRationale = job.tailoredOmissionRationale;
+      const tailoredExperienceEdits = job.tailoredExperienceEdits;
+      const tailoredLayoutDirectives = job.tailoredLayoutDirectives;
+      const tailoredSectionRationale = job.tailoredSectionRationale;
+      const tailoredOmissionRationale = job.tailoredOmissionRationale;
 
       if (!tailoredSummary || !tailoredHeadline || options?.force) {
         jobLogger.info("Generating tailoring content");

@@ -241,7 +241,7 @@ export async function downloadCoverLetterPdfForJob(
     .toLowerCase();
 
   const blob = buildPdfBlob({
-    personName: profile?.basics?.name || "Jiajia Zhang",
+    personName: profile?.basics?.name || "Candidate Name",
     email: profile?.basics?.email || null,
     phone: profile?.basics?.phone || null,
     location: formatLocation(profile),

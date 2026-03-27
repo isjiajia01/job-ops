@@ -96,7 +96,7 @@ export const CoverLetterPage: React.FC = () => {
   const coverLetter = normalizeCoverLetterContent(
     messagesQuery.data?.messages ?? [],
   );
-  const personName = profile?.basics?.name || "Jiajia Zhang";
+  const personName = profile?.basics?.name || "Candidate Name";
   const email = profile?.basics?.email || "";
   const phone = profile?.basics?.phone || "";
   const location = [
