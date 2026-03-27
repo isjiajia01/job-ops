@@ -136,25 +136,14 @@ jobs:
             GIT_SHA="${{ github.sha }}"
             export JOBOPS_IMAGE="ghcr.io/${{ github.repository_owner }}/job-ops:$IMAGE_TAG"
             touch .env
-            python3 - <<'PY'
-            from pathlib import Path
-            env_path = Path(".env")
-            values = {}
-            if env_path.exists():
-                for line in env_path.read_text().splitlines():
-                    if "=" in line:
-                        key, value = line.split("=", 1)
-                        values[key] = value
-            updates = {
-                "JOBOPS_IMAGE": "${JOBOPS_IMAGE}",
-                "APP_VERSION": "${APP_VERSION}",
-                "GIT_SHA": "${GIT_SHA}",
-                "IMAGE_TAG": "${IMAGE_TAG}",
-                "DEPLOYED_AT": "${DEPLOYED_AT}",
-            }
-            values.update(updates)
-            env_path.write_text("".join(f"{key}={value}\n" for key, value in values.items()))
-            PY
+            cp .env .env.tmp
+            grep -vE '^(JOBOPS_IMAGE|APP_VERSION|GIT_SHA|IMAGE_TAG|DEPLOYED_AT)=' .env.tmp > .env
+            printf 'JOBOPS_IMAGE=%s\n' "$JOBOPS_IMAGE" >> .env
+            printf 'APP_VERSION=%s\n' "$APP_VERSION" >> .env
+            printf 'GIT_SHA=%s\n' "$GIT_SHA" >> .env
+            printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG" >> .env
+            printf 'DEPLOYED_AT=%s\n' "$DEPLOYED_AT" >> .env
+            rm -f .env.tmp
             echo "Deploying image: $JOBOPS_IMAGE"
             echo "App version: $APP_VERSION"
             echo "Git SHA: $GIT_SHA"
