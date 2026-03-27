@@ -63,6 +63,9 @@ export const manifest: ExtractorManifest = {
         single:
           context.settings.searchCities ?? context.settings.jobspyLocation,
       }),
+      workplaceTypes: context.settings.workplaceTypes
+        ? JSON.parse(context.settings.workplaceTypes)
+        : undefined,
       maxJobsPerTerm,
       shouldCancel: context.shouldCancel,
       onProgress: (event) => {

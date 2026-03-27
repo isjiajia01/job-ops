@@ -63,6 +63,7 @@ let mockAutomaticRunValues: AutomaticRunValues = {
   runBudget: 150,
   country: "united kingdom",
   cityLocations: [],
+  workplaceTypes: ["remote", "hybrid", "onsite"],
 };
 
 const jobFixture = createJob({
@@ -402,6 +403,7 @@ describe("OrchestratorPage", () => {
       runBudget: 150,
       country: "united kingdom",
       cityLocations: [],
+      workplaceTypes: ["remote", "hybrid", "onsite"],
     };
   });
 
@@ -749,6 +751,7 @@ describe("OrchestratorPage", () => {
     await waitFor(() => {
       expect(api.updateSettings).toHaveBeenCalledWith({
         searchTerms: ["backend"],
+        workplaceTypes: ["remote", "hybrid", "onsite"],
         jobspyResultsWanted: 150,
         gradcrackerMaxJobsPerTerm: 150,
         ukvisajobsMaxJobs: 150,
@@ -780,6 +783,7 @@ describe("OrchestratorPage", () => {
       runBudget: 150,
       country: "united kingdom",
       cityLocations: ["London", "Manchester"],
+      workplaceTypes: ["remote", "hybrid", "onsite"],
     };
 
     render(
@@ -814,6 +818,7 @@ describe("OrchestratorPage", () => {
       runBudget: 150,
       country: "united kingdom",
       cityLocations: ["Leeds", "Manchester"],
+      workplaceTypes: ["remote", "hybrid", "onsite"],
     };
 
     render(
@@ -848,6 +853,7 @@ describe("OrchestratorPage", () => {
       runBudget: 150,
       country: "united kingdom",
       cityLocations: ["Leeds", "Manchester"],
+      workplaceTypes: ["remote", "hybrid", "onsite"],
     };
 
     render(
@@ -954,6 +960,7 @@ describe("OrchestratorPage", () => {
       runBudget: 150,
       country: "united states",
       cityLocations: [],
+      workplaceTypes: ["remote", "hybrid", "onsite"],
     };
 
     render(
@@ -1090,13 +1097,16 @@ describe("OrchestratorPage", () => {
       );
     });
 
+    // Update mock so selectedJob matches the discovered tab — visibleSelectedJob
+    // filters out jobs whose status doesn't belong to the active tab.
+    mockSelectedJob = job2;
+
     fireEvent.click(screen.getByTestId("select-job-2"));
 
     pressKey("r");
     await waitFor(() => {
       expect(toast.message).toHaveBeenCalledWith("Moving job to Ready...");
-      // Mock useOrchestratorData returns selectedJob as job-1 always
-      expect(api.processJob).toHaveBeenCalledWith("job-1");
+      expect(api.processJob).toHaveBeenCalledWith("job-2");
     });
   });
 

@@ -192,6 +192,7 @@ export function usePipelineControls(
           : formatCountryLabel(values.country);
       await api.updateSettings({
         searchTerms: values.searchTerms,
+        workplaceTypes: values.workplaceTypes,
         jobspyResultsWanted: limits.jobspyResultsWanted,
         gradcrackerMaxJobsPerTerm: limits.gradcrackerMaxJobsPerTerm,
         ukvisajobsMaxJobs: limits.ukvisajobsMaxJobs,

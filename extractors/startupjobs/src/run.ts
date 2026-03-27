@@ -30,6 +30,7 @@ export interface RunStartupJobsOptions {
   searchTerms?: string[];
   selectedCountry?: string;
   locations?: string[];
+  workplaceTypes?: Array<"remote" | "hybrid" | "onsite">;
   maxJobsPerTerm?: number;
   onProgress?: (event: StartupJobsProgressEvent) => void;
   shouldCancel?: () => boolean;
@@ -39,6 +40,18 @@ export interface StartupJobsResult {
   success: boolean;
   jobs: CreateJobInput[];
   error?: string;
+}
+
+type StartupJobsWorkplaceType = "remote" | "hybrid" | "on-site";
+
+function mapWorkplaceTypes(
+  workplaceTypes: Array<"remote" | "hybrid" | "onsite"> | undefined,
+): StartupJobsWorkplaceType[] | undefined {
+  if (!workplaceTypes || workplaceTypes.length === 0) return undefined;
+
+  return workplaceTypes.map((workplaceType) =>
+    workplaceType === "onsite" ? "on-site" : workplaceType,
+  );
 }
 
 function toPositiveIntOrFallback(
@@ -123,6 +136,7 @@ export async function runStartupJobs(
     locations: options.locations,
   });
   const maxJobsPerTerm = toPositiveIntOrFallback(options.maxJobsPerTerm, 50);
+  const workplaceType = mapWorkplaceTypes(options.workplaceTypes);
   const termTotal = searchTerms.length * runLocations.length;
   const jobs: CreateJobInput[] = [];
   const seen = new Set<string>();
@@ -149,6 +163,7 @@ export async function runStartupJobs(
           requestedCount: maxJobsPerTerm,
           enrichDetails: true,
           location: location ?? undefined,
+          workplaceType,
         });
 
         let jobsFoundTerm = 0;

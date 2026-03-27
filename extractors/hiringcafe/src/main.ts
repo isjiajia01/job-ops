@@ -68,6 +68,8 @@ interface NominatimResult {
   address?: Record<string, unknown>;
 }
 
+type HiringCafeWorkplaceType = "Remote" | "Hybrid" | "Onsite";
+
 function emitProgress(payload: Record<string, unknown>): void {
   if (process.env.JOBOPS_EMIT_PROGRESS !== "1") return;
   console.log(`${JOBOPS_PROGRESS_PREFIX}${JSON.stringify(payload)}`);
@@ -77,6 +79,36 @@ function parsePositiveInt(input: string | undefined, fallback: number): number {
   const parsed = input ? Number.parseInt(input, 10) : Number.NaN;
   if (!Number.isFinite(parsed) || parsed < 1) return fallback;
   return parsed;
+}
+
+function parseWorkplaceTypes(
+  raw: string | undefined,
+): HiringCafeWorkplaceType[] {
+  if (!raw) return ["Remote", "Hybrid", "Onsite"];
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return ["Remote", "Hybrid", "Onsite"];
+
+    const out: HiringCafeWorkplaceType[] = [];
+    const seen = new Set<HiringCafeWorkplaceType>();
+    for (const value of parsed) {
+      const mapped =
+        value === "remote"
+          ? "Remote"
+          : value === "hybrid"
+            ? "Hybrid"
+            : value === "onsite"
+              ? "Onsite"
+              : null;
+      if (!mapped || seen.has(mapped)) continue;
+      seen.add(mapped);
+      out.push(mapped);
+    }
+    return out.length > 0 ? out : ["Remote", "Hybrid", "Onsite"];
+  } catch {
+    return ["Remote", "Hybrid", "Onsite"];
+  }
 }
 
 function encodeSearchState(searchState: unknown): string {
@@ -301,6 +333,7 @@ function createCitySearchState(args: {
   searchQuery: string;
   dateFetchedPastNDays: number;
   context: CityLocationContext;
+  workplaceTypes: HiringCafeWorkplaceType[];
 }): Record<string, unknown> {
   return {
     locations: [
@@ -340,7 +373,7 @@ function createCitySearchState(args: {
         },
       },
     ],
-    workplaceTypes: ["Remote", "Hybrid", "Onsite"],
+    workplaceTypes: args.workplaceTypes,
     defaultToUserLocation: true,
     userLocation: null,
     physicalEnvironments: [
@@ -553,6 +586,9 @@ async function run(): Promise<void> {
     process.env.HIRING_CAFE_OUTPUT_JSON ||
     join(__dirname, "../storage/datasets/default/jobs.json");
   const headless = process.env.HIRING_CAFE_HEADLESS !== "false";
+  const workplaceTypes = parseWorkplaceTypes(
+    process.env.HIRING_CAFE_WORKPLACE_TYPES,
+  );
 
   let browser = await firefox.launch(
     await launchOptions({
@@ -620,11 +656,13 @@ async function run(): Promise<void> {
             searchQuery: searchTerm,
             dateFetchedPastNDays,
             context: cityLocationContext,
+            workplaceTypes,
           })
         : createDefaultSearchState({
             searchQuery: searchTerm,
             location: countryLocation,
             dateFetchedPastNDays,
+            workplaceTypes,
           });
       const encodedSearchState = encodeSearchState(searchState);
 

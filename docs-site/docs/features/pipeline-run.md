@@ -60,6 +60,16 @@ Incompatible sources are disabled with explanatory tooltips.
 - **Min suitability score**
 - **Max jobs discovered** (run budget cap)
 - **Search cities** (optional multi-city input; required for Glassdoor)
+- **Workplace type** (`Remote`, `Hybrid`, `Onsite`)
+
+Workplace type applies globally to the run across all search terms and locations.
+
+Source behavior differs:
+
+- Hiring Cafe and startup.jobs support all three workplace types directly.
+- Indeed, LinkedIn, and Glassdoor are backed by JobSpy and only support strict remote filtering.
+- If workplace type is set to `Remote` only, JobSpy runs with a remote-only filter.
+- If `Hybrid` or `Onsite` is included, JobSpy sources remain enabled but may return broader results.
 
 #### Search terms
 
@@ -109,6 +119,12 @@ For accepted input formats, inference behavior, and limits, see [Manual Import E
 - Reduce term count.
 - Use `Fast` preset or lower `Max jobs discovered`.
 - Disable high-cost source combinations where acceptable.
+
+### JobSpy results are broader than the selected workplace type
+
+- Indeed, LinkedIn, and Glassdoor only support strict remote filtering in this flow.
+- Use `Remote` only when you need JobSpy sources filtered tightly.
+- Hybrid or onsite selections are honored by Hiring Cafe and startup.jobs, but JobSpy-backed sources may still include broader results.
 
 ## Related pages
 

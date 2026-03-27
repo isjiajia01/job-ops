@@ -32,6 +32,9 @@ export const manifest: ExtractorManifest = {
         ? parseInt(context.settings.jobspyResultsWanted, 10)
         : undefined,
       countryIndeed: context.settings.jobspyCountryIndeed,
+      workplaceTypes: context.settings.workplaceTypes
+        ? JSON.parse(context.settings.workplaceTypes)
+        : undefined,
       onProgress: (event) => {
         if (context.shouldCancel?.()) return;
 

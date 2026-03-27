@@ -29,6 +29,7 @@ Using the published package also keeps the integration small and makes it easier
 3. Set your usual automatic run controls:
    - `searchTerms` are sent as `query`.
    - country or city filters are reused as the package `location` option.
+   - workplace type is passed through as the package `workplaceType` option.
    - run budget path (`jobspyResultsWanted`) is reused as `requestedCount` per term.
 4. Start the run and monitor progress in the pipeline progress card.
 
@@ -38,6 +39,7 @@ Defaults and constraints:
 - The integration runs with `enrichDetails: true`, so it opens job detail pages for richer records.
 - Browser binaries are not downloaded automatically with the package. Install them with `npx playwright install` before using this extractor in a fresh environment.
 - When **Search cities** is set, the extractor runs once per city and once per search term.
+- Workplace type is a global run filter, not a per-city override.
 - Without explicit cities, the selected country is used as the location filter except for broad modes such as `worldwide` and `usa/ca`.
 
 ## Common problems

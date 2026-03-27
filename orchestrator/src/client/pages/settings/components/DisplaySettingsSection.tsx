@@ -21,10 +21,7 @@ export const DisplaySettingsSection: React.FC<DisplaySettingsSectionProps> = ({
   isLoading,
   isSaving,
 }) => {
-  const {
-    default: defaultShowSponsorInfo,
-    effective: effectiveShowSponsorInfo,
-  } = values;
+  const { showSponsorInfo, renderMarkdownInJobDescriptions } = values;
   const { control } = useFormContext<UpdateSettingsInput>();
 
   return (
@@ -41,7 +38,7 @@ export const DisplaySettingsSection: React.FC<DisplaySettingsSectionProps> = ({
               render={({ field }) => (
                 <Checkbox
                   id="showSponsorInfo"
-                  checked={field.value ?? defaultShowSponsorInfo}
+                  checked={field.value ?? showSponsorInfo.default}
                   onCheckedChange={(checked) => {
                     field.onChange(
                       checked === "indeterminate" ? null : checked === true,
@@ -68,17 +65,77 @@ export const DisplaySettingsSection: React.FC<DisplaySettingsSectionProps> = ({
 
           <Separator />
 
-          <div className="grid gap-2 text-sm sm:grid-cols-2">
+          <div className="flex items-start space-x-3">
+            <Controller
+              name="renderMarkdownInJobDescriptions"
+              control={control}
+              render={({ field }) => (
+                <Checkbox
+                  id="renderMarkdownInJobDescriptions"
+                  checked={
+                    field.value ?? renderMarkdownInJobDescriptions.default
+                  }
+                  onCheckedChange={(checked) => {
+                    field.onChange(
+                      checked === "indeterminate" ? null : checked === true,
+                    );
+                  }}
+                  disabled={isLoading || isSaving}
+                />
+              )}
+            />
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="renderMarkdownInJobDescriptions"
+                className="text-sm font-medium leading-none cursor-pointer"
+              >
+                Render Markdown in job descriptions
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Show headings, bold text, lists, and code blocks as formatted
+                content when you expand a full job description. Turn this off if
+                you prefer the raw source text.
+              </p>
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="grid gap-3 text-sm sm:grid-cols-2">
             <div>
-              <div className="text-xs text-muted-foreground">Effective</div>
+              <div className="text-xs text-muted-foreground">
+                Sponsor info effective
+              </div>
               <div className="break-words font-mono text-xs">
-                {effectiveShowSponsorInfo ? "Enabled" : "Disabled"}
+                {showSponsorInfo.effective ? "Enabled" : "Disabled"}
               </div>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground">Default</div>
+              <div className="text-xs text-muted-foreground">
+                Sponsor info default
+              </div>
               <div className="break-words font-mono text-xs font-semibold">
-                {defaultShowSponsorInfo ? "Enabled" : "Disabled"}
+                {showSponsorInfo.default ? "Enabled" : "Disabled"}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">
+                Markdown rendering effective
+              </div>
+              <div className="break-words font-mono text-xs">
+                {renderMarkdownInJobDescriptions.effective
+                  ? "Enabled"
+                  : "Disabled"}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">
+                Markdown rendering default
+              </div>
+              <div className="break-words font-mono text-xs font-semibold">
+                {renderMarkdownInJobDescriptions.default
+                  ? "Enabled"
+                  : "Disabled"}
               </div>
             </div>
           </div>

@@ -61,6 +61,7 @@ vi.mock("@server/services/scorer", () => ({
 
 vi.mock("@server/services/profile", () => ({
   getProfile: vi.fn().mockResolvedValue({}),
+  clearProfileCache: vi.fn(),
 }));
 
 vi.mock("@server/services/visa-sponsors/index", () => ({
@@ -81,6 +82,24 @@ vi.mock("@server/services/visa-sponsors/index", () => ({
 }));
 
 const originalEnv = { ...process.env };
+const originalFetch = global.fetch;
+const isolatedEnvKeys = [
+  "RXRESUME_API_KEY",
+  "RXRESUME_EMAIL",
+  "RXRESUME_PASSWORD",
+  "RXRESUME_URL",
+  "RXRESUME_MODE",
+  "LLM_API_KEY",
+  "LLM_PROVIDER",
+  "LLM_BASE_URL",
+  "BASIC_AUTH_USER",
+  "BASIC_AUTH_PASSWORD",
+  "WEBHOOK_SECRET",
+  "UKVISAJOBS_EMAIL",
+  "UKVISAJOBS_PASSWORD",
+  "ADZUNA_APP_ID",
+  "ADZUNA_APP_KEY",
+] as const;
 
 export async function startServer(options?: {
   env?: Record<string, string | undefined>;
@@ -90,11 +109,17 @@ export async function startServer(options?: {
   closeDb: () => void;
   tempDir: string;
 }> {
+  vi.unstubAllGlobals();
+  global.fetch = originalFetch;
   vi.resetModules();
   const tempDir = await mkdtemp(join(tmpdir(), "job-ops-api-test-"));
   const envOverrides = options?.env ?? {};
+  const nextEnv = { ...originalEnv };
+  for (const key of isolatedEnvKeys) {
+    delete nextEnv[key];
+  }
   process.env = {
-    ...originalEnv,
+    ...nextEnv,
     DATA_DIR: tempDir,
     NODE_ENV: "test",
     MODEL: "test-model",
@@ -146,5 +171,7 @@ export async function stopServer(args: {
     await rm(args.tempDir, { recursive: true, force: true });
   }
   process.env = { ...originalEnv };
+  vi.unstubAllGlobals();
+  global.fetch = originalFetch;
   vi.clearAllMocks();
 }

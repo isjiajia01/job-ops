@@ -1,21 +1,23 @@
-# JobOps
+# JobOps: Your Ironman Suit for Job Hunting
 
-[![Stars](https://img.shields.io/github/stars/isjiajia01/job-ops?style=social)](https://github.com/isjiajia01/job-ops)
 
-<img width="1200" height="600" alt="Jobops-banner-900" src="https://github.com/user-attachments/assets/e929e389-2ebb-4de1-82c6-8e136b849b78" />
+<a href="https://trendshift.io/repositories/22756" target="_blank"><img src="https://trendshift.io/api/badge/repositories/22756" alt="DaKheera47%2Fjob-ops | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
-JobOps is a self-hosted job-search operations platform: it discovers roles from multiple job boards, scores fit against a candidate profile with an LLM, generates tailored resume content, exports PDFs through RxResume, and tracks post-application email replies.
+[![Stars](https://img.shields.io/github/stars/DaKheera47/job-ops?style=social)](https://github.com/DaKheera47/job-ops)
+[![GHCR](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker&logoColor=white)](https://github.com/DaKheera47/job-ops/pkgs/container/job-ops)
+[![Release](https://github.com/DaKheera47/job-ops/actions/workflows/ghcr.yml/badge.svg)](https://github.com/DaKheera47/job-ops/actions/workflows/ghcr.yml)
+[![Contributors](https://img.shields.io/github/contributors-anon/dakheera47/job-ops)](Contributors)
+[![Cloud Waitlist](https://img.shields.io/badge/☁️_Cloud-Join_Waitlist-orange?style=flat-square)](https://try.jobops.app?utm_source=github&utm_medium=badge&utm_campaign=waitlist)
 
-This repository is a public customized fork of the upstream `DaKheera47/job-ops` project, with additional work around resume-tailoring depth, Denmark-oriented search flow, and local evaluation utilities for improving AI-written CV output.
+<img width="1200" height="600" alt="2k" src="https://github.com/user-attachments/assets/14fdc392-0e96-43be-bc1f-cf819ab2afc4" />
 
-In practical terms, the system helps with:
+Stop applying blind.
 
-- multi-source job discovery
-- fit scoring with configurable LLM backends
-- structured resume tailoring for headline, summary, skills, experience bullets, and section emphasis
-- RxResume-backed PDF generation
-- Gmail-based post-application tracking
-- self-hosted deployment with Docker and SQLite
+Scrapes major job boards (LinkedIn, Indeed, Glassdoor & more), AI-scores suitability, tailors resumes (RxResume), and tracks application emails automatically.
+
+You still apply to every job yourself. JobOps just finds jobs, makes sure you're applying to the right ones with a tailored CV, and not losing track of where you're at.
+
+Self-hosted. Docker-based.
 
 ## 40s Demo: Crawl → Score → PDF → Track
 
@@ -55,7 +57,7 @@ Prefer guided setup? Follow the [Self-Hosting Guide](https://jobops.dakheera47.c
 
 ```bash
 # 1. Download
-git clone https://github.com/isjiajia01/job-ops.git
+git clone https://github.com/DaKheera47/job-ops.git
 cd job-ops
 
 # 2. Start (Pulls pre-built image)

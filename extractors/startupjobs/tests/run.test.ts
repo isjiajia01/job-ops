@@ -72,4 +72,46 @@ describe("runStartupJobs", () => {
       }),
     );
   });
+
+  it("passes workplaceType to the scraper", async () => {
+    const { scrapeStartupJobsViaAlgolia } = await import(
+      "startup-jobs-scraper"
+    );
+    const scrapeMock = vi.mocked(scrapeStartupJobsViaAlgolia);
+    scrapeMock.mockResolvedValueOnce([]);
+
+    const { runStartupJobs } = await import("../src/run");
+
+    await runStartupJobs({
+      searchTerms: ["software engineer"],
+      workplaceTypes: ["remote", "hybrid"],
+    });
+
+    expect(scrapeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workplaceType: ["remote", "hybrid"],
+      }),
+    );
+  });
+
+  it("maps onsite workplaceType to the scraper's on-site value", async () => {
+    const { scrapeStartupJobsViaAlgolia } = await import(
+      "startup-jobs-scraper"
+    );
+    const scrapeMock = vi.mocked(scrapeStartupJobsViaAlgolia);
+    scrapeMock.mockResolvedValueOnce([]);
+
+    const { runStartupJobs } = await import("../src/run");
+
+    await runStartupJobs({
+      searchTerms: ["software engineer"],
+      workplaceTypes: ["onsite"],
+    });
+
+    expect(scrapeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workplaceType: ["on-site"],
+      }),
+    );
+  });
 });

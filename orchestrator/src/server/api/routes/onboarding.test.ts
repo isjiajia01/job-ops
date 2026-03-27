@@ -1,4 +1,5 @@
 import type { Server } from "node:http";
+import { RxResumeClient } from "@server/services/rxresume/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { startServer, stopServer } from "./test-utils";
 
@@ -327,6 +328,179 @@ describe.sequential("Onboarding API routes", () => {
     });
   });
 
+  describe("POST /api/onboarding/validate/rxresume", () => {
+    it("returns invalid when no credentials are provided and none in env", async () => {
+      const res = await fetch(`${baseUrl}/api/onboarding/validate/rxresume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.ok).toBe(true);
+      expect(body.data.valid).toBe(false);
+      expect(body.data.message).toContain("not configured");
+      expect(body.data.status).toBe(400);
+    });
+
+    it("returns invalid when only email is provided", async () => {
+      const res = await fetch(`${baseUrl}/api/onboarding/validate/rxresume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "test@example.com" }),
+      });
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.data.valid).toBe(false);
+      expect(body.data.message).toContain("not configured");
+    });
+
+    it("returns invalid when only password is provided", async () => {
+      const res = await fetch(`${baseUrl}/api/onboarding/validate/rxresume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: "testpass" }),
+      });
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.data.valid).toBe(false);
+      expect(body.data.message).toContain("not configured");
+    });
+
+    it("validates invalid credentials against RxResume", async () => {
+      vi.spyOn(RxResumeClient, "verifyCredentials").mockResolvedValue({
+        ok: false,
+        status: 401,
+        message: "InvalidCredentials",
+      });
+      const res = await fetch(`${baseUrl}/api/onboarding/validate/rxresume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "nonexistent@test.com",
+          password: "wrongpassword123",
+        }),
+      });
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.ok).toBe(true);
+      // Should be invalid because credentials are fake
+      expect(body.data.valid).toBe(false);
+      expect(body.data.status).toBe(401);
+      expect(body.data.message).toContain("email/password");
+    });
+
+    it("returns a v5 API-key specific warning for invalid v5 credentials", async () => {
+      global.fetch = vi.fn((input, init) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.includes("/api/openapi/resumes")) {
+          return Promise.resolve({
+            ok: false,
+            status: 401,
+            headers: { get: () => "application/json" },
+            json: async () => ({ message: "Unauthorized" }),
+          } as unknown as Response);
+        }
+        return originalFetch(input, init);
+      });
+
+      const res = await fetch(`${baseUrl}/api/onboarding/validate/rxresume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "v5",
+          apiKey: "rr-v5-invalid-key",
+          baseUrl: "http://localhost:3000",
+        }),
+      });
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.ok).toBe(true);
+      expect(body.data.valid).toBe(false);
+      expect(body.data.status).toBe(401);
+      expect(body.data.message).toContain("API key");
+    });
+
+    it("returns an availability warning when the Reactive Resume instance is unreachable", async () => {
+      global.fetch = vi.fn((input, init) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.includes("/api/openapi/resumes")) {
+          return Promise.reject(new TypeError("fetch failed"));
+        }
+        return originalFetch(input, init);
+      });
+
+      const res = await fetch(`${baseUrl}/api/onboarding/validate/rxresume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "v5",
+          apiKey: "rr-v5-test-key",
+          baseUrl: "http://localhost:3000",
+        }),
+      });
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.ok).toBe(true);
+      expect(body.data.valid).toBe(false);
+      expect(body.data.status).toBe(0);
+      expect(body.data.message).toContain("http://localhost:3000");
+      expect(body.data.message).toContain("unavailable");
+    });
+
+    it("validates v5 API key mode against Reactive Resume OpenAPI", async () => {
+      global.fetch = vi.fn((input, init) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.includes("/api/openapi/resumes")) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers: { get: () => "application/json" },
+            json: async () => [],
+          } as unknown as Response);
+        }
+        return originalFetch(input, init);
+      });
+
+      const res = await fetch(`${baseUrl}/api/onboarding/validate/rxresume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "v5",
+          apiKey: "rr-v5-test-key",
+          baseUrl: "http://localhost:3000",
+        }),
+      });
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.ok).toBe(true);
+      expect(body.data.valid).toBe(true);
+      expect(body.data.message).toBeNull();
+      expect(body.data.status).toBeNull();
+    });
+
+    it("handles whitespace-only credentials", async () => {
+      const res = await fetch(`${baseUrl}/api/onboarding/validate/rxresume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "   ", password: "   " }),
+      });
+      const body = await res.json();
+
+      expect(res.ok).toBe(true);
+      expect(body.data.valid).toBe(false);
+      expect(body.data.message).toContain("not configured");
+      expect(body.data.status).toBe(400);
+    });
+  });
+
   describe("GET /api/onboarding/validate/resume", () => {
     it("returns invalid when rxresumeBaseResumeId is not configured", async () => {
       const res = await fetch(`${baseUrl}/api/onboarding/validate/resume`);
@@ -343,3 +517,157 @@ describe.sequential("Onboarding API routes", () => {
     // by unit tests in profile.test.ts and the service tests.
   });
 });
+
+/**
+ * Creates a minimal valid RxResume v4 schema compliant JSON
+ */
+function _createMinimalValidResume() {
+  return {
+    basics: {
+      name: "Test User",
+      headline: "Software Developer",
+      email: "test@example.com",
+      phone: "",
+      location: "",
+      url: { label: "", href: "" },
+      customFields: [],
+      picture: {
+        url: "",
+        size: 64,
+        aspectRatio: 1,
+        borderRadius: 0,
+        effects: { hidden: false, border: false, grayscale: false },
+      },
+    },
+    sections: {
+      summary: {
+        id: "summary",
+        name: "Summary",
+        columns: 1,
+        separateLinks: true,
+        visible: true,
+        content: "",
+      },
+      skills: {
+        id: "skills",
+        name: "Skills",
+        columns: 1,
+        separateLinks: true,
+        visible: true,
+        items: [],
+      },
+      awards: {
+        id: "awards",
+        name: "Awards",
+        columns: 1,
+        separateLinks: true,
+        visible: true,
+        items: [],
+      },
+      certifications: {
+        id: "certifications",
+        name: "Certifications",
+        columns: 1,
+        separateLinks: true,
+        visible: true,
+        items: [],
+      },
+      education: {
+        id: "education",
+        name: "Education",
+        columns: 1,
+        separateLinks: true,
+        visible: true,
+        items: [],
+      },
+      experience: {
+        id: "experience",
+        name: "Experience",
+        columns: 1,
+        separateLinks: true,
+        visible: true,
+        items: [],
+      },
+      volunteer: {
+        id: "volunteer",
+        name: "Volunteer",
+        columns: 1,
+        separateLinks: true,
+        visible: true,
+        items: [],
+      },
+      interests: {
+        id: "interests",
+        name: "Interests",
+        columns: 1,
+        separateLinks: true,
+        visible: true,
+        items: [],
+      },
+      languages: {
+        id: "languages",
+        name: "Languages",
+        columns: 1,
+        separateLinks: true,
+        visible: true,
+        items: [],
+      },
+      profiles: {
+        id: "profiles",
+        name: "Profiles",
+        columns: 1,
+        separateLinks: true,
+        visible: true,
+        items: [],
+      },
+      projects: {
+        id: "projects",
+        name: "Projects",
+        columns: 1,
+        separateLinks: true,
+        visible: true,
+        items: [],
+      },
+      publications: {
+        id: "publications",
+        name: "Publications",
+        columns: 1,
+        separateLinks: true,
+        visible: true,
+        items: [],
+      },
+      references: {
+        id: "references",
+        name: "References",
+        columns: 1,
+        separateLinks: true,
+        visible: true,
+        items: [],
+      },
+      custom: {},
+    },
+    metadata: {
+      template: "rhyhorn",
+      layout: [[["summary"], ["skills"]]],
+      css: { value: "", visible: false },
+      page: {
+        margin: 18,
+        format: "a4",
+        options: { breakLine: true, pageNumbers: true },
+      },
+      theme: { background: "#ffffff", text: "#000000", primary: "#dc2626" },
+      typography: {
+        font: {
+          family: "IBM Plex Serif",
+          subset: "latin",
+          variants: ["regular"],
+          size: 14,
+        },
+        lineHeight: 1.5,
+        hideIcons: false,
+        underlineLinks: true,
+      },
+      notes: "",
+    },
+  };
+}

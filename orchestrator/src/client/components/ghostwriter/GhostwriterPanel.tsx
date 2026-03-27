@@ -1,15 +1,25 @@
 import * as api from "@client/api";
-import type { Job, JobChatMessage, JobChatStreamEvent } from "@shared/types";
-import { getGhostwriterCoverLetterDraft } from "@shared/utils/ghostwriter";
-import { ChevronRight, Download, FileText } from "lucide-react";
+import type {
+  BranchInfo,
+  Job,
+  JobChatMessage,
+  JobChatStreamEvent,
+} from "@shared/types";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { CollapsibleSection } from "../discovered-panel/CollapsibleSection";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
-import { AI_ENTRY_PROMPTS, COVER_LETTER_PROMPTS } from "./prompt-presets";
 
 type GhostwriterPanelProps = {
   job: Job;
@@ -17,15 +27,15 @@ type GhostwriterPanelProps = {
 
 export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
   const [messages, setMessages] = useState<JobChatMessage[]>([]);
+  const [branches, setBranches] = useState<BranchInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(
     null,
   );
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
-  const [quickActionsOpen, setQuickActionsOpen] = useState(false);
-  const [cvActionsOpen, setCvActionsOpen] = useState(false);
-  const [coverActionsOpen, setCoverActionsOpen] = useState(false);
+
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
 
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
@@ -45,6 +55,7 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
       limit: 300,
     });
     setMessages(data.messages);
+    setBranches(data.branches);
   }, [job.id]);
 
   const load = useCallback(async () => {
@@ -90,6 +101,8 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
               tokensOut: null,
               version: 1,
               replacesMessageId: null,
+              parentMessageId: null,
+              activeChildId: null,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
             },
@@ -154,6 +167,8 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
         tokensOut: null,
         version: 1,
         replacesMessageId: null,
+        parentMessageId: null,
+        activeChildId: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -205,133 +220,140 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
     }
   }, [activeRunId, job.id, loadMessages]);
 
-  const canRegenerate = useMemo(() => {
-    if (isStreaming || messages.length === 0) return false;
-    const last = messages[messages.length - 1];
-    return last.role === "assistant";
-  }, [isStreaming, messages]);
+  const regenerate = useCallback(
+    async (assistantMessageId: string) => {
+      if (isStreaming) return;
 
-  const latestAssistantMessage = useMemo(() => {
-    return [...messages]
-      .reverse()
-      .find((message) => message.role === "assistant");
-  }, [messages]);
+      // Remove messages below the branch point (everything after the regenerated message disappears)
+      setMessages((current) => {
+        const targetIndex = current.findIndex(
+          (m) => m.id === assistantMessageId,
+        );
+        if (targetIndex === -1) return current;
+        return current.slice(0, targetIndex);
+      });
 
-  const downloadLatestCoverLetter = useCallback(() => {
-    const content = latestAssistantMessage
-      ? getGhostwriterCoverLetterDraft(latestAssistantMessage.content)
-      : "";
-    if (!content) return;
+      setIsStreaming(true);
+      const controller = new AbortController();
+      streamAbortRef.current = controller;
 
-    const safeEmployer = (job.employer || "employer")
-      .replace(/[^a-z0-9]+/gi, "-")
-      .replace(/^-+|-+$/g, "")
-      .toLowerCase();
-    const safeTitle = (job.title || "job")
-      .replace(/[^a-z0-9]+/gi, "-")
-      .replace(/^-+|-+$/g, "")
-      .toLowerCase();
-
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `cover-letter-${safeEmployer}-${safeTitle}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-  }, [job.employer, job.title, latestAssistantMessage]);
-
-  const triggerQuickPrompt = useCallback(
-    async (prompt: string) => {
-      await sendMessage(prompt);
+      try {
+        await api.streamRegenerateJobGhostwriterMessage(
+          job.id,
+          assistantMessageId,
+          { signal: controller.signal },
+          { onEvent: onStreamEvent },
+        );
+        await loadMessages();
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
+        }
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Failed to regenerate response";
+        toast.error(message);
+      } finally {
+        streamAbortRef.current = null;
+        setIsStreaming(false);
+      }
     },
-    [sendMessage],
+    [isStreaming, job.id, loadMessages, onStreamEvent],
   );
 
-  const composerPlaceholder =
-    "Ask anything about this job, your CV, or the cover letter...";
+  const editMessage = useCallback(
+    async (messageId: string, content: string) => {
+      if (isStreaming) return;
 
-  const regenerate = useCallback(async () => {
-    if (isStreaming || messages.length === 0) return;
-    const last = messages[messages.length - 1];
-    if (last.role !== "assistant") return;
+      // Remove the edited message and everything below it (old branch disappears)
+      setMessages((current) => {
+        const targetIndex = current.findIndex((m) => m.id === messageId);
+        if (targetIndex === -1) return current;
+        // Keep everything before the edited message, add an optimistic new user message
+        const before = current.slice(0, targetIndex);
+        return [
+          ...before,
+          {
+            id: `tmp-edit-${Date.now()}`,
+            threadId: current[0]?.threadId || "pending-thread",
+            jobId: job.id,
+            role: "user" as const,
+            content,
+            status: "complete" as const,
+            tokensIn: null,
+            tokensOut: null,
+            version: 1,
+            replacesMessageId: null,
+            parentMessageId: null,
+            activeChildId: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ];
+      });
 
-    setIsStreaming(true);
-    const controller = new AbortController();
-    streamAbortRef.current = controller;
+      setIsStreaming(true);
+      const controller = new AbortController();
+      streamAbortRef.current = controller;
 
-    try {
-      await api.streamRegenerateJobGhostwriterMessage(
-        job.id,
-        last.id,
-        { signal: controller.signal },
-        { onEvent: onStreamEvent },
-      );
-      await loadMessages();
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        return;
+      try {
+        await api.editJobGhostwriterMessage(
+          job.id,
+          messageId,
+          { content, signal: controller.signal },
+          { onEvent: onStreamEvent },
+        );
+        await loadMessages();
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
+        }
+        const message =
+          error instanceof Error ? error.message : "Failed to edit message";
+        toast.error(message);
+      } finally {
+        streamAbortRef.current = null;
+        setIsStreaming(false);
       }
+    },
+    [isStreaming, job.id, loadMessages, onStreamEvent],
+  );
+
+  const switchBranch = useCallback(
+    async (messageId: string) => {
+      try {
+        const result = await api.switchJobGhostwriterBranch(job.id, messageId);
+        setMessages(result.messages);
+        setBranches(result.branches);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to switch branch";
+        toast.error(message);
+      }
+    },
+    [job.id],
+  );
+
+  const canReset = useMemo(() => {
+    return !isStreaming && messages.length > 0;
+  }, [isStreaming, messages]);
+
+  const resetConversation = useCallback(async () => {
+    try {
+      await api.resetJobGhostwriterConversation(job.id);
+      setMessages([]);
+      setBranches([]);
+      toast.success("Conversation cleared");
+    } catch (error) {
       const message =
-        error instanceof Error
-          ? error.message
-          : "Failed to regenerate response";
+        error instanceof Error ? error.message : "Failed to reset conversation";
       toast.error(message);
-    } finally {
-      streamAbortRef.current = null;
-      setIsStreaming(false);
     }
-  }, [isStreaming, job.id, loadMessages, messages, onStreamEvent]);
+  }, [job.id]);
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
-      <div className="mb-3 rounded-xl border border-border/60 bg-muted/10 px-3 py-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-foreground">
-              Ask AI Copilot
-            </div>
-            <div className="mt-1 text-xs leading-5 text-muted-foreground">
-              Ask in normal Q&A form. It already has this job description, your
-              CV context, and your shared profile knowledge.
-            </div>
-          </div>
-          {latestAssistantMessage &&
-          getGhostwriterCoverLetterDraft(
-            latestAssistantMessage.content,
-          ).trim() ? (
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                asChild
-                variant="ghost"
-                size="sm"
-                className="h-8 gap-1 text-xs"
-              >
-                <a
-                  href={`/job/${job.id}/cover-letter`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <FileText className="h-3.5 w-3.5" />
-                  View Letter
-                </a>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 gap-1 text-xs"
-                onClick={downloadLatestCoverLetter}
-              >
-                <Download className="h-3.5 w-3.5" />
-                Draft
-              </Button>
-            </div>
-          ) : null}
-        </div>
-      </div>
-
       <div
         ref={messageListRef}
         className="min-h-0 flex-1 overflow-y-auto border-b border-border/50 pb-3 pr-1"
@@ -342,97 +364,55 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
               {job.title} at {job.employer}
             </h4>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              Ask a question, request a rewrite, update the CV for this role, or
-              draft a cover letter. Quick actions are available below if you
-              want them.
+              Ghostwriter already has this job description, your resume and your
+              writing style preferences. Ask for tailored response drafts, or
+              concise role-fit talking points.
             </p>
           </div>
         ) : (
           <MessageList
             messages={messages}
+            branches={branches}
             isStreaming={isStreaming}
             streamingMessageId={streamingMessageId}
+            onRegenerate={regenerate}
+            onEdit={editMessage}
+            onSwitchBranch={switchBranch}
           />
         )}
       </div>
 
-      <div className="mt-4 space-y-3">
-        <CollapsibleSection
-          isOpen={quickActionsOpen}
-          label="Quick Actions"
-          onToggle={() => setQuickActionsOpen((current) => !current)}
-        >
-          <div className="rounded-xl border border-border/60 bg-muted/10 p-3 space-y-3">
-            <CollapsibleSection
-              isOpen={cvActionsOpen}
-              label="CV Actions"
-              onToggle={() => setCvActionsOpen((current) => !current)}
-            >
-              <div className="grid gap-2 pt-1">
-                {AI_ENTRY_PROMPTS.map((item) => (
-                  <Button
-                    key={item.id}
-                    variant="outline"
-                    size="sm"
-                    className="justify-between gap-3 text-left"
-                    disabled={isLoading || isStreaming}
-                    onClick={() => void triggerQuickPrompt(item.prompt)}
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium">
-                        {item.label}
-                      </span>
-                      <span className="block truncate text-[11px] text-muted-foreground">
-                        {item.description}
-                      </span>
-                    </span>
-                    <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-                  </Button>
-                ))}
-              </div>
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              isOpen={coverActionsOpen}
-              label="Cover Letter Actions"
-              onToggle={() => setCoverActionsOpen((current) => !current)}
-            >
-              <div className="grid gap-2 pt-1">
-                {COVER_LETTER_PROMPTS.map((item) => (
-                  <Button
-                    key={item.id}
-                    variant="outline"
-                    size="sm"
-                    className="justify-between gap-3 text-left"
-                    disabled={isLoading || isStreaming}
-                    onClick={() => void triggerQuickPrompt(item.prompt)}
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium">
-                        {item.label}
-                      </span>
-                      <span className="block truncate text-[11px] text-muted-foreground">
-                        {item.description}
-                      </span>
-                    </span>
-                    <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-                  </Button>
-                ))}
-              </div>
-            </CollapsibleSection>
-          </div>
-        </CollapsibleSection>
-
+      <div className="mt-4">
         <Composer
           disabled={isLoading || isStreaming}
           isStreaming={isStreaming}
-          canRegenerate={canRegenerate}
-          placeholder={composerPlaceholder}
-          onRegenerate={regenerate}
+          canReset={canReset}
           onStop={stopStreaming}
           onSend={sendMessage}
+          onReset={() => setIsResetDialogOpen(true)}
         />
       </div>
+
+      <AlertDialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Start over?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently erase the entire conversation. This action
+              cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void resetConversation()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Erase conversation
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

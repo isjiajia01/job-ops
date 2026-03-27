@@ -1,3 +1,4 @@
+import { createAppSettings } from "@shared/testing/factories.js";
 import { act, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api";
@@ -15,8 +16,15 @@ describe("useSettings", () => {
   });
 
   it("fetches settings on mount if not already cached", async () => {
-    const mockSettings = { showSponsorInfo: false };
-    vi.mocked(api.getSettings).mockResolvedValue(mockSettings as any);
+    const mockSettings = createAppSettings({
+      showSponsorInfo: { value: false, default: true, override: false },
+      renderMarkdownInJobDescriptions: {
+        value: false,
+        default: true,
+        override: false,
+      },
+    });
+    vi.mocked(api.getSettings).mockResolvedValue(mockSettings);
 
     const { result } = renderHookWithQueryClient(() => useSettings());
 
@@ -28,6 +36,7 @@ describe("useSettings", () => {
     });
 
     expect(result.current.showSponsorInfo).toBe(false);
+    expect(result.current.renderMarkdownInJobDescriptions).toBe(false);
     expect(api.getSettings).toHaveBeenCalledTimes(1);
   });
 
@@ -39,15 +48,23 @@ describe("useSettings", () => {
     await waitFor(() => {
       // settings is null, so showSponsorInfo should default to true
       expect(result.current.showSponsorInfo).toBe(true);
+      expect(result.current.renderMarkdownInJobDescriptions).toBe(true);
     });
   });
 
   it("provides a refresh function that updates settings", async () => {
-    const initialSettings = { showSponsorInfo: true };
-    const updatedSettings = { showSponsorInfo: false };
+    const initialSettings = createAppSettings();
+    const updatedSettings = createAppSettings({
+      showSponsorInfo: { value: false, default: true, override: false },
+      renderMarkdownInJobDescriptions: {
+        value: false,
+        default: true,
+        override: false,
+      },
+    });
 
-    vi.mocked(api.getSettings).mockResolvedValueOnce(initialSettings as any);
-    vi.mocked(api.getSettings).mockResolvedValueOnce(updatedSettings as any);
+    vi.mocked(api.getSettings).mockResolvedValueOnce(initialSettings);
+    vi.mocked(api.getSettings).mockResolvedValueOnce(updatedSettings);
 
     const { result } = renderHookWithQueryClient(() => useSettings());
 
@@ -66,6 +83,7 @@ describe("useSettings", () => {
 
     expect(refreshed).toEqual(updatedSettings);
     expect(result.current.showSponsorInfo).toBe(false);
+    expect(result.current.renderMarkdownInJobDescriptions).toBe(false);
   });
 
   it("handles errors when fetching settings", async () => {

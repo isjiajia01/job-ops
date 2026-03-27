@@ -1,5 +1,5 @@
 import { getMetaShortcutLabel, isMetaKeyPressed } from "@client/lib/meta-key";
-import { RefreshCcw, Send, Square } from "lucide-react";
+import { Eraser, Send, Square } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -8,21 +8,19 @@ import { Textarea } from "@/components/ui/textarea";
 type ComposerProps = {
   disabled?: boolean;
   isStreaming: boolean;
-  canRegenerate: boolean;
-  placeholder?: string;
-  onRegenerate: () => Promise<void>;
+  canReset: boolean;
   onStop: () => Promise<void>;
   onSend: (content: string) => Promise<void>;
+  onReset: () => void;
 };
 
 export const Composer: React.FC<ComposerProps> = ({
   disabled,
   isStreaming,
-  canRegenerate,
-  placeholder,
-  onRegenerate,
+  canReset,
   onStop,
   onSend,
+  onReset,
 }) => {
   const [value, setValue] = useState("");
 
@@ -30,18 +28,13 @@ export const Composer: React.FC<ComposerProps> = ({
     const content = value.trim();
     if (!content || disabled) return;
     setValue("");
-    try {
-      await onSend(content);
-    } catch (error) {
-      setValue(content);
-      throw error;
-    }
+    await onSend(content);
   };
 
   return (
     <div className="space-y-2">
       <Textarea
-        placeholder={placeholder || "Ask anything about this job..."}
+        placeholder="Ask anything about this job..."
         value={value}
         onChange={(event) => setValue(event.target.value)}
         disabled={disabled}
@@ -58,7 +51,19 @@ export const Composer: React.FC<ComposerProps> = ({
           {getMetaShortcutLabel("Enter")} to send
         </div>
         <div className="flex items-center gap-1">
-          {isStreaming ? (
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={onReset}
+            disabled={disabled || !canReset}
+            aria-label="Start over"
+            title="Start over"
+            className="text-destructive hover:text-destructive"
+          >
+            <Eraser className="h-3.5 w-3.5" />
+          </Button>
+
+          {isStreaming && (
             <Button
               size="icon"
               variant="outline"
@@ -67,17 +72,6 @@ export const Composer: React.FC<ComposerProps> = ({
               title="Stop generating"
             >
               <Square className="h-3.5 w-3.5" />
-            </Button>
-          ) : (
-            <Button
-              size="icon"
-              variant="outline"
-              onClick={() => void onRegenerate()}
-              disabled={disabled || !canRegenerate}
-              aria-label="Regenerate response"
-              title="Regenerate response"
-            >
-              <RefreshCcw className="h-3.5 w-3.5" />
             </Button>
           )}
 

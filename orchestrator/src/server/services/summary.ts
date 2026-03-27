@@ -4,9 +4,9 @@
 
 import { logger } from "@infra/logger";
 import type { ResumeProfile } from "@shared/types";
-import { getSetting } from "../repositories/settings";
 import { LlmService } from "./llm/service";
 import type { JsonSchemaDefinition } from "./llm/types";
+import { resolveLlmModel } from "./modelSelection";
 import {
   getWritingLanguageLabel,
   resolveWritingOutputLanguage,
@@ -16,37 +16,16 @@ import {
   stripLanguageDirectivesFromConstraints,
 } from "./writing-style";
 
-export interface TailoredExperienceEdit {
-  id: string;
-  bullets: string[];
-}
-
-export interface TailoredLayoutDirectives {
-  sectionOrder?: string[];
-  hiddenSections?: string[];
-  hiddenProjectIds?: string[];
-  hiddenExperienceIds?: string[];
-}
-
 export interface TailoredData {
   summary: string;
   headline: string;
   skills: Array<{ name: string; keywords: string[] }>;
-  experienceEdits: TailoredExperienceEdit[];
-  layoutDirectives: TailoredLayoutDirectives;
-  sectionRationale: string;
-  omissionRationale: string;
 }
 
 export interface TailoringResult {
   success: boolean;
   data?: TailoredData;
   error?: string;
-}
-
-export interface TailoringInput {
-  jobDescription: string;
-  jobTitle?: string | null;
 }
 
 /** JSON schema for resume tailoring response */
@@ -62,46 +41,6 @@ const TAILORING_SCHEMA: JsonSchemaDefinition = {
       summary: {
         type: "string",
         description: "Tailored resume summary paragraph",
-      },
-      experienceEdits: {
-        type: "array",
-        description:
-          "Structured rewrites for resume experience bullet lists keyed by experience id",
-        items: {
-          type: "object",
-          properties: {
-            id: { type: "string" },
-            bullets: { type: "array", items: { type: "string" } },
-          },
-          required: ["id", "bullets"],
-          additionalProperties: false,
-        },
-      },
-      layoutDirectives: {
-        type: "object",
-        properties: {
-          sectionOrder: { type: "array", items: { type: "string" } },
-          hiddenSections: { type: "array", items: { type: "string" } },
-          hiddenProjectIds: { type: "array", items: { type: "string" } },
-          hiddenExperienceIds: { type: "array", items: { type: "string" } },
-        },
-        required: [
-          "sectionOrder",
-          "hiddenSections",
-          "hiddenProjectIds",
-          "hiddenExperienceIds",
-        ],
-        additionalProperties: false,
-      },
-      sectionRationale: {
-        type: "string",
-        description:
-          "Short explanation of why the chosen section ordering and emphasis fit this JD",
-      },
-      omissionRationale: {
-        type: "string",
-        description:
-          "Short explanation of any hidden sections, projects, or experience items for this JD",
       },
       skills: {
         type: "array",
@@ -124,15 +63,7 @@ const TAILORING_SCHEMA: JsonSchemaDefinition = {
         },
       },
     },
-    required: [
-      "headline",
-      "summary",
-      "skills",
-      "experienceEdits",
-      "layoutDirectives",
-      "sectionRationale",
-      "omissionRationale",
-    ],
+    required: ["headline", "summary", "skills"],
     additionalProperties: false,
   },
 };
@@ -141,24 +72,14 @@ const TAILORING_SCHEMA: JsonSchemaDefinition = {
  * Generate tailored resume content (summary, headline, skills) for a job.
  */
 export async function generateTailoring(
-  input: TailoringInput | string,
+  jobDescription: string,
   profile: ResumeProfile,
 ): Promise<TailoringResult> {
-  const tailoringInput: TailoringInput =
-    typeof input === "string" ? { jobDescription: input } : input;
-  const [overrideModel, overrideModelTailoring, writingStyle] =
-    await Promise.all([
-      getSetting("model"),
-      getSetting("modelTailoring"),
-      getWritingStyle(),
-    ]);
-  // Precedence: Tailoring-specific override > Global override > Env var > Default
-  const model =
-    overrideModelTailoring ||
-    overrideModel ||
-    process.env.MODEL ||
-    "google/gemini-3-flash-preview";
-  const prompt = buildTailoringPrompt(profile, tailoringInput, writingStyle);
+  const [model, writingStyle] = await Promise.all([
+    resolveLlmModel("tailoring"),
+    getWritingStyle(),
+  ]);
+  const prompt = buildTailoringPrompt(profile, jobDescription, writingStyle);
 
   const llm = new LlmService();
   const result = await llm.callJson<TailoredData>({
@@ -180,15 +101,7 @@ export async function generateTailoring(
     };
   }
 
-  const {
-    summary,
-    headline,
-    skills,
-    experienceEdits,
-    layoutDirectives,
-    sectionRationale,
-    omissionRationale,
-  } = result.data;
+  const { summary, headline, skills } = result.data;
 
   // Basic validation
   if (!summary || !headline || !Array.isArray(skills)) {
@@ -199,12 +112,8 @@ export async function generateTailoring(
     success: true,
     data: {
       summary: sanitizeText(summary || ""),
-      headline: sanitizeText(tailoringInput.jobTitle || headline || ""),
+      headline: sanitizeText(headline || ""),
       skills: skills || [],
-      experienceEdits: sanitizeExperienceEdits(experienceEdits || []),
-      layoutDirectives: sanitizeLayoutDirectives(layoutDirectives || {}),
-      sectionRationale: sanitizeText(sectionRationale || ""),
-      omissionRationale: sanitizeText(omissionRationale || ""),
     },
   };
 }
@@ -217,7 +126,7 @@ export async function generateSummary(
   profile: ResumeProfile,
 ): Promise<{ success: boolean; summary?: string; error?: string }> {
   // If we just need summary, we can discard the rest (or cache it? but here we just return summary)
-  const result = await generateTailoring({ jobDescription }, profile);
+  const result = await generateTailoring(jobDescription, profile);
   return {
     success: result.success,
     summary: result.data?.summary,
@@ -227,11 +136,9 @@ export async function generateSummary(
 
 function buildTailoringPrompt(
   profile: ResumeProfile,
-  input: TailoringInput,
+  jd: string,
   writingStyle: Awaited<ReturnType<typeof getWritingStyle>>,
 ): string {
-  const jobTitle = sanitizeText(input.jobTitle || "");
-  const jd = input.jobDescription;
   const resolvedLanguage = resolveWritingOutputLanguage({
     style: writingStyle,
     profile,
@@ -244,38 +151,29 @@ function buildTailoringPrompt(
   // Extract only needed parts of profile to save tokens
   const relevantProfile = {
     basics: {
+      name: profile.basics?.name,
       label: profile.basics?.label, // Original headline
       summary: profile.basics?.summary,
     },
     skills: profile.sections?.skills,
     projects: profile.sections?.projects?.items?.map((p) => ({
-      id: p.id,
       name: p.name,
       description: p.description,
       keywords: p.keywords,
     })),
-    experience: profile.sections?.experience?.items?.map((e) => {
-      const raw = e as unknown as Record<string, unknown>;
-      return {
-        id: e.id,
-        company: e.company,
-        position: e.position,
-        summary: e.summary,
-        description:
-          typeof raw.description === "string" ? raw.description : undefined,
-        bullets: extractExperienceBullets(raw),
-      };
-    }),
+    experience: profile.sections?.experience?.items?.map((e) => ({
+      company: e.company,
+      position: e.position,
+      summary: e.summary,
+    })),
   };
 
   return `
-You are an expert resume writer tailoring a full resume for a specific job application.
-You must return a JSON object with seven fields: "headline", "summary", "skills", "experienceEdits", "layoutDirectives", "sectionRationale", and "omissionRationale".
+You are an expert resume writer tailoring a profile for a specific job application.
+You must return a JSON object with three fields: "headline", "summary", and "skills".
 
 JOB DESCRIPTION (JD):
 ${jd}
-
-${jobTitle ? `TARGET JOB TITLE:\n${jobTitle}\n` : ""}
 
 MY PROFILE:
 ${JSON.stringify(relevantProfile, null, 2)}
@@ -284,82 +182,22 @@ INSTRUCTIONS:
 
 1. "headline" (String):
    - CRITICAL: This is the #1 ATS factor.
-   - ${jobTitle ? `It must be exactly "${jobTitle}".` : 'It must match the Job Title from the JD exactly (e.g., if JD says "Senior React Dev", use "Senior React Dev").'}
+   - It must match the Job Title from the JD exactly (e.g., if JD says "Senior React Dev", use "Senior React Dev").
    - Do NOT translate, localize, or paraphrase the headline, even if the rest of the output is in ${outputLanguage}.
 
 2. "summary" (String):
-   - The Hook. Mirror the role's actual needs and foreground the strongest relevant evidence from the profile.
-   - Keep it concise, direct, business-oriented, specific, and natural.
-   - Prefer 2-4 sentences and keep it under 90 words unless the writing-style constraints require otherwise.
-   - Lead with the most relevant functional fit, operating context, or business contribution instead of personality traits.
-   - Mention 2-3 of the most important matched needs from the JD only when the profile genuinely supports them.
-   - Include at least one concrete evidence anchor from the profile, such as a planning model, reporting workflow, optimization problem, stakeholder-facing analysis task, or operational context.
-   - Write in standard CV/resume voice with the subject implied.
-   - Do NOT use the candidate's full name or first-person wording such as "I", "me", "my", or "we".
+   - The Hook. This needs to mirror the company's "About You" / "What we're looking for" section.
+   - Keep it concise, warm, and confident.
    - Do NOT invent experience.
    - Use the profile to add context.
-   - Weave the most relevant JD terms into natural prose instead of listing keywords mechanically.
-   - Avoid template openings such as "Analytical ... profile", "...-focused analyst with experience in ...", or "hands-on experience in ..." unless the wording is genuinely necessary.
-   - Avoid generic filler such as "passionate", "dynamic", "results-driven", "team player", or vague claims with no evidence.
    - Write the summary in ${outputLanguage}.
 
-3. "experienceEdits" (Array of Objects):
-   - You may rewrite experience bullets to better match the JD, but you must stay strictly truthful to the original evidence.
-   - Only edit experience entries that clearly benefit from tailoring.
-   - Use the provided experience item ids exactly.
-   - Each edit must be shaped as: { "id": "...", "bullets": ["...", "..."] }.
-   - Only rewrite 1-3 experience entries unless broader changes are clearly justified by the JD.
-   - For each edited entry, return 2-4 bullets unless the source evidence is too thin.
-   - Bullets should be concise, evidence-led, achievement-oriented where supported, and written in ${outputLanguage}.
-   - Prefer practical resume bullets that follow this pattern when possible: strong action verb + concrete task/scope/problem + outcome or business effect.
-   - Front-load the most important action or result; do not bury the useful point at the end.
-   - Quantify only when the source evidence supports it. If no metric is supported, use concrete scope, process, stakeholder, or operational detail instead of vague impact language.
-   - Do not turn bullets into long full-sentence narratives. Keep them crisp and skimmable like a real recruiter-facing CV.
-   - Avoid duty-only bullets such as "Responsible for..." or generic soft-skill claims without concrete work.
-   - Do NOT invent responsibilities, tools, metrics, or business ownership that are not supported by the original profile.
-   - If a JD term is relevant but not stated verbatim in the source profile, you may use adjacent wording only when the evidence clearly supports it.
-
-4. "layoutDirectives" (Object):
-   - Use this to control resume organization, emphasis, and omissions.
-   - sectionOrder: ordered list of section ids in the preferred reading order, using ids such as summary, experience, education, projects, skills, languages, profiles.
-   - hiddenSections: section ids to hide completely when they are weakly relevant.
-   - hiddenProjectIds: project ids to hide. Use only ids that appear in the provided projects list.
-   - hiddenExperienceIds: experience ids to hide.
-   - Use omissions conservatively: only hide content that is clearly distracting or off-target for this JD.
-
-5. "sectionRationale" (String):
-   - Explain briefly why the chosen section order and emphasis fit this JD.
-   - Mention the most relevant evidence the resume should foreground.
-   - Keep it to 1-2 sentences in ${outputLanguage}.
-
-6. "omissionRationale" (String):
-   - Explain what was hidden or deemphasized, or state clearly that no omission was necessary.
-   - Keep it to 1-2 sentences in ${outputLanguage}.
-
-7. "skills" (Array of Objects):
+3. "skills" (Array of Objects):
    - Review my existing skills section structure.
    - Keyword Stuffing: Swap synonyms to match the JD exactly (e.g. "TDD" -> "Unit Testing", "ReactJS" -> "React").
    - Keep my original skill levels and categories, just rename/reorder keywords to prioritize JD terms.
-   - Prefer JD-relevant keywords that are already supported by the profile; do not pad categories with speculative tools.
-   - Reorder and trim for relevance so the strongest practical fit appears first.
-   - Make the wording feel like a credible human CV, not an SEO list.
    - Return the full "items" array for the skills section, preserving the structure: { "name": "Frontend", "keywords": [...] }.
    - Write user-visible skill text in ${outputLanguage} when natural, but keep exact JD terms, acronyms, and technology names when that helps ATS matching.
-
-TRUTH AND EVIDENCE RULES:
-- Every output field must be grounded in the supplied profile.
-- Do not add seniority, ownership, domain depth, certifications, tools, or metrics that are not supported by the profile.
-- If the profile is only adjacent to part of the JD, make that adjacency clear instead of pretending full direct experience.
-- Prefer plain, credible phrasing over inflated or overly optimized wording.
-- Treat the profile as the source draft and improve it; do not behave like a primary author inventing a new career history.
-- Every line should feel defensible in an interview.
-
-PRACTICAL CV WRITING RULES:
-- Recruiters scan quickly, so foreground the most relevant evidence and cut low-value wording.
-- Prefer accomplishment statements over responsibility lists.
-- Use strong action verbs, concrete nouns, and specific operational detail.
-- Use resume-style phrasing, not cover-letter or bio-style phrasing.
-- The final wording should sound like a polished human-edited CV, not an AI-generated essay.
 
 WRITING STYLE PREFERENCES:
 - Tone: ${writingStyle.tone}
@@ -376,17 +214,6 @@ OUTPUT FORMAT (JSON):
 {
   "headline": "...",
   "summary": "...",
-  "experienceEdits": [
-    { "id": "experience-id", "bullets": ["bullet 1", "bullet 2"] }
-  ],
-  "layoutDirectives": {
-    "sectionOrder": ["summary", "experience", "projects", "education", "skills"],
-    "hiddenSections": [],
-    "hiddenProjectIds": [],
-    "hiddenExperienceIds": []
-  },
-  "sectionRationale": "Why this section order works",
-  "omissionRationale": "What was hidden and why",
   "skills": [ ... ]
 }
 `;
@@ -395,79 +222,5 @@ OUTPUT FORMAT (JSON):
 function sanitizeText(text: string): string {
   return text
     .replace(/\*\*[\s\S]*?\*\*/g, "") // remove markdown bold
-    .replace(/\s+/g, " ")
     .trim();
-}
-
-function stripHtmlToText(text: string | null | undefined): string {
-  if (!text) return "";
-  return text
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function extractExperienceBullets(item: Record<string, unknown>): string[] {
-  const candidates = [item.summary, item.description].filter(
-    (value): value is string =>
-      typeof value === "string" && value.trim().length > 0,
-  );
-  for (const candidate of candidates) {
-    const matches = [...candidate.matchAll(/<li>([\s\S]*?)<\/li>/gi)]
-      .map((match) => stripHtmlToText(match[1]))
-      .filter(Boolean);
-    if (matches.length > 0) return matches;
-  }
-  const text = stripHtmlToText(candidates[0] ?? "");
-  return text ? [text] : [];
-}
-
-function sanitizeExperienceEdits(
-  edits: TailoredExperienceEdit[],
-): TailoredExperienceEdit[] {
-  const out: TailoredExperienceEdit[] = [];
-  const seen = new Set<string>();
-  for (const edit of edits) {
-    const id = edit?.id?.trim();
-    if (!id || seen.has(id)) continue;
-    const bullets = Array.isArray(edit.bullets)
-      ? edit.bullets
-          .map((bullet) => sanitizeText(String(bullet || "")))
-          .filter(Boolean)
-          .slice(0, 6)
-      : [];
-    if (bullets.length === 0) continue;
-    seen.add(id);
-    out.push({ id, bullets });
-  }
-  return out;
-}
-
-function sanitizeStringArray(value: unknown, limit = 20): string[] {
-  if (!Array.isArray(value)) return [];
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const raw of value) {
-    if (typeof raw !== "string") continue;
-    const item = raw.trim();
-    if (!item || seen.has(item)) continue;
-    seen.add(item);
-    out.push(item);
-    if (out.length >= limit) break;
-  }
-  return out;
-}
-
-function sanitizeLayoutDirectives(
-  directives: TailoredLayoutDirectives,
-): TailoredLayoutDirectives {
-  return {
-    sectionOrder: sanitizeStringArray(directives.sectionOrder, 20),
-    hiddenSections: sanitizeStringArray(directives.hiddenSections, 20),
-    hiddenProjectIds: sanitizeStringArray(directives.hiddenProjectIds, 50),
-    hiddenExperienceIds: sanitizeStringArray(
-      directives.hiddenExperienceIds,
-      50,
-    ),
-  };
 }

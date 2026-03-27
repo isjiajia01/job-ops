@@ -54,6 +54,7 @@ export interface RunHiringCafeOptions {
   country?: string;
   countryKey?: string;
   locations?: string[];
+  workplaceTypes?: Array<"remote" | "hybrid" | "onsite">;
   locationRadiusMiles?: number;
   maxJobsPerTerm?: number;
   onProgress?: (event: HiringCafeProgressEvent) => void;
@@ -216,6 +217,9 @@ export async function runHiringCafe(
           JOBOPS_EMIT_PROGRESS: "1",
           HIRING_CAFE_SEARCH_TERMS: JSON.stringify(searchTerms),
           HIRING_CAFE_COUNTRY: country,
+          HIRING_CAFE_WORKPLACE_TYPES: JSON.stringify(
+            options.workplaceTypes ?? ["remote", "hybrid", "onsite"],
+          ),
           HIRING_CAFE_MAX_JOBS_PER_TERM: String(maxJobsPerTerm),
           HIRING_CAFE_OUTPUT_JSON: DATASET_PATH,
           HIRING_CAFE_LOCATION_QUERY: strictLocationFilter ? location : "",

@@ -5,6 +5,12 @@ import {
 import type { JobSource } from "@shared/types";
 
 export type AutomaticPresetId = "fast" | "balanced" | "detailed";
+export type WorkplaceType = "remote" | "hybrid" | "onsite";
+export const WORKPLACE_TYPE_OPTIONS: WorkplaceType[] = [
+  "remote",
+  "hybrid",
+  "onsite",
+];
 
 export interface AutomaticRunValues {
   topN: number;
@@ -13,6 +19,7 @@ export interface AutomaticRunValues {
   runBudget: number;
   country: string;
   cityLocations: string[];
+  workplaceTypes: WorkplaceType[];
 }
 
 export interface AutomaticPresetValues {
@@ -59,6 +66,22 @@ export const RUN_MEMORY_STORAGE_KEY = "jobops.pipeline.run-memory.v1";
 export interface AutomaticRunMemory {
   topN: number;
   minSuitabilityScore: number;
+}
+
+export function normalizeWorkplaceTypes(
+  workplaceTypes: WorkplaceType[] | null | undefined,
+): WorkplaceType[] {
+  const seen = new Set<WorkplaceType>();
+  const out: WorkplaceType[] = [];
+
+  for (const workplaceType of workplaceTypes ?? []) {
+    if (!WORKPLACE_TYPE_OPTIONS.includes(workplaceType)) continue;
+    if (seen.has(workplaceType)) continue;
+    seen.add(workplaceType);
+    out.push(workplaceType);
+  }
+
+  return out.length > 0 ? out : [...WORKPLACE_TYPE_OPTIONS];
 }
 
 export interface ExtractorLimits {

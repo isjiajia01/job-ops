@@ -15,7 +15,10 @@ const render = (ui: Parameters<typeof renderWithQueryClient>[0]) =>
 
 vi.mock("../api", () => ({
   getSettings: vi.fn(),
+  getLlmModels: vi.fn().mockResolvedValue([]),
   updateSettings: vi.fn(),
+  validateRxresume: vi.fn(),
+  getRxResumeProjects: vi.fn(),
   clearDatabase: vi.fn(),
   deleteJobsByStatus: vi.fn(),
   getTracerReadiness: vi.fn(),
@@ -71,6 +74,13 @@ const openWritingStyleSection = async () => {
   fireEvent.click(chatTrigger);
 };
 
+const openReactiveResumeSection = async () => {
+  const trigger = await screen.findByRole("button", {
+    name: /reactive resume/i,
+  });
+  fireEvent.click(trigger);
+};
+
 describe("SettingsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -87,6 +97,11 @@ describe("SettingsPage", () => {
       checkedAt: Date.now(),
       lastSuccessAt: Date.now(),
       reason: null,
+    });
+    vi.mocked(api.validateRxresume).mockResolvedValue({
+      valid: false,
+      message: "Missing credentials",
+      status: 400,
     });
   });
 
@@ -203,6 +218,50 @@ describe("SettingsPage", () => {
     await waitFor(() => expect(saveButton).toBeEnabled());
   });
 
+  it("clears stale model overrides when the provider changes", async () => {
+    vi.mocked(api.getSettings).mockResolvedValue(
+      createAppSettings({
+        model: {
+          value: "google/gemini-3-flash-preview",
+          default: "google/gemini-3-flash-preview",
+          override: "google/gemini-3-flash-preview",
+        },
+        modelScorer: { value: "google/gemini-3-flash-preview", override: null },
+        modelTailoring: {
+          value: "google/gemini-3-flash-preview",
+          override: "google/gemini-3-flash-preview",
+        },
+        modelProjectSelection: {
+          value: "google/gemini-3-flash-preview",
+          override: null,
+        },
+        llmProvider: { value: "gemini", default: "gemini", override: "gemini" },
+      }),
+    );
+    vi.mocked(api.updateSettings).mockResolvedValue(baseSettings);
+
+    renderPage();
+    await openModelSection();
+
+    fireEvent.click(screen.getByRole("combobox", { name: /provider/i }));
+    fireEvent.click(await screen.findByText("OpenAI"));
+
+    const saveButton = screen.getByRole("button", { name: /^save$/i });
+    await waitFor(() => expect(saveButton).toBeEnabled());
+    fireEvent.click(saveButton);
+
+    await waitFor(() => expect(api.updateSettings).toHaveBeenCalled());
+    expect(api.updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        llmProvider: "openai",
+        model: null,
+        modelScorer: null,
+        modelTailoring: null,
+        modelProjectSelection: null,
+      }),
+    );
+  });
+
   it("hides pipeline tuning sections that moved to run modal", async () => {
     vi.mocked(api.getSettings).mockResolvedValue(baseSettings);
     renderPage();
@@ -236,6 +295,192 @@ describe("SettingsPage", () => {
     );
     fireEvent.click(sponsorCheckbox);
     await waitFor(() => expect(saveButton).toBeEnabled());
+  });
+
+  it("allows saving when both Reactive Resume v4 and v5 credentials are present", async () => {
+    const settingsWithBothRxResumeAuth = createAppSettings({
+      rxresumeEmail: "resume@example.com",
+      rxresumePasswordHint: "pass",
+      rxresumeApiKeyHint: "api_",
+    });
+    vi.mocked(api.getSettings).mockResolvedValue(settingsWithBothRxResumeAuth);
+    vi.mocked(api.updateSettings).mockResolvedValue(
+      settingsWithBothRxResumeAuth,
+    );
+
+    renderPage();
+
+    const displayTrigger = await screen.findByRole("button", {
+      name: /display settings/i,
+    });
+    fireEvent.click(displayTrigger);
+    const sponsorCheckbox = screen.getByLabelText(
+      /show visa sponsor information/i,
+    );
+    fireEvent.click(sponsorCheckbox);
+
+    const saveButton = screen.getByRole("button", { name: /^save$/i });
+    await waitFor(() => expect(saveButton).toBeEnabled());
+    fireEvent.click(saveButton);
+
+    await waitFor(() => expect(api.updateSettings).toHaveBeenCalled());
+    expect(toast.error).not.toHaveBeenCalledWith(
+      "Choose one Reactive Resume auth method",
+      expect.anything(),
+    );
+  });
+
+  it("saves a shared RxResume URL from the Reactive Resume section", async () => {
+    vi.mocked(api.getSettings).mockResolvedValue(baseSettings);
+    vi.mocked(api.updateSettings).mockResolvedValue({
+      ...baseSettings,
+      rxresumeUrl: "https://resume.example.com",
+    });
+
+    renderPage();
+
+    const reactiveResumeTrigger = await screen.findByRole("button", {
+      name: /reactive resume/i,
+    });
+    fireEvent.click(reactiveResumeTrigger);
+
+    const urlInput = screen.getByLabelText(/rxresume url/i);
+    await waitFor(() => expect(urlInput).toBeEnabled());
+    fireEvent.change(urlInput, {
+      target: { value: "https://resume.example.com" },
+    });
+
+    const saveButton = screen.getByRole("button", { name: /^save$/i });
+    await waitFor(() => expect(saveButton).toBeEnabled());
+    fireEvent.click(saveButton);
+
+    await waitFor(() => expect(api.updateSettings).toHaveBeenCalled());
+    expect(api.updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rxresumeUrl: "https://resume.example.com",
+      }),
+    );
+  });
+
+  it("blocks save and renders an inline alert when the v5 API key is invalid", async () => {
+    vi.mocked(api.getSettings).mockResolvedValue(baseSettings);
+
+    renderPage();
+    await openReactiveResumeSection();
+
+    await waitFor(() => expect(api.validateRxresume).toHaveBeenCalled());
+    vi.mocked(api.validateRxresume).mockClear();
+    vi.mocked(api.validateRxresume).mockResolvedValue({
+      valid: false,
+      message:
+        "Reactive Resume v5 API key is invalid. Update the API key and try again.",
+      status: 401,
+    });
+
+    fireEvent.change(screen.getByLabelText(/v5 api key/i), {
+      target: { value: "invalid-v5-key" },
+    });
+
+    const saveButton = screen.getByRole("button", { name: /^save$/i });
+    await waitFor(() => expect(saveButton).toBeEnabled());
+    fireEvent.click(saveButton);
+
+    expect(
+      await screen.findByText(/Reactive Resume v5 API key is invalid/i),
+    ).toBeInTheDocument();
+    expect(api.updateSettings).not.toHaveBeenCalled();
+  });
+
+  it("allows saving on RxResume availability warnings and keeps the inline warning visible", async () => {
+    vi.mocked(api.getSettings).mockResolvedValue(baseSettings);
+    vi.mocked(api.updateSettings).mockResolvedValue({
+      ...baseSettings,
+      rxresumeApiKeyHint: "rr-v",
+    });
+
+    renderPage();
+    await openReactiveResumeSection();
+
+    await waitFor(() => expect(api.validateRxresume).toHaveBeenCalled());
+    vi.mocked(api.validateRxresume).mockClear();
+    vi.mocked(api.validateRxresume).mockResolvedValue({
+      valid: false,
+      message:
+        "JobOps could not verify Reactive Resume because the instance is unavailable right now.",
+      status: 0,
+    });
+
+    fireEvent.change(screen.getByLabelText(/v5 api key/i), {
+      target: { value: "rr-v5-warning-key" },
+    });
+
+    const saveButton = screen.getByRole("button", { name: /^save$/i });
+    await waitFor(() => expect(saveButton).toBeEnabled());
+    fireEvent.click(saveButton);
+
+    await waitFor(() => expect(api.updateSettings).toHaveBeenCalled());
+    expect(
+      await screen.findByText(/instance is unavailable right now/i),
+    ).toBeInTheDocument();
+    expect(toast.success).toHaveBeenCalledWith("Settings saved");
+    expect(toast.info).toHaveBeenCalledWith(
+      "Settings saved, but JobOps could not verify Reactive Resume because the instance is unavailable.",
+    );
+  });
+
+  it("does not run RxResume validation for unrelated settings saves", async () => {
+    vi.mocked(api.getSettings).mockResolvedValue(baseSettings);
+    vi.mocked(api.updateSettings).mockResolvedValue({
+      ...baseSettings,
+      model: {
+        value: "new-model",
+        default: baseSettings.model.default,
+        override: "new-model",
+      },
+    });
+
+    renderPage();
+    await openModelSection();
+    await waitFor(() => expect(api.validateRxresume).toHaveBeenCalled());
+    vi.mocked(api.validateRxresume).mockClear();
+
+    fireEvent.change(screen.getByLabelText(/default model/i), {
+      target: { value: "new-model" },
+    });
+
+    const saveButton = screen.getByRole("button", { name: /^save$/i });
+    await waitFor(() => expect(saveButton).toBeEnabled());
+    fireEvent.click(saveButton);
+
+    await waitFor(() => expect(api.updateSettings).toHaveBeenCalled());
+    expect(api.validateRxresume).not.toHaveBeenCalled();
+  });
+
+  it("clears the previous RxResume warning when the key or URL changes", async () => {
+    vi.mocked(api.getSettings).mockResolvedValue(baseSettings);
+    vi.mocked(api.validateRxresume).mockResolvedValue({
+      valid: false,
+      message:
+        "JobOps could not verify Reactive Resume because the instance is unavailable right now.",
+      status: 0,
+    });
+
+    renderPage();
+    await openReactiveResumeSection();
+
+    expect(
+      await screen.findByText(/instance is unavailable right now/i),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/rxresume url/i), {
+      target: { value: "https://resume.example.com" },
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.queryByText(/instance is unavailable right now/i),
+      ).not.toBeInTheDocument(),
+    );
   });
 
   it("saves the writing language mode through the settings page", async () => {

@@ -21,6 +21,7 @@ export const DEMO_DEFAULT_SETTINGS: DemoDefaultSettings = {
     "full stack engineer",
   ]),
   showSponsorInfo: "1",
+  renderMarkdownInJobDescriptions: "1",
   backupEnabled: "0",
   backupHour: "2",
   backupMaxCount: "5",

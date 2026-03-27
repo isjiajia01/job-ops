@@ -27,6 +27,7 @@ Key environment variables:
 - `JOBSPY_HOURS_OLD` (default: `72`)
 - `JOBSPY_COUNTRY_INDEED` (default: `UK`)
 - `JOBSPY_LINKEDIN_FETCH_DESCRIPTION` (default: `true`)
+- `JOBSPY_IS_REMOTE` (unset by default)
 
 ## 2) Orchestrator flow
 
@@ -50,3 +51,14 @@ The service in `orchestrator/src/server/services/jobspy.ts`:
 - `JOBSPY_SEARCH_TERMS` can be JSON array or `|`, comma, newline-delimited text.
 - Set `JOBSPY_LINKEDIN_FETCH_DESCRIPTION=0` to speed runs.
 - Temp output files are stored under `data/imports/`.
+- If workplace type is only `Remote`, JobSpy runs with `JOBSPY_IS_REMOTE=true`.
+- If workplace type includes `Hybrid` or `Onsite`, JobSpy cannot enforce those filters precisely, so the JobSpy-backed sources run without a workplace-type filter and may return broader results.
+
+## Common Problems
+
+- `Hybrid` or `Onsite` was selected, but Indeed, LinkedIn, or Glassdoor still returned remote jobs.
+  JobSpy only supports a strict remote toggle. Any workplace-type selection that includes `Hybrid` or `Onsite` broadens those source results.
+- A run returned fewer LinkedIn descriptions than expected.
+  `JOBSPY_LINKEDIN_FETCH_DESCRIPTION=0` disables description fetching to speed up runs.
+- Different cities need different workplace-type filters.
+  This is not supported in the current automatic-run flow. JobSpy receives one global workplace-type selection per run/query invocation.

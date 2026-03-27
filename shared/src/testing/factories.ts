@@ -173,6 +173,11 @@ export const createAppSettings = (
     default: ["Software Engineer"],
     override: null,
   },
+  workplaceTypes: {
+    value: ["remote", "hybrid", "onsite"],
+    default: ["remote", "hybrid", "onsite"],
+    override: null,
+  },
   blockedCompanyKeywords: {
     value: [],
     default: [],
@@ -195,6 +200,11 @@ export const createAppSettings = (
     override: null,
   },
   showSponsorInfo: { value: true, default: true, override: null },
+  renderMarkdownInJobDescriptions: {
+    value: true,
+    default: true,
+    override: null,
+  },
   chatStyleTone: {
     value: "professional",
     default: "professional",

@@ -35,4 +35,30 @@ describe("startupjobs manifest", () => {
       }),
     );
   });
+
+  it("forwards workplace types to the runner", async () => {
+    const { manifest } = await import("../src/manifest");
+    const { runStartupJobs } = await import("../src/run");
+    const runStartupJobsMock = vi.mocked(runStartupJobs);
+    runStartupJobsMock.mockResolvedValue({
+      success: true,
+      jobs: [],
+    });
+
+    await manifest.run({
+      source: "startupjobs",
+      selectedSources: ["startupjobs"],
+      settings: {
+        workplaceTypes: '["remote","onsite"]',
+      },
+      searchTerms: ["software engineer"],
+      selectedCountry: "united kingdom",
+    });
+
+    expect(runStartupJobsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workplaceTypes: ["remote", "onsite"],
+      }),
+    );
+  });
 });

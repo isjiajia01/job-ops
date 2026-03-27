@@ -26,7 +26,9 @@ export function useSettings() {
     settings,
     error: error ?? null,
     isLoading: isLoading || (!!isFetching && !settings && !error),
-    showSponsorInfo: settings?.showSponsorInfo ?? true,
+    showSponsorInfo: settings?.showSponsorInfo?.value ?? true,
+    renderMarkdownInJobDescriptions:
+      settings?.renderMarkdownInJobDescriptions?.value ?? true,
     refreshSettings,
   };
 }

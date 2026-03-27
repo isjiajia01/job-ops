@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseJobSpyProgressLine } from "../src/run";
+import { deriveIsRemoteFlag, parseJobSpyProgressLine } from "../src/run";
 
 describe("parseJobSpyProgressLine", () => {
   it("parses term_start progress lines", () => {
@@ -36,5 +36,16 @@ describe("parseJobSpyProgressLine", () => {
 
   it("returns null for non-progress lines", () => {
     expect(parseJobSpyProgressLine("Found 20 jobs")).toBeNull();
+  });
+
+  it("maps remote-only workplace types to isRemote", () => {
+    expect(deriveIsRemoteFlag(["remote"])).toBe(true);
+  });
+
+  it("does not force JobSpy remote filtering for hybrid or onsite selections", () => {
+    expect(deriveIsRemoteFlag(["hybrid"])).toBeUndefined();
+    expect(deriveIsRemoteFlag(["onsite"])).toBeUndefined();
+    expect(deriveIsRemoteFlag(["remote", "hybrid"])).toBeUndefined();
+    expect(deriveIsRemoteFlag(["remote", "hybrid", "onsite"])).toBeUndefined();
   });
 });

@@ -1,3 +1,4 @@
+import { useSettings } from "@client/hooks/useSettings";
 import type { Job } from "@shared/types.js";
 import {
   ChevronUp,
@@ -9,6 +10,7 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useMemo, useState } from "react";
+import { JobDescriptionMarkdown } from "@/client/components/JobDescriptionMarkdown";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -17,12 +19,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
-import { getJobListingUrl } from "@/lib/utils";
 import { FitAssessment, JobHeader, TailoredSummary } from "..";
 import { KbdHint } from "../KbdHint";
 import { OpenJobListingButton } from "../OpenJobListingButton";
 import { CollapsibleSection } from "./CollapsibleSection";
-import { getPlainDescription } from "./helpers";
+import { getRenderableJobDescription } from "./helpers";
 
 interface DecideModeProps {
   job: Job;
@@ -46,10 +47,11 @@ export const DecideMode: React.FC<DecideModeProps> = ({
   onCheckSponsor,
 }) => {
   const [showDescription, setShowDescription] = useState(false);
-  const jobLink = getJobListingUrl(job);
+  const jobLink = job.applicationLink || job.jobUrl;
+  const { renderMarkdownInJobDescriptions } = useSettings();
 
   const description = useMemo(
-    () => getPlainDescription(job.jobDescription),
+    () => getRenderableJobDescription(job.jobDescription),
     [job.jobDescription],
   );
 
@@ -104,9 +106,13 @@ export const DecideMode: React.FC<DecideModeProps> = ({
           label={`${showDescription ? "Hide" : "View"} Full Job Description`}
         >
           <div className="rounded-xl border border-border/40 bg-muted/5 p-4 mt-2 max-h-[400px] overflow-y-auto shadow-inner">
-            <p className="text-xs text-muted-foreground/90 whitespace-pre-wrap leading-relaxed">
-              {description}
-            </p>
+            {renderMarkdownInJobDescriptions ? (
+              <JobDescriptionMarkdown description={description} />
+            ) : (
+              <p className="text-xs text-muted-foreground/90 whitespace-pre-wrap leading-relaxed">
+                {description}
+              </p>
+            )}
           </div>
         </CollapsibleSection>
       </div>

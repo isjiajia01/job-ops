@@ -35,10 +35,11 @@ export function createDefaultSearchState(args: {
   searchQuery: string;
   location: HiringCafeCountryLocation | null;
   dateFetchedPastNDays: number;
+  workplaceTypes?: Array<"Remote" | "Hybrid" | "Onsite">;
 }): HiringCafeSearchState {
   return {
     locations: args.location ? [args.location] : [],
-    workplaceTypes: ["Remote", "Hybrid", "Onsite"],
+    workplaceTypes: args.workplaceTypes ?? ["Remote", "Hybrid", "Onsite"],
     defaultToUserLocation: false,
     userLocation: null,
     commitmentTypes: [

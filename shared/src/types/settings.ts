@@ -147,6 +147,7 @@ export interface ProfileStatusResponse {
 export interface ValidationResult {
   valid: boolean;
   message: string | null;
+  status?: number | null;
 }
 
 export interface DemoInfoResponse {
@@ -174,12 +175,14 @@ export interface AppSettings {
   gradcrackerMaxJobsPerTerm: Resolved<number>;
   startupjobsMaxJobsPerTerm: Resolved<number>;
   searchTerms: Resolved<string[]>;
+  workplaceTypes: Resolved<Array<"remote" | "hybrid" | "onsite">>;
   blockedCompanyKeywords: Resolved<string[]>;
   scoringInstructions: Resolved<string>;
   searchCities: Resolved<string>;
   jobspyResultsWanted: Resolved<number>;
   jobspyCountryIndeed: Resolved<string>;
   showSponsorInfo: Resolved<boolean>;
+  renderMarkdownInJobDescriptions: Resolved<boolean>;
   chatStyleTone: Resolved<string>;
   chatStyleFormality: Resolved<string>;
   chatStyleConstraints: Resolved<string>;

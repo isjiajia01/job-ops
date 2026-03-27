@@ -28,6 +28,7 @@ describe("automatic-run utilities", () => {
         runBudget: 100,
         country: "united kingdom",
         cityLocations: [],
+        workplaceTypes: ["remote", "hybrid", "onsite"],
       },
       sources: ["indeed", "linkedin", "gradcracker", "ukvisajobs"],
     });
@@ -72,6 +73,7 @@ describe("automatic-run utilities", () => {
         runBudget: 750,
         country: "united kingdom",
         cityLocations: [],
+        workplaceTypes: ["remote", "hybrid", "onsite"],
       },
       sources: ["indeed", "linkedin", "gradcracker", "ukvisajobs"],
     });
@@ -99,6 +101,7 @@ describe("automatic-run utilities", () => {
         runBudget: 120,
         country: "united kingdom",
         cityLocations: [],
+        workplaceTypes: ["remote", "hybrid", "onsite"],
       },
       sources: ["adzuna"],
     });
@@ -116,6 +119,7 @@ describe("automatic-run utilities", () => {
         runBudget: 120,
         country: "united kingdom",
         cityLocations: [],
+        workplaceTypes: ["remote", "hybrid", "onsite"],
       },
       sources: ["hiringcafe"],
     });
@@ -133,6 +137,7 @@ describe("automatic-run utilities", () => {
         runBudget: 120,
         country: "united kingdom",
         cityLocations: [],
+        workplaceTypes: ["remote", "hybrid", "onsite"],
       },
       sources: ["startupjobs"],
     });
