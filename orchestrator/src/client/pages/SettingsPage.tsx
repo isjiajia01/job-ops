@@ -1,26 +1,13 @@
 import * as api from "@client/api";
 import { PageHeader } from "@client/components/layout";
 import { useUpdateSettingsMutation } from "@client/hooks/queries/useSettingsMutation";
-import { useRxResumeConfigState } from "@client/hooks/useRxResumeConfigState";
 import { useTracerReadiness } from "@client/hooks/useTracerReadiness";
-import {
-  coerceRxResumeMode,
-  getRxResumeCredentialDrafts,
-  getRxResumeCredentialPrecheckFailure,
-  isRxResumeAvailabilityValidationFailure,
-  isRxResumeBlockingValidationFailure,
-  RXRESUME_MODES,
-  RXRESUME_PRECHECK_MESSAGES,
-  toRxResumeValidationPayload,
-  validateAndMaybePersistRxResumeMode,
-} from "@client/lib/rxresume-config";
 import { BackupSettingsSection } from "@client/pages/settings/components/BackupSettingsSection";
 import { ChatSettingsSection } from "@client/pages/settings/components/ChatSettingsSection";
 import { DangerZoneSection } from "@client/pages/settings/components/DangerZoneSection";
 import { DisplaySettingsSection } from "@client/pages/settings/components/DisplaySettingsSection";
 import { EnvironmentSettingsSection } from "@client/pages/settings/components/EnvironmentSettingsSection";
 import { ModelSettingsSection } from "@client/pages/settings/components/ModelSettingsSection";
-import { ReactiveResumeSection } from "@client/pages/settings/components/ReactiveResumeSection";
 import { ScoringSettingsSection } from "@client/pages/settings/components/ScoringSettingsSection";
 import { TracerLinksSettingsSection } from "@client/pages/settings/components/TracerLinksSettingsSection";
 import { WebhooksSection } from "@client/pages/settings/components/WebhooksSection";
@@ -51,6 +38,7 @@ import {
   FormProvider,
   type Resolver,
   useForm,
+  useFormContext,
   useWatch,
 } from "react-hook-form";
 import { toast } from "sonner";
@@ -58,6 +46,19 @@ import { useQueryErrorToast } from "@/client/hooks/useQueryErrorToast";
 import { queryKeys } from "@/client/lib/queryKeys";
 import { Accordion } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
+import {
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { SettingsInput } from "@/client/pages/settings/components/SettingsInput";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const DEFAULT_FORM_VALUES: UpdateSettingsInput = {
   model: "",
@@ -116,12 +117,80 @@ const EMPTY_RXRESUME_VALIDATION_BADGE_STATE: RxResumeValidationBadgeState = {
   status: null,
 };
 
+const RXRESUME_MODES: RxResumeMode[] = ["v4", "v5"];
+
+type StoredRxResumeDrafts = {
+  v4: { email: string; password: string; baseUrl: string; baseResumeId: string | null };
+  v5: { apiKey: string; baseUrl: string; baseResumeId: string | null };
+};
+
 const getRxResumeValidationFieldsForMode = (
   mode: RxResumeMode,
 ): Array<keyof UpdateSettingsInput> =>
   mode === "v5"
     ? ["rxresumeApiKey", "rxresumeUrl"]
     : ["rxresumeEmail", "rxresumePassword", "rxresumeUrl"];
+
+const coerceRxResumeMode = (
+  value: string | null | undefined,
+): RxResumeMode => (value === "v4" ? "v4" : "v5");
+
+const getStoredRxResumeDrafts = (settings: AppSettings | null): StoredRxResumeDrafts => ({
+  v4: {
+    email: settings?.rxresumeEmail ?? "",
+    password: "",
+    baseUrl: settings?.rxresumeUrl ?? "",
+    baseResumeId:
+      settings?.rxresumeMode?.value === "v4" ? settings?.rxresumeBaseResumeId : null,
+  },
+  v5: {
+    apiKey: "",
+    baseUrl: settings?.rxresumeUrl ?? "",
+    baseResumeId:
+      settings?.rxresumeMode?.value === "v5" ? settings?.rxresumeBaseResumeId : null,
+  },
+});
+
+const getRxResumeCredentialDrafts = (values: UpdateSettingsInput) => ({
+  email: values.rxresumeEmail ?? "",
+  password: values.rxresumePassword ?? "",
+  apiKey: values.rxresumeApiKey ?? "",
+  baseUrl: values.rxresumeUrl ?? "",
+});
+
+const getRxResumeCredentialPrecheckFailure = ({
+  mode,
+  draft,
+}: {
+  mode: RxResumeMode;
+  stored: StoredRxResumeDrafts;
+  draft: ReturnType<typeof getRxResumeCredentialDrafts>;
+}): "missing-v4" | "missing-v5" | null => {
+  if (mode === "v4") {
+    return draft.email.trim() && draft.password.trim() ? null : "missing-v4";
+  }
+  return draft.apiKey.trim() ? null : "missing-v5";
+};
+
+const RXRESUME_PRECHECK_MESSAGES: Record<"missing-v4" | "missing-v5", string> = {
+  "missing-v4": "Reactive Resume v4 requires both email and password.",
+  "missing-v5": "Reactive Resume v5 requires an API key.",
+};
+
+const isRxResumeBlockingValidationFailure = (validation: ValidationResult) =>
+  !validation.valid && Boolean(validation.status) && validation.status! >= 400 && validation.status! < 500;
+
+const isRxResumeAvailabilityValidationFailure = (validation: ValidationResult) =>
+  !validation.valid && (validation.status === 0 || (validation.status ?? 0) >= 500);
+
+const toRxResumeValidationPayload = (
+  draft: ReturnType<typeof getRxResumeCredentialDrafts>,
+) => ({
+  email: draft.email.trim() || undefined,
+  password: draft.password.trim() || undefined,
+  apiKey: draft.apiKey.trim() || undefined,
+  baseUrl: draft.baseUrl.trim() || undefined,
+});
 
 const toRxResumeValidationBadgeState = (
   validation: ValidationResult,
@@ -275,6 +344,168 @@ const normalizeResumeProjectsForCatalog = (
     Math.max(lockedProjectIds.length, maxProjectsInt, 3),
   );
   return { maxProjects, lockedProjectIds, aiSelectableProjectIds };
+};
+
+function useRxResumeConfigState(settings: AppSettings | null) {
+  const [storedRxResume, setStoredRxResume] = useState<StoredRxResumeDrafts>(
+    () => getStoredRxResumeDrafts(settings),
+  );
+
+  useEffect(() => {
+    setStoredRxResume(getStoredRxResumeDrafts(settings));
+  }, [settings]);
+
+  const getBaseResumeIdForMode = useCallback(
+    (mode: RxResumeMode) => storedRxResume[mode].baseResumeId,
+    [storedRxResume],
+  );
+
+  const setBaseResumeIdForMode = useCallback(
+    (mode: RxResumeMode, value: string | null) => {
+      setStoredRxResume((current) => ({
+        ...current,
+        [mode]: {
+          ...current[mode],
+          baseResumeId: value,
+        },
+      }));
+    },
+    [],
+  );
+
+  const syncBaseResumeIdsForMode = useCallback(
+    (mode: RxResumeMode) => getStoredRxResumeDrafts(settings)[mode].baseResumeId,
+    [settings],
+  );
+
+  return {
+    storedRxResume,
+    getBaseResumeIdForMode,
+    setBaseResumeIdForMode,
+    syncBaseResumeIdsForMode,
+  };
+}
+
+const ReactiveResumeSection: React.FC<{
+  rxResumeBaseResumeIdDraft: string | null;
+  onRxresumeModeChange: (mode: RxResumeMode) => void;
+  setRxResumeBaseResumeIdDraft: (value: string | null) => void;
+  hasRxResumeAccess: boolean;
+  rxresumeMode: RxResumeMode;
+  onCredentialFieldEdit: (mode: RxResumeMode) => void;
+  validationStatuses: Record<RxResumeMode, RxResumeValidationBadgeState>;
+  profileProjects: ResumeProjectCatalogItem[];
+  lockedCount: number;
+  maxProjectsTotal: number;
+  isProjectsLoading: boolean;
+  isLoading: boolean;
+  isSaving: boolean;
+}> = ({
+  rxResumeBaseResumeIdDraft,
+  onRxresumeModeChange,
+  setRxResumeBaseResumeIdDraft,
+  hasRxResumeAccess,
+  rxresumeMode,
+  validationStatuses,
+  profileProjects,
+  lockedCount,
+  maxProjectsTotal,
+  isProjectsLoading,
+  isLoading,
+  isSaving,
+}) => {
+  const { register, watch } = useFormContext<UpdateSettingsInput>();
+  const selectedMode = (watch("rxresumeMode") ?? rxresumeMode) as RxResumeMode;
+
+  return (
+    <AccordionItem value="rxresume" className="border rounded-lg px-4">
+      <AccordionTrigger className="hover:no-underline py-4">
+        <span className="text-base font-semibold">Reactive Resume</span>
+      </AccordionTrigger>
+      <AccordionContent className="pb-4">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Mode</label>
+            <Select
+              value={selectedMode}
+              onValueChange={(value: string) =>
+                onRxresumeModeChange(value as RxResumeMode)
+              }
+              disabled={isLoading || isSaving}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="v4">v4</SelectItem>
+                <SelectItem value="v5">v5</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {selectedMode === "v4" ? (
+            <>
+              <SettingsInput
+                label="Reactive Resume email"
+                inputProps={{ ...register("rxresumeEmail"), id: "rxresumeEmail" }}
+                disabled={isLoading || isSaving}
+              />
+              <SettingsInput
+                label="Reactive Resume password"
+                type="password"
+                inputProps={{
+                  ...register("rxresumePassword"),
+                  id: "rxresumePassword",
+                }}
+                disabled={isLoading || isSaving}
+              />
+            </>
+          ) : (
+            <SettingsInput
+              label="Reactive Resume API key"
+              type="password"
+              inputProps={{
+                ...register("rxresumeApiKey"),
+                id: "rxresumeApiKey",
+              }}
+              disabled={isLoading || isSaving}
+            />
+          )}
+
+          <SettingsInput
+            label="Reactive Resume base URL"
+            inputProps={{ ...register("rxresumeUrl"), id: "rxresumeUrl" }}
+            disabled={isLoading || isSaving}
+          />
+
+          <SettingsInput
+            label="Base resume ID"
+            inputProps={{
+              id: "rxresumeBaseResumeId",
+              value: rxResumeBaseResumeIdDraft ?? "",
+              onChange: (event: React.ChangeEvent<HTMLInputElement>) =>
+                setRxResumeBaseResumeIdDraft(event.target.value.trim() || null),
+            }}
+            disabled={!hasRxResumeAccess || isLoading || isSaving}
+          />
+
+          <div className="text-xs text-muted-foreground">
+            Validation:{" "}
+            {validationStatuses[selectedMode].checked
+              ? validationStatuses[selectedMode].valid
+                ? "Valid"
+                : validationStatuses[selectedMode].message ?? "Invalid"
+              : "Not checked"}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Projects: {isProjectsLoading ? "Loading..." : profileProjects.length}
+            {" · "}Locked: {lockedCount}
+            {" · "}Total: {maxProjectsTotal}
+          </div>
+        </div>
+      </AccordionContent>
+    </AccordionItem>
+  );
 };
 
 const getDerivedSettings = (settings: AppSettings | null) => {
@@ -662,53 +893,60 @@ export const SettingsPage: React.FC = () => {
       const notify = !silent;
       const values = getValues();
       const draftCredentials = getRxResumeCredentialDrafts(values);
-      const result = await validateAndMaybePersistRxResumeMode({
+      const precheckFailure = silent
+        ? null
+        : getRxResumeCredentialPrecheckFailure({
+            mode,
+            stored: storedRxResume,
+            draft: draftCredentials,
+          });
+
+      if (precheckFailure) {
+        const validation: ValidationResult = {
+          valid: false,
+          message: RXRESUME_PRECHECK_MESSAGES[precheckFailure],
+          status: 400,
+        };
+        setRxResumeValidationStatus(mode, validation);
+        if (notify) toast.info(validation.message);
+        return;
+      }
+
+      const validation = await api.validateRxresume({
         mode,
-        stored: storedRxResume,
-        draft: draftCredentials,
-        validate: api.validateRxresume,
-        persist: api.updateSettings,
-        persistOnSuccess,
-        skipPrecheck: silent,
-        getPrecheckMessage: (failure) => RXRESUME_PRECHECK_MESSAGES[failure],
-        getValidationErrorMessage: (error) =>
-          error instanceof Error ? error.message : "RxResume validation failed",
-        getPersistErrorMessage: (error) =>
-          error instanceof Error ? error.message : "RxResume validation failed",
+        ...toRxResumeValidationPayload(draftCredentials),
       });
 
-      setRxResumeValidationStatus(mode, result.validation);
+      setRxResumeValidationStatus(mode, validation);
 
-      if (result.updatedSettings) {
-        setSettings(result.updatedSettings);
-        queryClient.setQueryData(
-          queryKeys.settings.current(),
-          result.updatedSettings,
-        );
+      if (validation.valid && persistOnSuccess) {
+        const updatedSettings = await api.updateSettings({
+          rxresumeMode: mode,
+          rxresumeBaseResumeId: getBaseResumeIdForMode(mode),
+        });
+        setSettings(updatedSettings);
+        queryClient.setQueryData(queryKeys.settings.current(), updatedSettings);
         if (notify) {
           toast.success(`Reactive Resume ${mode} validation passed`);
         }
         return;
       }
 
-      if (!notify || result.validation.valid) {
-        return;
-      }
-
-      if (result.precheckFailure) {
-        toast.info(
-          result.validation.message ??
-            RXRESUME_PRECHECK_MESSAGES[result.precheckFailure],
-        );
+      if (!notify || validation.valid) {
         return;
       }
 
       toast.error(
-        result.validation.message ||
-          `Reactive Resume ${mode} validation failed`,
+        validation.message || `Reactive Resume ${mode} validation failed`,
       );
     },
-    [getValues, queryClient, setRxResumeValidationStatus, storedRxResume],
+    [
+      getBaseResumeIdForMode,
+      getValues,
+      queryClient,
+      setRxResumeValidationStatus,
+      storedRxResume,
+    ],
   );
 
   useEffect(() => {
@@ -938,11 +1176,7 @@ export const SettingsPage: React.FC = () => {
           ];
           const validation = await api.validateRxresume({
             mode: rxResumeValidationMode,
-            ...toRxResumeValidationPayload(validationDraft, {
-              preserveBlankFields: preserveBlankFields as Array<
-                keyof ReturnType<typeof getRxResumeCredentialDrafts>
-              >,
-            }),
+            ...toRxResumeValidationPayload(validationDraft),
           });
 
           setRxResumeValidationStatus(rxResumeValidationMode, validation);

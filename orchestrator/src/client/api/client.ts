@@ -10,6 +10,7 @@ import type {
   AppSettings,
   BackupInfo,
   BranchInfo,
+  CandidateKnowledgeBase,
   DemoInfoResponse,
   Job,
   JobActionRequest,
@@ -658,6 +659,37 @@ export async function streamJobGhostwriterMessage(
   );
 }
 
+export async function sendJobGhostwriterMessage(
+  jobId: string,
+  input: { content: string; signal?: AbortSignal },
+): Promise<{
+  assistantMessage: JobChatMessage | null;
+  messages: JobChatMessage[];
+  branches: BranchInfo[];
+}> {
+  const events: JobChatStreamEvent[] = [];
+
+  await streamJobGhostwriterMessage(jobId, input, {
+    onEvent: (event) => {
+      events.push(event);
+    },
+  });
+
+  const completedEvent = [...events]
+    .reverse()
+    .find((event) => event.type === "completed");
+  const data = await listJobGhostwriterMessages(jobId, { limit: 300 });
+
+  return {
+    assistantMessage:
+      completedEvent && completedEvent.type === "completed"
+        ? completedEvent.message
+        : null,
+    messages: data.messages,
+    branches: data.branches,
+  };
+}
+
 export async function cancelJobChatRun(
   jobId: string,
   threadId: string,
@@ -844,6 +876,12 @@ export async function checkSponsor(id: string): Promise<Job> {
 
 export async function markAsApplied(id: string): Promise<Job> {
   return fetchApi<Job>(`/jobs/${id}/apply`, {
+    method: "POST",
+  });
+}
+
+export async function unapplyJob(id: string): Promise<Job> {
+  return fetchApi<Job>(`/jobs/${id}/unapply`, {
     method: "POST",
   });
 }
@@ -1313,6 +1351,32 @@ export async function getResumeProjectsCatalog(): Promise<
 
 export async function getProfile(): Promise<ResumeProfile> {
   return fetchApi<ResumeProfile>("/profile");
+}
+
+export async function getInternalProfile(): Promise<ResumeProfile> {
+  return fetchApi<ResumeProfile>("/profile/internal");
+}
+
+export async function saveInternalProfile(
+  profile: ResumeProfile,
+): Promise<ResumeProfile> {
+  return fetchApi<ResumeProfile>("/profile/internal", {
+    method: "POST",
+    body: JSON.stringify(profile),
+  });
+}
+
+export async function getCandidateKnowledgeBase(): Promise<CandidateKnowledgeBase> {
+  return fetchApi<CandidateKnowledgeBase>("/profile/knowledge");
+}
+
+export async function saveCandidateKnowledgeBase(
+  knowledgeBase: CandidateKnowledgeBase,
+): Promise<CandidateKnowledgeBase> {
+  return fetchApi<CandidateKnowledgeBase>("/profile/knowledge", {
+    method: "POST",
+    body: JSON.stringify(knowledgeBase),
+  });
 }
 
 export async function getProfileStatus(): Promise<ProfileStatusResponse> {

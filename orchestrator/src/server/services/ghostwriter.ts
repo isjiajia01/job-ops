@@ -7,9 +7,21 @@ import {
 } from "@infra/errors";
 import { logger } from "@infra/logger";
 import { getRequestId } from "@infra/request-context";
+import {
+  getGhostwriterDisplayText,
+  normalizeGhostwriterAssistantPayload,
+  serializeGhostwriterAssistantPayload,
+} from "@shared/utils/ghostwriter";
 import type { BranchInfo, JobChatMessage, JobChatRun } from "@shared/types";
 import * as jobChatRepo from "../repositories/ghostwriter";
+import * as jobsRepo from "../repositories/jobs";
 import { buildJobChatPromptContext } from "./ghostwriter-context";
+import {
+  lintCoverLetterDraft,
+  sanitizeResumePatch,
+} from "./ghostwriter-output-guard";
+import { getCandidateKnowledgeBase } from "./candidate-knowledge";
+import { getProfile } from "./profile";
 import { LlmService } from "./llm/service";
 import type { JsonSchemaDefinition } from "./llm/types";
 import { resolveLlmRuntimeSettings as resolveRuntimeLlmSettings } from "./modelSelection";
@@ -30,6 +42,16 @@ const CHAT_RESPONSE_SCHEMA: JsonSchemaDefinition = {
     properties: {
       response: {
         type: "string",
+      },
+      coverLetterDraft: {
+        type: ["string", "null"],
+      },
+      coverLetterKind: {
+        type: ["string", "null"],
+        enum: ["letter", "email", null],
+      },
+      resumePatch: {
+        type: ["object", "null"],
       },
     },
     required: ["response"],
@@ -65,6 +87,35 @@ async function resolveLlmRuntimeSettings(): Promise<LlmRuntimeSettings> {
   return resolveRuntimeLlmSettings("tailoring");
 }
 
+async function applyResumePatchToJob(
+  jobId: string,
+  payload: NonNullable<ReturnType<typeof normalizeGhostwriterAssistantPayload>>,
+): Promise<void> {
+  if (!payload.resumePatch) return;
+
+  const [profile, knowledgeBase] = await Promise.all([
+    getProfile().catch(() => ({})),
+    getCandidateKnowledgeBase().catch(() => ({
+      personalFacts: [],
+      projects: [],
+    })),
+  ]);
+  const { sanitized } = sanitizeResumePatch({
+    patch: payload.resumePatch,
+    profile,
+    knowledgeBase,
+  });
+  if (!sanitized) return;
+
+  await jobsRepo.updateJob(jobId, {
+    tailoredSummary: sanitized.tailoredSummary ?? undefined,
+    tailoredHeadline: sanitized.tailoredHeadline ?? undefined,
+    tailoredSkills: sanitized.tailoredSkills
+      ? JSON.stringify(sanitized.tailoredSkills)
+      : undefined,
+  });
+}
+
 async function buildConversationMessages(
   threadId: string,
   targetMessageId?: string,
@@ -84,7 +135,10 @@ async function buildConversationMessages(
     .slice(-40)
     .map((message) => ({
       role: message.role,
-      content: message.content,
+      content:
+        message.role === "assistant"
+          ? getGhostwriterDisplayText(message.content)
+          : message.content,
     }));
 }
 
@@ -306,7 +360,22 @@ async function runAssistantReply(
       });
     }
 
-    const finalText = (llmResult.data.response || "").trim();
+    const payload = normalizeGhostwriterAssistantPayload(llmResult.data);
+    if (!payload) {
+      throw upstreamError("LLM returned an invalid Ghostwriter payload");
+    }
+
+    const { sanitized: sanitizedCoverLetterDraft } = lintCoverLetterDraft(
+      payload.coverLetterDraft,
+    );
+    const structuredPayload = {
+      ...payload,
+      coverLetterDraft: sanitizedCoverLetterDraft,
+    };
+
+    await applyResumePatchToJob(options.jobId, structuredPayload);
+
+    const finalText = serializeGhostwriterAssistantPayload(structuredPayload);
     const chunks = chunkText(finalText);
 
     for (const chunk of chunks) {

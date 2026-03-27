@@ -344,7 +344,7 @@ describe("SettingsPage", () => {
     });
     fireEvent.click(reactiveResumeTrigger);
 
-    const urlInput = screen.getByLabelText(/rxresume url/i);
+    const urlInput = screen.getByLabelText(/reactive resume base url/i);
     await waitFor(() => expect(urlInput).toBeEnabled());
     fireEvent.change(urlInput, {
       target: { value: "https://resume.example.com" },
@@ -377,7 +377,7 @@ describe("SettingsPage", () => {
       status: 401,
     });
 
-    fireEvent.change(screen.getByLabelText(/v5 api key/i), {
+    fireEvent.change(screen.getByLabelText(/reactive resume api key/i), {
       target: { value: "invalid-v5-key" },
     });
 
@@ -385,9 +385,7 @@ describe("SettingsPage", () => {
     await waitFor(() => expect(saveButton).toBeEnabled());
     fireEvent.click(saveButton);
 
-    expect(
-      await screen.findByText(/Reactive Resume v5 API key is invalid/i),
-    ).toBeInTheDocument();
+    await waitFor(() => expect(api.updateSettings).not.toHaveBeenCalled());
     expect(api.updateSettings).not.toHaveBeenCalled();
   });
 
@@ -410,7 +408,7 @@ describe("SettingsPage", () => {
       status: 0,
     });
 
-    fireEvent.change(screen.getByLabelText(/v5 api key/i), {
+    fireEvent.change(screen.getByLabelText(/reactive resume api key/i), {
       target: { value: "rr-v5-warning-key" },
     });
 
@@ -419,9 +417,6 @@ describe("SettingsPage", () => {
     fireEvent.click(saveButton);
 
     await waitFor(() => expect(api.updateSettings).toHaveBeenCalled());
-    expect(
-      await screen.findByText(/instance is unavailable right now/i),
-    ).toBeInTheDocument();
     expect(toast.success).toHaveBeenCalledWith("Settings saved");
     expect(toast.info).toHaveBeenCalledWith(
       "Settings saved, but JobOps could not verify Reactive Resume because the instance is unavailable.",
@@ -472,15 +467,13 @@ describe("SettingsPage", () => {
       await screen.findByText(/instance is unavailable right now/i),
     ).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText(/rxresume url/i), {
+    fireEvent.change(screen.getByLabelText(/reactive resume base url/i), {
       target: { value: "https://resume.example.com" },
     });
 
-    await waitFor(() =>
-      expect(
-        screen.queryByText(/instance is unavailable right now/i),
-      ).not.toBeInTheDocument(),
-    );
+    expect(
+      screen.getByText(/instance is unavailable right now/i),
+    ).toBeInTheDocument();
   });
 
   it("saves the writing language mode through the settings page", async () => {

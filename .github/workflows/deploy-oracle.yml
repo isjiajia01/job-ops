@@ -8,6 +8,11 @@ on:
         required: false
         default: job-ops
         type: string
+      image_tag:
+        description: "GHCR image tag to deploy"
+        required: false
+        default: latest
+        type: string
 
 permissions:
   contents: read
@@ -123,6 +128,22 @@ jobs:
           script_stop: true
           script: |
             cd /opt/job-ops
+            IMAGE_TAG='${{ inputs.image_tag }}'
+            if [ -z "$IMAGE_TAG" ]; then
+              IMAGE_TAG=latest
+            fi
+            export JOBOPS_IMAGE="ghcr.io/${{ github.repository_owner }}/job-ops:$IMAGE_TAG"
+            if [ -f .env ]; then
+              if grep -q '^JOBOPS_IMAGE=' .env; then
+                sed -i.bak "s#^JOBOPS_IMAGE=.*#JOBOPS_IMAGE=$JOBOPS_IMAGE#" .env
+              else
+                printf '\nJOBOPS_IMAGE=%s\n' "$JOBOPS_IMAGE" >> .env
+              fi
+            else
+              printf 'JOBOPS_IMAGE=%s\n' "$JOBOPS_IMAGE" > .env
+            fi
+            rm -f .env.bak
+            echo "Deploying image: $JOBOPS_IMAGE"
             docker compose pull ${{ inputs.service }}
             docker compose up -d ${{ inputs.service }}
             docker compose ps

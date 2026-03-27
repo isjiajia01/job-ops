@@ -257,24 +257,13 @@ export async function summarizeJob(
       if (!tailoredSummary || !tailoredHeadline || options?.force) {
         jobLogger.info("Generating tailoring content");
         const tailoringResult = await generateTailoring(
-          {
-            jobDescription: job.jobDescription || "",
-            jobTitle: job.title || "",
-          },
+          job.jobDescription || "",
           profile,
         );
         if (tailoringResult.success && tailoringResult.data) {
           tailoredSummary = tailoringResult.data.summary;
           tailoredHeadline = tailoringResult.data.headline;
           tailoredSkills = JSON.stringify(tailoringResult.data.skills);
-          tailoredExperienceEdits = JSON.stringify(
-            tailoringResult.data.experienceEdits,
-          );
-          tailoredLayoutDirectives = JSON.stringify(
-            tailoringResult.data.layoutDirectives,
-          );
-          tailoredSectionRationale = tailoringResult.data.sectionRationale;
-          tailoredOmissionRationale = tailoringResult.data.omissionRationale;
         } else if (options?.force || !tailoredSummary || !tailoredHeadline) {
           return {
             success: false,

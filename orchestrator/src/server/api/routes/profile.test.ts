@@ -54,6 +54,10 @@ describe.sequential("Profile API routes", () => {
     await stopServer({ server, closeDb, tempDir });
   });
 
+  const authHeaders = {
+    Authorization: `Basic ${Buffer.from("admin:secret").toString("base64")}`,
+  };
+
   describe("GET /api/profile/projects", () => {
     it("returns projects when profile is configured", async () => {
       const mockProfile = {
@@ -82,7 +86,9 @@ describe.sequential("Profile API routes", () => {
       };
       vi.mocked(getProfile).mockResolvedValue(mockProfile);
 
-      const res = await fetch(`${baseUrl}/api/profile/projects`);
+      const res = await fetch(`${baseUrl}/api/profile/projects`, {
+        headers: authHeaders,
+      });
       const body = await res.json();
 
       expect(res.ok).toBe(true);
@@ -96,7 +102,9 @@ describe.sequential("Profile API routes", () => {
         new Error("Base resume not configured."),
       );
 
-      const res = await fetch(`${baseUrl}/api/profile/projects`);
+      const res = await fetch(`${baseUrl}/api/profile/projects`, {
+        headers: authHeaders,
+      });
       const body = await res.json();
 
       expect(res.ok).toBe(false);
@@ -142,7 +150,9 @@ describe.sequential("Profile API routes", () => {
       };
       vi.mocked(getProfile).mockResolvedValue(mockProfile);
 
-      const res = await fetch(`${baseUrl}/api/profile`);
+      const res = await fetch(`${baseUrl}/api/profile`, {
+        headers: authHeaders,
+      });
       const body = await res.json();
 
       expect(res.ok).toBe(true);
@@ -155,7 +165,9 @@ describe.sequential("Profile API routes", () => {
         new Error("Base resume not configured."),
       );
 
-      const res = await fetch(`${baseUrl}/api/profile`);
+      const res = await fetch(`${baseUrl}/api/profile`, {
+        headers: authHeaders,
+      });
       const body = await res.json();
 
       expect(res.ok).toBe(false);
@@ -179,7 +191,9 @@ describe.sequential("Profile API routes", () => {
         }),
       );
 
-      const res = await fetch(`${baseUrl}/api/profile/knowledge`);
+      const res = await fetch(`${baseUrl}/api/profile/knowledge`, {
+        headers: authHeaders,
+      });
       const body = await res.json();
 
       expect(res.ok).toBe(true);
