@@ -57,13 +57,13 @@ jobs:
           fi
 
           if git rev-parse "v$RELEASE_VERSION" >/dev/null 2>&1; then
-            echo "Tag v$RELEASE_VERSION already exists locally" >&2
-            exit 1
-          fi
-
-          if git ls-remote --tags origin "refs/tags/v$RELEASE_VERSION" | grep -q .; then
-            echo "Tag v$RELEASE_VERSION already exists on origin" >&2
-            exit 1
+            echo "Tag v$RELEASE_VERSION already exists locally"
+            echo "tag_already_exists=true" >> "$GITHUB_OUTPUT"
+          elif git ls-remote --tags origin "refs/tags/v$RELEASE_VERSION" | grep -q .; then
+            echo "Tag v$RELEASE_VERSION already exists on origin"
+            echo "tag_already_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag_already_exists=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Bump orchestrator version files
@@ -85,6 +85,7 @@ jobs:
           git push origin HEAD:main
 
       - name: Create and push release tag
+        if: steps.validate.outputs.tag_already_exists != 'true'
         env:
           RELEASE_VERSION: ${{ inputs.version }}
         run: |
@@ -137,4 +138,8 @@ jobs:
             RELEASE_TITLE="v$RELEASE_VERSION"
           fi
 
-          gh release create "v$RELEASE_VERSION" --title "$RELEASE_TITLE" --generate-notes
+          if gh release view "v$RELEASE_VERSION" >/dev/null 2>&1; then
+            gh release edit "v$RELEASE_VERSION" --title "$RELEASE_TITLE"
+          else
+            gh release create "v$RELEASE_VERSION" --title "$RELEASE_TITLE" --generate-notes
+          fi
