@@ -127,39 +127,34 @@ jobs:
           port: ${{ secrets.ORACLE_SSH_PORT || '22' }}
           script_stop: true
           script: |
+            set -e
             cd /opt/job-ops
             IMAGE_TAG='${{ inputs.image_tag }}'
+            if [ -z "$IMAGE_TAG" ]; then IMAGE_TAG=latest; fi
             APP_VERSION="${IMAGE_TAG#v}"
             DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             GIT_SHA="${{ github.sha }}"
-            if [ -z "$IMAGE_TAG" ]; then
-              IMAGE_TAG=latest
-            fi
             export JOBOPS_IMAGE="ghcr.io/${{ github.repository_owner }}/job-ops:$IMAGE_TAG"
-            if [ -f .env ]; then
-              if grep -q '^JOBOPS_IMAGE=' .env; then
-                sed -i.bak "s#^JOBOPS_IMAGE=.*#JOBOPS_IMAGE=$JOBOPS_IMAGE#" .env
-              else
-                printf '\nJOBOPS_IMAGE=%s\n' "$JOBOPS_IMAGE" >> .env
-              fi
-            else
-              printf 'JOBOPS_IMAGE=%s\n' "$JOBOPS_IMAGE" > .env
-            fi
-            for kv in \
-              "APP_VERSION=$APP_VERSION" \
-              "GIT_SHA=$GIT_SHA" \
-              "IMAGE_TAG=$IMAGE_TAG" \
-              "DEPLOYED_AT=$DEPLOYED_AT"
-            do
-              key="${kv%%=*}"
-              value="${kv#*=}"
-              if grep -q "^${key}=" .env; then
-                sed -i.bak "s#^${key}=.*#${key}=${value}#" .env
-              else
-                printf '%s\n' "${key}=${value}" >> .env
-              fi
-            done
-            rm -f .env.bak
+            touch .env
+            python3 - <<'PY'
+            from pathlib import Path
+            env_path = Path(".env")
+            values = {}
+            if env_path.exists():
+                for line in env_path.read_text().splitlines():
+                    if "=" in line:
+                        key, value = line.split("=", 1)
+                        values[key] = value
+            updates = {
+                "JOBOPS_IMAGE": "${JOBOPS_IMAGE}",
+                "APP_VERSION": "${APP_VERSION}",
+                "GIT_SHA": "${GIT_SHA}",
+                "IMAGE_TAG": "${IMAGE_TAG}",
+                "DEPLOYED_AT": "${DEPLOYED_AT}",
+            }
+            values.update(updates)
+            env_path.write_text("".join(f"{key}={value}\n" for key, value in values.items()))
+            PY
             echo "Deploying image: $JOBOPS_IMAGE"
             echo "App version: $APP_VERSION"
             echo "Git SHA: $GIT_SHA"
