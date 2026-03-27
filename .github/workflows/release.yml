@@ -11,6 +11,11 @@ on:
         description: "Optional release title shown on GitHub (defaults to vX.Y.Z)"
         required: false
         type: string
+      image_platforms:
+        description: "Docker platforms to publish (comma-separated)"
+        required: false
+        default: "linux/arm64"
+        type: string
 
 permissions:
   contents: write
@@ -121,7 +126,7 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ inputs.image_platforms }}
           tags: ${{ steps.docker-meta.outputs.tags }}
           labels: ${{ steps.docker-meta.outputs.labels }}
           cache-from: type=gha

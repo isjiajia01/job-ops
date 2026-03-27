@@ -670,7 +670,7 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
                     download={`${safeFilenamePart(personName || "Unknown")}_${safeFilenamePart(selectedJob.employer || "Unknown")}.pdf`}
                   >
                     <FileText className="mr-2 h-4 w-4" />
-                    Download PDF
+                    Download CV
                   </a>
                 </DropdownMenuItem>
               </>
