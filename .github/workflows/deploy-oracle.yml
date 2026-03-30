@@ -137,7 +137,9 @@ jobs:
             export JOBOPS_IMAGE="ghcr.io/${{ github.repository_owner }}/job-ops:$IMAGE_TAG"
             touch .env
             cp .env .env.tmp
-            grep -vE '^(JOBOPS_IMAGE|APP_VERSION|GIT_SHA|IMAGE_TAG|DEPLOYED_AT)=' .env.tmp > .env
+            if ! grep -vE '^(JOBOPS_IMAGE|APP_VERSION|GIT_SHA|IMAGE_TAG|DEPLOYED_AT)=' .env.tmp > .env; then
+              : > .env
+            fi
             printf 'JOBOPS_IMAGE=%s\n' "$JOBOPS_IMAGE" >> .env
             printf 'APP_VERSION=%s\n' "$APP_VERSION" >> .env
             printf 'GIT_SHA=%s\n' "$GIT_SHA" >> .env
