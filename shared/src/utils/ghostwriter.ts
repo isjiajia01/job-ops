@@ -41,10 +41,69 @@ export const companyResearchNoteSchema = z.object({
   summary: z.string().trim().min(1).max(2400),
 });
 
+export const ghostwriterWritingPreferenceSchema = z.object({
+  id: z.string().trim().min(1).max(120),
+  label: z.string().trim().min(1).max(160),
+  instruction: z.string().trim().min(1).max(2000),
+  kind: z
+    .enum(["tone", "positioning", "guardrail", "phrase", "priority"])
+    .default("positioning"),
+  strength: z.enum(["normal", "strong"]).default("normal"),
+});
+
+export const candidateKnowledgeInboxSuggestedFactSchema = z.object({
+  title: z.string().trim().min(1).max(160),
+  detail: z.string().trim().min(1).max(2000),
+});
+
+export const candidateKnowledgeInboxSuggestedProjectSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  summary: z.string().trim().min(1).max(2400),
+  keywords: z.array(z.string().trim().min(1).max(80)).max(12).default([]),
+  role: z.string().trim().max(200).nullable().default(null),
+  impact: z.string().trim().max(1200).nullable().default(null),
+  roleRelevance: z.string().trim().max(1200).nullable().default(null),
+});
+
+export const candidateKnowledgeInboxSuggestedPreferenceSchema = z.object({
+  label: z.string().trim().min(1).max(160),
+  instruction: z.string().trim().min(1).max(2000),
+  kind: z
+    .enum(["tone", "positioning", "guardrail", "phrase", "priority"])
+    .default("positioning"),
+  strength: z.enum(["normal", "strong"]).default("normal"),
+});
+
+export const candidateKnowledgeInboxItemSchema = z.object({
+  id: z.string().trim().min(1).max(120),
+  createdAt: z.string().trim().min(1).max(80),
+  updatedAt: z.string().trim().min(1).max(80),
+  kind: z.enum(["project", "fact", "preference", "general"]),
+  status: z.enum(["pending", "accepted", "archived"]),
+  sourceLabel: z.string().trim().max(200).nullable().default(null),
+  title: z.string().trim().min(1).max(160),
+  summary: z.string().trim().min(1).max(2000),
+  rawText: z.string().trim().min(1).max(12000),
+  tags: z.array(z.string().trim().min(1).max(80)).max(20).default([]),
+  confidence: z.enum(["low", "medium", "high"]).default("medium"),
+  suggestedFact: candidateKnowledgeInboxSuggestedFactSchema.nullable().default(null),
+  suggestedProject: candidateKnowledgeInboxSuggestedProjectSchema
+    .nullable()
+    .default(null),
+  suggestedPreference: candidateKnowledgeInboxSuggestedPreferenceSchema
+    .nullable()
+    .default(null),
+});
+
 export const candidateKnowledgeBaseSchema = z.object({
   personalFacts: z.array(candidateKnowledgeFactSchema).max(200),
   projects: z.array(candidateKnowledgeProjectSchema).max(200),
   companyResearchNotes: z.array(companyResearchNoteSchema).max(200).default([]),
+  writingPreferences: z
+    .array(ghostwriterWritingPreferenceSchema)
+    .max(200)
+    .default([]),
+  inboxItems: z.array(candidateKnowledgeInboxItemSchema).max(400).default([]),
 });
 
 export const ghostwriterAssistantPayloadSchema = z.object({

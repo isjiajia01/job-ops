@@ -27,6 +27,70 @@ export interface CandidateKnowledgeProject {
   impact: string | null;
 }
 
+export type GhostwriterPreferenceKind =
+  | "tone"
+  | "positioning"
+  | "guardrail"
+  | "phrase"
+  | "priority";
+
+export interface GhostwriterWritingPreference {
+  id: string;
+  label: string;
+  instruction: string;
+  kind: GhostwriterPreferenceKind;
+  strength: "normal" | "strong";
+}
+
+export type CandidateKnowledgeInboxItemKind =
+  | "project"
+  | "fact"
+  | "preference"
+  | "general";
+
+export type CandidateKnowledgeInboxItemStatus =
+  | "pending"
+  | "accepted"
+  | "archived";
+
+export interface CandidateKnowledgeInboxSuggestedFact {
+  title: string;
+  detail: string;
+}
+
+export interface CandidateKnowledgeInboxSuggestedProject {
+  name: string;
+  summary: string;
+  keywords: string[];
+  role: string | null;
+  impact: string | null;
+  roleRelevance: string | null;
+}
+
+export interface CandidateKnowledgeInboxSuggestedPreference {
+  label: string;
+  instruction: string;
+  kind: GhostwriterPreferenceKind;
+  strength: "normal" | "strong";
+}
+
+export interface CandidateKnowledgeInboxItem {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  kind: CandidateKnowledgeInboxItemKind;
+  status: CandidateKnowledgeInboxItemStatus;
+  sourceLabel: string | null;
+  title: string;
+  summary: string;
+  rawText: string;
+  tags: string[];
+  confidence?: "low" | "medium" | "high";
+  suggestedFact?: CandidateKnowledgeInboxSuggestedFact | null;
+  suggestedProject?: CandidateKnowledgeInboxSuggestedProject | null;
+  suggestedPreference?: CandidateKnowledgeInboxSuggestedPreference | null;
+}
+
 export interface CompanyResearchNote {
   company: string;
   source: string | null;
@@ -37,6 +101,8 @@ export interface CandidateKnowledgeBase {
   personalFacts: CandidateKnowledgeFact[];
   projects: CandidateKnowledgeProject[];
   companyResearchNotes?: CompanyResearchNote[];
+  writingPreferences?: GhostwriterWritingPreference[];
+  inboxItems?: CandidateKnowledgeInboxItem[];
 }
 
 export type RxResumeMode = "v4" | "v5";

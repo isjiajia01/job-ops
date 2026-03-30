@@ -9,6 +9,7 @@ import {
   deleteCandidateKnowledgeProject,
   getCandidateKnowledgeBase,
 } from "@server/services/candidate-knowledge";
+import { ingestProfileCapture } from "@server/services/profile-ingestion";
 import {
   getInternalProfile,
   saveInternalProfile,
@@ -39,6 +40,11 @@ const createKnowledgeProjectSchema = z.object({
   keywords: z.array(z.string().trim().min(1).max(80)).max(12).optional(),
   role: z.string().trim().max(200).nullable().optional(),
   impact: z.string().trim().max(1200).nullable().optional(),
+});
+
+const ingestKnowledgeCaptureSchema = z.object({
+  rawText: z.string().trim().min(1).max(20000),
+  sourceLabel: z.string().trim().max(200).nullable().optional(),
 });
 
 /**
@@ -179,6 +185,19 @@ profileRouter.delete(
     }
   },
 );
+
+/**
+ * POST /api/profile/knowledge/ingest - Turn raw capture text into structured inbox items
+ */
+profileRouter.post("/knowledge/ingest", async (req: Request, res: Response) => {
+  try {
+    const input = ingestKnowledgeCaptureSchema.parse(req.body);
+    const result = await ingestProfileCapture(input);
+    ok(res, result);
+  } catch (error) {
+    fail(res, toAppError(error));
+  }
+});
 
 /**
  * GET /api/profile/status - Check if base resume is configured and accessible

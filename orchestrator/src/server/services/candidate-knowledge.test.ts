@@ -37,6 +37,8 @@ describe("candidate-knowledge service", () => {
     expect(result.personalFacts).toEqual([]);
     expect(result.projects).toEqual([]);
     expect(result.companyResearchNotes ?? []).toEqual([]);
+    expect(result.writingPreferences ?? []).toEqual([]);
+    expect(result.inboxItems ?? []).toEqual([]);
   });
 
   it("adds a personal fact and persists the updated knowledge base", async () => {
@@ -60,6 +62,8 @@ describe("candidate-knowledge service", () => {
         personalFacts: [fact],
         projects: [],
         companyResearchNotes: [],
+        writingPreferences: [],
+        inboxItems: [],
       }),
     );
   });

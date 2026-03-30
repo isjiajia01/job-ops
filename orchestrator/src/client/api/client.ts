@@ -11,6 +11,7 @@ import type {
   BackupInfo,
   BranchInfo,
   CandidateKnowledgeBase,
+  CandidateKnowledgeInboxItem,
   DemoInfoResponse,
   Job,
   JobActionRequest,
@@ -1606,6 +1607,19 @@ export async function saveCandidateKnowledgeBase(
     method: "POST",
     body: JSON.stringify(knowledgeBase),
   });
+}
+
+export async function ingestProfileKnowledgeCapture(input: {
+  rawText: string;
+  sourceLabel?: string | null;
+}): Promise<{ items: CandidateKnowledgeInboxItem[]; mode: "llm" | "fallback" }> {
+  return fetchApi<{ items: CandidateKnowledgeInboxItem[]; mode: "llm" | "fallback" }>(
+    "/profile/knowledge/ingest",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
 }
 
 export async function getProfileStatus(): Promise<ProfileStatusResponse> {
