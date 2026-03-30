@@ -77,6 +77,7 @@ describe("candidate-knowledge service", () => {
       name: "Forecasting Dashboard",
       summary: "Built a supply planning dashboard.",
       keywords: ["Python", " Excel ", ""],
+      cvBullets: [" Led dashboard rollout ", ""],
     });
 
     expect(project).toEqual({
@@ -86,6 +87,7 @@ describe("candidate-knowledge service", () => {
       keywords: ["Python", "Excel"],
       role: null,
       impact: null,
+      cvBullets: ["Led dashboard rollout"],
     });
   });
 });

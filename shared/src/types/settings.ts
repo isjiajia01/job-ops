@@ -25,6 +25,7 @@ export interface CandidateKnowledgeProject {
   keywords: string[];
   role: string | null;
   impact: string | null;
+  cvBullets?: string[];
 }
 
 export type GhostwriterPreferenceKind =

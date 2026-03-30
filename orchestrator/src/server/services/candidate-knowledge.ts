@@ -71,6 +71,7 @@ export async function addCandidateKnowledgeProject(input: {
   keywords?: string[];
   role?: string | null;
   impact?: string | null;
+  cvBullets?: string[];
 }): Promise<CandidateKnowledgeProject> {
   const knowledgeBase = await getCandidateKnowledgeBase();
   const project: CandidateKnowledgeProject = {
@@ -80,6 +81,7 @@ export async function addCandidateKnowledgeProject(input: {
     keywords: (input.keywords ?? []).map((item) => item.trim()).filter(Boolean),
     role: input.role?.trim() || null,
     impact: input.impact?.trim() || null,
+    cvBullets: (input.cvBullets ?? []).map((item) => item.trim()).filter(Boolean),
   };
 
   await saveCandidateKnowledgeBase({

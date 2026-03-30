@@ -40,6 +40,7 @@ const createKnowledgeProjectSchema = z.object({
   keywords: z.array(z.string().trim().min(1).max(80)).max(12).optional(),
   role: z.string().trim().max(200).nullable().optional(),
   impact: z.string().trim().max(1200).nullable().optional(),
+  cvBullets: z.array(z.string().trim().min(1).max(240)).max(8).optional(),
 });
 
 const ingestKnowledgeCaptureSchema = z.object({

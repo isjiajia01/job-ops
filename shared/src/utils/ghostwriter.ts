@@ -33,6 +33,7 @@ export const candidateKnowledgeProjectSchema = z.object({
   keywords: z.array(z.string().trim().min(1).max(80)).max(12),
   role: z.string().trim().max(200).nullable().default(null),
   impact: z.string().trim().max(1200).nullable().default(null),
+  cvBullets: z.array(z.string().trim().min(1).max(240)).max(8).default([]),
 });
 
 export const companyResearchNoteSchema = z.object({

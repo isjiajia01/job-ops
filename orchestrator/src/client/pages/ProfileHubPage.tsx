@@ -19,6 +19,7 @@ import {
   FolderKanban,
   Lightbulb,
   Loader2,
+  PencilLine,
   Plus,
   RefreshCcw,
   Save,
@@ -28,6 +29,7 @@ import {
   Trash2,
   Upload,
   Wand2,
+  X,
 } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -261,6 +263,86 @@ function firstSentence(text: string): string {
   return sentence ?? text.trim();
 }
 
+function toSentenceCase(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
+
+function normalizeBullet(text: string): string | null {
+  const trimmed = text.replace(/^[-*•\d.\s]+/, "").trim();
+  if (!trimmed) return null;
+  return toSentenceCase(trimmed).replace(/[.;,:\s]+$/, "");
+}
+
+function parseBulletLines(text: string): string[] {
+  return text
+    .split("\n")
+    .map((line) => normalizeBullet(line))
+    .filter((line): line is string => Boolean(line))
+    .slice(0, 8);
+}
+
+function bulletsToText(bullets: string[] | null | undefined): string {
+  return (bullets ?? []).join("\n");
+}
+
+function inferPreferenceKind(
+  item: Pick<CandidateKnowledgeInboxItem, "kind" | "title" | "summary" | "rawText" | "tags">,
+): GhostwriterWritingPreference["kind"] {
+  const corpus = [item.title, item.summary, item.rawText, ...(item.tags ?? [])]
+    .join(" \n ")
+    .toLowerCase();
+
+  if (/tone|warm|confident|direct|humble|modest|voice|sound/i.test(corpus)) {
+    return "tone";
+  }
+  if (/avoid|do not|don't|never|without|no hype|no fluff|no overclaim/i.test(corpus)) {
+    return "guardrail";
+  }
+  if (/priorit|lead with|emphas|highlight first|focus on/i.test(corpus)) {
+    return "priority";
+  }
+  if (/phrase|wording|say|use phrasing|word choice/i.test(corpus)) {
+    return "phrase";
+  }
+  return item.kind === "preference" ? "positioning" : "positioning";
+}
+
+function inferPreferenceStrength(text: string): GhostwriterWritingPreference["strength"] {
+  return /must|always|never|do not|don't|without exception/i.test(text)
+    ? "strong"
+    : "normal";
+}
+
+function generateProjectCvBullets(input: {
+  name: string;
+  summary: string;
+  impact?: string | null;
+  role?: string | null;
+  keywords?: string[];
+}): string[] {
+  const bullets = [
+    input.role ? `${input.role}: ${input.summary}` : input.summary,
+    input.impact ? `Impact: ${input.impact}` : null,
+    input.keywords?.length
+      ? `Tools / themes: ${input.keywords.slice(0, 5).join(", ")}`
+      : null,
+  ]
+    .map((item) => (typeof item === "string" ? normalizeBullet(item) : null))
+    .filter((item): item is string => Boolean(item));
+
+  return Array.from(new Set(bullets)).slice(0, 4);
+}
+
+function updateInboxItem(
+  items: CandidateKnowledgeInboxItem[],
+  id: string,
+  updater: (item: CandidateKnowledgeInboxItem) => CandidateKnowledgeInboxItem,
+): CandidateKnowledgeInboxItem[] {
+  return items.map((item) => (item.id === id ? updater(item) : item));
+}
+
 function inboxItemToProject(item: CandidateKnowledgeInboxItem): CandidateKnowledgeProject {
   if (item.suggestedProject) {
     return {
@@ -270,6 +352,13 @@ function inboxItemToProject(item: CandidateKnowledgeInboxItem): CandidateKnowled
       keywords: item.suggestedProject.keywords,
       role: item.suggestedProject.role,
       impact: item.suggestedProject.impact,
+      cvBullets: generateProjectCvBullets({
+        name: item.suggestedProject.name,
+        summary: item.suggestedProject.summary,
+        impact: item.suggestedProject.impact,
+        role: item.suggestedProject.role,
+        keywords: item.suggestedProject.keywords,
+      }),
     };
   }
 
@@ -280,6 +369,12 @@ function inboxItemToProject(item: CandidateKnowledgeInboxItem): CandidateKnowled
     keywords: item.tags,
     role: null,
     impact: item.summary,
+    cvBullets: generateProjectCvBullets({
+      name: item.title,
+      summary: item.rawText,
+      impact: item.summary,
+      keywords: item.tags,
+    }),
   };
 }
 
@@ -312,14 +407,13 @@ function inboxItemToPreference(
     };
   }
 
+  const kind = inferPreferenceKind(item);
   return {
     id: createId("preference"),
     label: item.title,
     instruction: item.rawText,
-    kind: item.kind === "preference" ? "guardrail" : "positioning",
-    strength: /avoid|do not|don't|must|always/i.test(item.rawText)
-      ? "strong"
-      : "normal",
+    kind,
+    strength: inferPreferenceStrength(item.rawText),
   };
 }
 
@@ -464,6 +558,7 @@ export const ProfileHubPage: React.FC = () => {
   >([]);
   const [preferences, setPreferences] = useState<PreferenceFormItem[]>([]);
   const [inboxItems, setInboxItems] = useState<CandidateKnowledgeInboxItem[]>([]);
+  const [editingInboxItemId, setEditingInboxItemId] = useState<string | null>(null);
   const [companyResearchNotes, setCompanyResearchNotes] = useState<
     NonNullable<CandidateKnowledgeBase["companyResearchNotes"]>
   >([]);
@@ -515,7 +610,12 @@ export const ProfileHubPage: React.FC = () => {
         detail: item.detail,
       })),
     );
-    setKnowledgeProjects(knowledge.projects ?? []);
+    setKnowledgeProjects(
+      (knowledge.projects ?? []).map((item) => ({
+        ...item,
+        cvBullets: item.cvBullets ?? [],
+      })),
+    );
     setPreferences(knowledge.writingPreferences ?? []);
     setInboxItems(knowledge.inboxItems ?? []);
     setCompanyResearchNotes(knowledge.companyResearchNotes ?? []);
@@ -608,6 +708,9 @@ export const ProfileHubPage: React.FC = () => {
           keywords: item.keywords.map((keyword) => keyword.trim()).filter(Boolean),
           role: item.role?.trim() || null,
           impact: item.impact?.trim() || null,
+          cvBullets: (item.cvBullets ?? [])
+            .map((bullet) => bullet.trim())
+            .filter(Boolean),
         })),
       companyResearchNotes,
       writingPreferences: preferences
@@ -732,7 +835,12 @@ export const ProfileHubPage: React.FC = () => {
             detail: item.detail,
           })),
         );
-        setKnowledgeProjects(parsed.knowledgeBase.projects ?? []);
+        setKnowledgeProjects(
+          (parsed.knowledgeBase.projects ?? []).map((item) => ({
+            ...item,
+            cvBullets: item.cvBullets ?? [],
+          })),
+        );
         setPreferences(parsed.knowledgeBase.writingPreferences ?? []);
         setInboxItems(parsed.knowledgeBase.inboxItems ?? []);
         setCompanyResearchNotes(parsed.knowledgeBase.companyResearchNotes ?? []);
@@ -777,28 +885,44 @@ export const ProfileHubPage: React.FC = () => {
     } else {
       setPreferences((current) => [inboxItemToPreference(item), ...current]);
     }
+    setEditingInboxItemId((current) => (current === item.id ? null : current));
     setInboxItems((current) => updateInboxStatus(current, item.id, "accepted"));
-    toast.success(`Accepted into ${target === "project" ? "evidence projects" : target}`);
+    toast.success(
+      target === "project"
+        ? "Accepted into evidence projects and generated starter CV bullets"
+        : `Accepted into ${target === "fact" ? "fact library" : "writing rules"}`,
+    );
+  };
+
+  const updateInboxDraft = (
+    id: string,
+    updater: (item: CandidateKnowledgeInboxItem) => CandidateKnowledgeInboxItem,
+  ) => {
+    setInboxItems((current) => updateInboxItem(current, id, updater));
   };
 
   const archiveInboxItem = (id: string) => {
+    setEditingInboxItemId((current) => (current === id ? null : current));
     setInboxItems((current) => updateInboxStatus(current, id, "archived"));
   };
 
   const addQuickRule = () => {
     const instruction = quickRule.trim();
     if (!instruction) return;
+    const inferredKind = inferPreferenceKind({
+      kind: "preference",
+      title: firstSentence(instruction).slice(0, 80),
+      summary: instruction,
+      rawText: instruction,
+      tags: [],
+    });
     setPreferences((current) => [
       {
         id: createId("preference"),
         label: firstSentence(instruction).slice(0, 80),
         instruction,
-        kind: /avoid|do not|don't|never|without/i.test(instruction)
-          ? "guardrail"
-          : "positioning",
-        strength: /must|always|never|do not|don't/i.test(instruction)
-          ? "strong"
-          : "normal",
+        kind: inferredKind,
+        strength: inferPreferenceStrength(instruction),
       },
       ...current,
     ]);
@@ -1244,9 +1368,92 @@ export const ProfileHubPage: React.FC = () => {
                             </div>
                           </AccordionTrigger>
                           <AccordionContent className="space-y-4 pb-4">
-                            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-white/70">
-                              {item.rawText}
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-[11px] uppercase tracking-[0.24em] text-white/40">
+                                Raw capture
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() =>
+                                  setEditingInboxItemId((current) =>
+                                    current === item.id ? null : item.id,
+                                  )
+                                }
+                              >
+                                {editingInboxItemId === item.id ? (
+                                  <>
+                                    <X className="mr-2 h-4 w-4" />
+                                    Done editing
+                                  </>
+                                ) : (
+                                  <>
+                                    <PencilLine className="mr-2 h-4 w-4" />
+                                    Inline edit
+                                  </>
+                                )}
+                              </Button>
                             </div>
+                            {editingInboxItemId === item.id ? (
+                              <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                                <Input
+                                  value={item.title}
+                                  onChange={(event) =>
+                                    updateInboxDraft(item.id, (current) => ({
+                                      ...current,
+                                      title: event.target.value,
+                                      updatedAt: new Date().toISOString(),
+                                    }))
+                                  }
+                                  placeholder="Inbox title"
+                                  className="border-white/10 bg-black/20 text-white placeholder:text-white/30"
+                                />
+                                <Textarea
+                                  value={item.summary}
+                                  onChange={(event) =>
+                                    updateInboxDraft(item.id, (current) => ({
+                                      ...current,
+                                      summary: event.target.value,
+                                      updatedAt: new Date().toISOString(),
+                                    }))
+                                  }
+                                  placeholder="Short summary"
+                                  className="min-h-[90px] border-white/10 bg-black/20 text-white placeholder:text-white/30"
+                                />
+                                <Input
+                                  value={item.tags.join(", ")}
+                                  onChange={(event) =>
+                                    updateInboxDraft(item.id, (current) => ({
+                                      ...current,
+                                      tags: event.target.value
+                                        .split(",")
+                                        .map((tag) => tag.trim())
+                                        .filter(Boolean)
+                                        .slice(0, 12),
+                                      updatedAt: new Date().toISOString(),
+                                    }))
+                                  }
+                                  placeholder="Comma-separated tags"
+                                  className="border-white/10 bg-black/20 text-white placeholder:text-white/30"
+                                />
+                                <Textarea
+                                  value={item.rawText}
+                                  onChange={(event) =>
+                                    updateInboxDraft(item.id, (current) => ({
+                                      ...current,
+                                      rawText: event.target.value,
+                                      updatedAt: new Date().toISOString(),
+                                    }))
+                                  }
+                                  placeholder="Raw capture text"
+                                  className="min-h-[120px] border-white/10 bg-black/20 text-white placeholder:text-white/30"
+                                />
+                              </div>
+                            ) : (
+                              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-white/70">
+                                {item.rawText}
+                              </div>
+                            )}
                             <div className="flex flex-wrap gap-2">
                               {item.tags.map((tag) => (
                                 <Badge key={tag} className="border-white/10 bg-white/[0.04] text-white/65">
@@ -1257,40 +1464,236 @@ export const ProfileHubPage: React.FC = () => {
                             {item.suggestedProject ? (
                               <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/5 p-4 text-sm">
                                 <div className="font-medium text-emerald-200">Suggested project</div>
-                                <div className="mt-2 text-white">{item.suggestedProject.name}</div>
-                                <p className="mt-2 leading-6 text-white/70">{item.suggestedProject.summary}</p>
-                                {item.suggestedProject.roleRelevance ? (
-                                  <p className="mt-2 text-white/55">
-                                    <span className="text-white/75">Role relevance:</span> {item.suggestedProject.roleRelevance}
-                                  </p>
-                                ) : null}
-                                {item.suggestedProject.impact ? (
-                                  <p className="mt-1 text-white/55">
-                                    <span className="text-white/75">Impact:</span> {item.suggestedProject.impact}
-                                  </p>
-                                ) : null}
+                                {editingInboxItemId === item.id ? (
+                                  <div className="mt-3 space-y-3">
+                                    <Input
+                                      value={item.suggestedProject.name}
+                                      onChange={(event) =>
+                                        updateInboxDraft(item.id, (current) => ({
+                                          ...current,
+                                          suggestedProject: current.suggestedProject
+                                            ? {
+                                                ...current.suggestedProject,
+                                                name: event.target.value,
+                                              }
+                                            : null,
+                                          updatedAt: new Date().toISOString(),
+                                        }))
+                                      }
+                                      placeholder="Project name"
+                                      className="border-white/10 bg-black/20 text-white placeholder:text-white/30"
+                                    />
+                                    <Textarea
+                                      value={item.suggestedProject.summary}
+                                      onChange={(event) =>
+                                        updateInboxDraft(item.id, (current) => ({
+                                          ...current,
+                                          suggestedProject: current.suggestedProject
+                                            ? {
+                                                ...current.suggestedProject,
+                                                summary: event.target.value,
+                                              }
+                                            : null,
+                                          updatedAt: new Date().toISOString(),
+                                        }))
+                                      }
+                                      placeholder="Project summary"
+                                      className="min-h-[100px] border-white/10 bg-black/20 text-white placeholder:text-white/30"
+                                    />
+                                    <div className="grid gap-3 md:grid-cols-2">
+                                      <Input
+                                        value={item.suggestedProject.role ?? ""}
+                                        onChange={(event) =>
+                                          updateInboxDraft(item.id, (current) => ({
+                                            ...current,
+                                            suggestedProject: current.suggestedProject
+                                              ? {
+                                                  ...current.suggestedProject,
+                                                  role: event.target.value || null,
+                                                }
+                                              : null,
+                                            updatedAt: new Date().toISOString(),
+                                          }))
+                                        }
+                                        placeholder="Role"
+                                        className="border-white/10 bg-black/20 text-white placeholder:text-white/30"
+                                      />
+                                      <Input
+                                        value={item.suggestedProject.keywords.join(", ")}
+                                        onChange={(event) =>
+                                          updateInboxDraft(item.id, (current) => ({
+                                            ...current,
+                                            suggestedProject: current.suggestedProject
+                                              ? {
+                                                  ...current.suggestedProject,
+                                                  keywords: event.target.value
+                                                    .split(",")
+                                                    .map((tag) => tag.trim())
+                                                    .filter(Boolean)
+                                                    .slice(0, 12),
+                                                }
+                                              : null,
+                                            updatedAt: new Date().toISOString(),
+                                          }))
+                                        }
+                                        placeholder="Keywords"
+                                        className="border-white/10 bg-black/20 text-white placeholder:text-white/30"
+                                      />
+                                    </div>
+                                    <Textarea
+                                      value={item.suggestedProject.impact ?? ""}
+                                      onChange={(event) =>
+                                        updateInboxDraft(item.id, (current) => ({
+                                          ...current,
+                                          suggestedProject: current.suggestedProject
+                                            ? {
+                                                ...current.suggestedProject,
+                                                impact: event.target.value || null,
+                                              }
+                                            : null,
+                                          updatedAt: new Date().toISOString(),
+                                        }))
+                                      }
+                                      placeholder="Impact / why it matters"
+                                      className="min-h-[80px] border-white/10 bg-black/20 text-white placeholder:text-white/30"
+                                    />
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="mt-2 text-white">{item.suggestedProject.name}</div>
+                                    <p className="mt-2 leading-6 text-white/70">{item.suggestedProject.summary}</p>
+                                    <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+                                      <div className="text-[11px] uppercase tracking-[0.24em] text-emerald-200/75">
+                                        Starter CV bullets
+                                      </div>
+                                      <ul className="mt-2 space-y-2 text-white/70">
+                                        {generateProjectCvBullets({
+                                          name: item.suggestedProject.name,
+                                          summary: item.suggestedProject.summary,
+                                          impact: item.suggestedProject.impact,
+                                          role: item.suggestedProject.role,
+                                          keywords: item.suggestedProject.keywords,
+                                        }).map((bullet) => (
+                                          <li key={bullet} className="list-disc ml-5">{bullet}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                    {item.suggestedProject.roleRelevance ? (
+                                      <p className="mt-2 text-white/55">
+                                        <span className="text-white/75">Role relevance:</span> {item.suggestedProject.roleRelevance}
+                                      </p>
+                                    ) : null}
+                                    {item.suggestedProject.impact ? (
+                                      <p className="mt-1 text-white/55">
+                                        <span className="text-white/75">Impact:</span> {item.suggestedProject.impact}
+                                      </p>
+                                    ) : null}
+                                  </>
+                                )}
                               </div>
                             ) : null}
                             {item.suggestedFact ? (
                               <div className="rounded-2xl border border-sky-400/20 bg-sky-500/5 p-4 text-sm">
                                 <div className="font-medium text-sky-200">Suggested fact</div>
-                                <div className="mt-2 text-white">{item.suggestedFact.title}</div>
-                                <p className="mt-2 leading-6 text-white/70">{item.suggestedFact.detail}</p>
+                                {editingInboxItemId === item.id ? (
+                                  <div className="mt-3 space-y-3">
+                                    <Input
+                                      value={item.suggestedFact.title}
+                                      onChange={(event) =>
+                                        updateInboxDraft(item.id, (current) => ({
+                                          ...current,
+                                          suggestedFact: current.suggestedFact
+                                            ? {
+                                                ...current.suggestedFact,
+                                                title: event.target.value,
+                                              }
+                                            : null,
+                                          updatedAt: new Date().toISOString(),
+                                        }))
+                                      }
+                                      placeholder="Fact title"
+                                      className="border-white/10 bg-black/20 text-white placeholder:text-white/30"
+                                    />
+                                    <Textarea
+                                      value={item.suggestedFact.detail}
+                                      onChange={(event) =>
+                                        updateInboxDraft(item.id, (current) => ({
+                                          ...current,
+                                          suggestedFact: current.suggestedFact
+                                            ? {
+                                                ...current.suggestedFact,
+                                                detail: event.target.value,
+                                              }
+                                            : null,
+                                          updatedAt: new Date().toISOString(),
+                                        }))
+                                      }
+                                      placeholder="Fact detail"
+                                      className="min-h-[90px] border-white/10 bg-black/20 text-white placeholder:text-white/30"
+                                    />
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="mt-2 text-white">{item.suggestedFact.title}</div>
+                                    <p className="mt-2 leading-6 text-white/70">{item.suggestedFact.detail}</p>
+                                  </>
+                                )}
                               </div>
                             ) : null}
                             {item.suggestedPreference ? (
                               <div className="rounded-2xl border border-violet-400/20 bg-violet-500/5 p-4 text-sm">
                                 <div className="font-medium text-violet-200">Suggested writing rule</div>
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                  <Badge variant="outline" className="border-white/10 text-white/55">
-                                    {item.suggestedPreference.kind}
-                                  </Badge>
-                                  <Badge variant="outline" className="border-white/10 text-white/45">
-                                    {item.suggestedPreference.strength}
-                                  </Badge>
-                                </div>
-                                <div className="mt-2 text-white">{item.suggestedPreference.label}</div>
-                                <p className="mt-2 leading-6 text-white/70">{item.suggestedPreference.instruction}</p>
+                                {editingInboxItemId === item.id ? (
+                                  <div className="mt-3 space-y-3">
+                                    <Input
+                                      value={item.suggestedPreference.label}
+                                      onChange={(event) =>
+                                        updateInboxDraft(item.id, (current) => ({
+                                          ...current,
+                                          suggestedPreference: current.suggestedPreference
+                                            ? {
+                                                ...current.suggestedPreference,
+                                                label: event.target.value,
+                                              }
+                                            : null,
+                                          updatedAt: new Date().toISOString(),
+                                        }))
+                                      }
+                                      placeholder="Rule label"
+                                      className="border-white/10 bg-black/20 text-white placeholder:text-white/30"
+                                    />
+                                    <Textarea
+                                      value={item.suggestedPreference.instruction}
+                                      onChange={(event) =>
+                                        updateInboxDraft(item.id, (current) => ({
+                                          ...current,
+                                          suggestedPreference: current.suggestedPreference
+                                            ? {
+                                                ...current.suggestedPreference,
+                                                instruction: event.target.value,
+                                              }
+                                            : null,
+                                          updatedAt: new Date().toISOString(),
+                                        }))
+                                      }
+                                      placeholder="Rule instruction"
+                                      className="min-h-[90px] border-white/10 bg-black/20 text-white placeholder:text-white/30"
+                                    />
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                      <Badge variant="outline" className="border-white/10 text-white/55">
+                                        {item.suggestedPreference.kind}
+                                      </Badge>
+                                      <Badge variant="outline" className="border-white/10 text-white/45">
+                                        {item.suggestedPreference.strength}
+                                      </Badge>
+                                    </div>
+                                    <div className="mt-2 text-white">{item.suggestedPreference.label}</div>
+                                    <p className="mt-2 leading-6 text-white/70">{item.suggestedPreference.instruction}</p>
+                                  </>
+                                )}
                               </div>
                             ) : null}
                             <div className="flex flex-wrap gap-2">
@@ -1445,6 +1848,58 @@ export const ProfileHubPage: React.FC = () => {
                             className="border-white/10 bg-white/[0.03] text-white placeholder:text-white/30"
                           />
                         </div>
+                        <div className="mt-3 rounded-2xl border border-emerald-400/15 bg-emerald-500/5 p-3">
+                          <div className="mb-2 flex items-center justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-medium text-emerald-200">Starter CV bullets</div>
+                              <div className="text-xs text-white/45">
+                                Auto-generated on accept, then editable here.
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                setKnowledgeProjects((current) =>
+                                  current.map((item) =>
+                                    item.id === project.id
+                                      ? {
+                                          ...item,
+                                          cvBullets: generateProjectCvBullets({
+                                            name: item.name,
+                                            summary: item.summary,
+                                            impact: item.impact,
+                                            role: item.role,
+                                            keywords: item.keywords,
+                                          }),
+                                        }
+                                      : item,
+                                  ),
+                                )
+                              }
+                            >
+                              <Wand2 className="mr-2 h-4 w-4" />
+                              Refresh bullets
+                            </Button>
+                          </div>
+                          <Textarea
+                            value={bulletsToText(project.cvBullets)}
+                            onChange={(event) =>
+                              setKnowledgeProjects((current) =>
+                                current.map((item) =>
+                                  item.id === project.id
+                                    ? {
+                                        ...item,
+                                        cvBullets: parseBulletLines(event.target.value),
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                            placeholder="One bullet per line"
+                            className="min-h-[120px] border-white/10 bg-black/20 text-white placeholder:text-white/30"
+                          />
+                        </div>
                       </div>
                     ))}
                     <Button
@@ -1458,6 +1913,7 @@ export const ProfileHubPage: React.FC = () => {
                             keywords: [],
                             role: null,
                             impact: null,
+                            cvBullets: [],
                           },
                           ...current,
                         ])
