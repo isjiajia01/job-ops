@@ -215,9 +215,9 @@ export async function downloadCoverLetterPdfForJob(
   jobId: string,
 ): Promise<void> {
   const [job, profile, data] = await Promise.all([
-    api.getJob(jobId),
+    api.getApplication(jobId),
     api.getProfile().catch(() => null),
-    api.listJobGhostwriterMessages(jobId, { limit: 100 }),
+    api.listApplicationGhostwriterMessages(jobId, { limit: 100 }),
   ]);
 
   const latestAssistant = [...data.messages]

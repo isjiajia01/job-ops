@@ -379,6 +379,29 @@ export async function getJobs(options?: {
   );
 }
 
+export function getApplications(): Promise<JobsListResponse<JobListItem>>;
+export function getApplications(options: {
+  statuses?: string[];
+  view?: "list";
+}): Promise<JobsListResponse<JobListItem>>;
+export function getApplications(options?: {
+  statuses?: string[];
+  view: "full";
+}): Promise<JobsListResponse<Job>>;
+export async function getApplications(options?: {
+  statuses?: string[];
+  view?: "full" | "list";
+}): Promise<JobsListResponse<Job> | JobsListResponse<JobListItem>> {
+  const params = new URLSearchParams();
+  if (options?.statuses?.length)
+    params.set("status", options.statuses.join(","));
+  if (options?.view) params.set("view", options.view);
+  const query = params.toString();
+  return fetchApi<JobsListResponse<Job> | JobsListResponse<JobListItem>>(
+    `/applications${query ? `?${query}` : ""}`,
+  );
+}
+
 export async function getJobsRevision(options?: {
   statuses?: string[];
 }): Promise<JobsRevisionResponse> {
@@ -395,11 +418,25 @@ export async function getJob(id: string): Promise<Job> {
   return fetchApi<Job>(`/jobs/${id}?t=${Date.now()}`);
 }
 
+export async function getApplication(id: string): Promise<Job> {
+  return fetchApi<Job>(`/applications/${id}?t=${Date.now()}`);
+}
+
 export async function updateJob(
   id: string,
   update: Partial<Job>,
 ): Promise<Job> {
   return fetchApi<Job>(`/jobs/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(update),
+  });
+}
+
+export async function updateApplication(
+  id: string,
+  update: Partial<Job>,
+): Promise<Job> {
+  return fetchApi<Job>(`/applications/${id}`, {
     method: "PATCH",
     body: JSON.stringify(update),
   });
@@ -575,6 +612,23 @@ export async function listJobGhostwriterMessages(
   );
 }
 
+export async function listApplicationGhostwriterMessages(
+  applicationId: string,
+  options?: { limit?: number; offset?: number },
+): Promise<{ messages: JobChatMessage[]; branches: BranchInfo[] }> {
+  const params = new URLSearchParams();
+  if (typeof options?.limit === "number") {
+    params.set("limit", String(options.limit));
+  }
+  if (typeof options?.offset === "number") {
+    params.set("offset", String(options.offset));
+  }
+  const query = params.toString();
+  return fetchApi<{ messages: JobChatMessage[]; branches: BranchInfo[] }>(
+    `/applications/${applicationId}/chat/messages${query ? `?${query}` : ""}`,
+  );
+}
+
 export async function createJobChatThread(
   jobId: string,
   input?: { title?: string | null },
@@ -659,6 +713,23 @@ export async function streamJobGhostwriterMessage(
   );
 }
 
+export async function streamApplicationGhostwriterMessage(
+  applicationId: string,
+  input: { content: string; signal?: AbortSignal },
+  handlers: {
+    onEvent: (event: JobChatStreamEvent) => void;
+  },
+): Promise<void> {
+  return streamSseEvents(
+    `/applications/${applicationId}/chat/messages`,
+    { content: input.content, stream: true },
+    {
+      onEvent: handlers.onEvent,
+      signal: input.signal,
+    },
+  );
+}
+
 export async function sendJobGhostwriterMessage(
   jobId: string,
   input: { content: string; signal?: AbortSignal },
@@ -716,12 +787,37 @@ export async function resetJobGhostwriterConversation(
   );
 }
 
+export async function resetApplicationGhostwriterConversation(
+  applicationId: string,
+): Promise<{ deletedMessages: number; deletedRuns: number }> {
+  return fetchApi<{ deletedMessages: number; deletedRuns: number }>(
+    `/applications/${applicationId}/chat/reset`,
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+    },
+  );
+}
+
 export async function cancelJobGhostwriterRun(
   jobId: string,
   runId: string,
 ): Promise<{ cancelled: boolean; alreadyFinished: boolean }> {
   return fetchApi<{ cancelled: boolean; alreadyFinished: boolean }>(
     `/jobs/${jobId}/chat/runs/${runId}/cancel`,
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+    },
+  );
+}
+
+export async function cancelApplicationGhostwriterRun(
+  applicationId: string,
+  runId: string,
+): Promise<{ cancelled: boolean; alreadyFinished: boolean }> {
+  return fetchApi<{ cancelled: boolean; alreadyFinished: boolean }>(
+    `/applications/${applicationId}/chat/runs/${runId}/cancel`,
     {
       method: "POST",
       body: JSON.stringify({}),
@@ -780,6 +876,24 @@ export async function streamRegenerateJobGhostwriterMessage(
   );
 }
 
+export async function streamRegenerateApplicationGhostwriterMessage(
+  applicationId: string,
+  assistantMessageId: string,
+  input: { signal?: AbortSignal },
+  handlers: {
+    onEvent: (event: JobChatStreamEvent) => void;
+  },
+): Promise<void> {
+  return streamSseEvents(
+    `/applications/${applicationId}/chat/messages/${assistantMessageId}/regenerate`,
+    { stream: true },
+    {
+      onEvent: handlers.onEvent,
+      signal: input.signal,
+    },
+  );
+}
+
 export async function editJobGhostwriterMessage(
   jobId: string,
   messageId: string,
@@ -798,12 +912,43 @@ export async function editJobGhostwriterMessage(
   );
 }
 
+export async function editApplicationGhostwriterMessage(
+  applicationId: string,
+  messageId: string,
+  input: { content: string; signal?: AbortSignal },
+  handlers: {
+    onEvent: (event: JobChatStreamEvent) => void;
+  },
+): Promise<void> {
+  return streamSseEvents(
+    `/applications/${applicationId}/chat/messages/${messageId}/edit`,
+    { content: input.content, stream: true },
+    {
+      onEvent: handlers.onEvent,
+      signal: input.signal,
+    },
+  );
+}
+
 export async function switchJobGhostwriterBranch(
   jobId: string,
   messageId: string,
 ): Promise<{ messages: JobChatMessage[]; branches: BranchInfo[] }> {
   return fetchApi<{ messages: JobChatMessage[]; branches: BranchInfo[] }>(
     `/jobs/${jobId}/chat/messages/${messageId}/switch-branch`,
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+    },
+  );
+}
+
+export async function switchApplicationGhostwriterBranch(
+  applicationId: string,
+  messageId: string,
+): Promise<{ messages: JobChatMessage[]; branches: BranchInfo[] }> {
+  return fetchApi<{ messages: JobChatMessage[]; branches: BranchInfo[] }>(
+    `/applications/${applicationId}/chat/messages/${messageId}/switch-branch`,
     {
       method: "POST",
       body: JSON.stringify({}),
@@ -943,6 +1088,12 @@ export async function getJobStageEvents(id: string): Promise<StageEvent[]> {
   return fetchApi<StageEvent[]>(`/jobs/${id}/events?t=${Date.now()}`);
 }
 
+export async function getApplicationStageEvents(
+  id: string,
+): Promise<StageEvent[]> {
+  return fetchApi<StageEvent[]>(`/applications/${id}/events?t=${Date.now()}`);
+}
+
 export async function getJobTasks(
   id: string,
   options?: { includeCompleted?: boolean },
@@ -952,6 +1103,17 @@ export async function getJobTasks(
   params.set("t", Date.now().toString());
   const query = params.toString();
   return fetchApi<ApplicationTask[]>(`/jobs/${id}/tasks?${query}`);
+}
+
+export async function getApplicationTasks(
+  id: string,
+  options?: { includeCompleted?: boolean },
+): Promise<ApplicationTask[]> {
+  const params = new URLSearchParams();
+  if (options?.includeCompleted) params.set("includeCompleted", "1");
+  params.set("t", Date.now().toString());
+  const query = params.toString();
+  return fetchApi<ApplicationTask[]>(`/applications/${id}/tasks?${query}`);
 }
 
 export async function transitionJobStage(
@@ -964,6 +1126,21 @@ export async function transitionJobStage(
   },
 ): Promise<StageEvent> {
   return fetchApi<StageEvent>(`/jobs/${id}/stages`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function transitionApplicationStage(
+  id: string,
+  input: {
+    toStage: StageTransitionTarget;
+    occurredAt?: number | null;
+    metadata?: StageEventMetadata | null;
+    outcome?: JobOutcome | null;
+  },
+): Promise<StageEvent> {
+  return fetchApi<StageEvent>(`/applications/${id}/stages`, {
     method: "POST",
     body: JSON.stringify(input),
   });
@@ -985,11 +1162,36 @@ export async function updateJobStageEvent(
   });
 }
 
+export async function updateApplicationStageEvent(
+  id: string,
+  eventId: string,
+  input: {
+    toStage?: ApplicationStage;
+    occurredAt?: number | null;
+    metadata?: StageEventMetadata | null;
+    outcome?: JobOutcome | null;
+  },
+): Promise<void> {
+  return fetchApi<void>(`/applications/${id}/events/${eventId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
 export async function deleteJobStageEvent(
   id: string,
   eventId: string,
 ): Promise<void> {
   return fetchApi<void>(`/jobs/${id}/events/${eventId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function deleteApplicationStageEvent(
+  id: string,
+  eventId: string,
+): Promise<void> {
+  return fetchApi<void>(`/applications/${id}/events/${eventId}`, {
     method: "DELETE",
   });
 }
@@ -1289,6 +1491,15 @@ export async function fetchJobFromUrl(input: {
   });
 }
 
+export async function fetchApplicationSourceFromUrl(input: {
+  url: string;
+}): Promise<ManualJobFetchResponse> {
+  return fetchApi<ManualJobFetchResponse>("/applications/intake/fetch", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export async function inferManualJob(input: {
   jobDescription: string;
 }): Promise<ManualJobInferenceResponse> {
@@ -1298,10 +1509,28 @@ export async function inferManualJob(input: {
   });
 }
 
+export async function inferApplicationFromJd(input: {
+  jobDescription: string;
+}): Promise<ManualJobInferenceResponse> {
+  return fetchApi<ManualJobInferenceResponse>("/applications/intake/infer", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export async function importManualJob(input: {
   job: ManualJobDraft;
 }): Promise<Job> {
   return fetchApi<Job>("/manual-jobs/import", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function createApplicationFromDraft(input: {
+  job: ManualJobDraft;
+}): Promise<Job> {
+  return fetchApi<Job>("/applications/intake/import", {
     method: "POST",
     body: JSON.stringify(input),
   });

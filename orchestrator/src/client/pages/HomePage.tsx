@@ -7,7 +7,11 @@ import {
   ResponseRateBySourceChart,
 } from "@client/components/charts";
 import { PageHeader, PageMain } from "@client/components/layout";
-import type { JobSource, StageEvent } from "@shared/types.js";
+import type {
+  ApplicationListItem,
+  JobSource,
+  StageEvent,
+} from "@shared/types.js";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChartColumn } from "lucide-react";
 import type React from "react";
@@ -44,17 +48,17 @@ export const HomePage: React.FC = () => {
   const [duration, setDuration] = useState<DurationValue>(initialDuration);
 
   const overviewQuery = useQuery({
-    queryKey: queryKeys.jobs.list({
+    queryKey: queryKeys.applications.list({
       statuses: ["applied", "in_progress"],
       view: "list",
     }),
     queryFn: async () => {
-      const response = await api.getJobs({
+      const response = await api.getApplications({
         statuses: ["applied", "in_progress"],
         view: "list",
       });
       const appliedDates = response.jobs.map((job) => job.appliedAt);
-      const jobSummaries = response.jobs.map((job) => ({
+      const jobSummaries = response.jobs.map((job: ApplicationListItem) => ({
         id: job.id,
         source: job.source,
         datePosted: job.datePosted,
@@ -66,8 +70,8 @@ export const HomePage: React.FC = () => {
       const results = await Promise.allSettled(
         appliedJobs.map((job) =>
           queryClient.fetchQuery({
-            queryKey: queryKeys.jobs.stageEvents(job.id),
-            queryFn: () => api.getJobStageEvents(job.id),
+            queryKey: queryKeys.applications.stageEvents(job.id),
+            queryFn: () => api.getApplicationStageEvents(job.id),
             staleTime: 0,
           }),
         ),

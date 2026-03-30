@@ -1,5 +1,5 @@
 import { useSettings } from "@client/hooks/useSettings";
-import type { Job } from "@shared/types.js";
+import type { Application } from "@shared/types.js";
 import {
   ChevronUp,
   Edit2,
@@ -19,14 +19,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
-import { FitAssessment, JobHeader, TailoredSummary } from "..";
+import { ApplicationHeader, FitAssessment, TailoredSummary } from "..";
 import { KbdHint } from "../KbdHint";
 import { OpenJobListingButton } from "../OpenJobListingButton";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { getRenderableJobDescription } from "./helpers";
 
 interface DecideModeProps {
-  job: Job;
+  job: Application;
   onTailor: () => void;
   onSkip: () => void;
   isSkipping: boolean;
@@ -58,7 +58,7 @@ export const DecideMode: React.FC<DecideModeProps> = ({
   return (
     <div className="flex flex-col h-full">
       <div className="space-y-4 pb-4">
-        <JobHeader job={job} onCheckSponsor={onCheckSponsor} />
+        <ApplicationHeader job={job} onCheckSponsor={onCheckSponsor} />
 
         <div className="flex flex-col gap-2.5 pt-2 sm:flex-row">
           {jobLink ? (
@@ -79,7 +79,7 @@ export const DecideMode: React.FC<DecideModeProps> = ({
             ) : (
               <XCircle className="mr-2 h-4 w-4" />
             )}
-            Skip Job
+            Skip Application
             <KbdHint shortcut="s" className="ml-1.5" />
           </Button>
           <Button

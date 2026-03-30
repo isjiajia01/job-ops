@@ -1,12 +1,12 @@
 import * as api from "@client/api";
-import { useSkipJobMutation } from "@client/hooks/queries/useJobMutations";
-import { useRescoreJob } from "@client/hooks/useRescoreJob";
-import type { Job } from "@shared/types.js";
+import { useSkipApplicationMutation } from "@client/hooks/queries/useApplicationMutations";
+import { useRescoreApplication } from "@client/hooks/useRescoreApplication";
+import type { Application } from "@shared/types.js";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { trackProductEvent } from "@/lib/analytics";
-import { JobDetailsEditDrawer } from "../JobDetailsEditDrawer";
+import { ApplicationDetailsEditDrawer } from "../ApplicationDetailsEditDrawer";
 import { DecideMode } from "./DecideMode";
 import { EmptyState } from "./EmptyState";
 import { ProcessingState } from "./ProcessingState";
@@ -15,7 +15,7 @@ import { TailorMode } from "./TailorMode";
 type PanelMode = "decide" | "tailor";
 
 interface DiscoveredPanelProps {
-  job: Job | null;
+  job: Application | null;
   onJobUpdated: () => void | Promise<void>;
   onJobMoved: (jobId: string) => void;
   onTailoringDirtyChange?: (isDirty: boolean) => void;
@@ -32,8 +32,9 @@ export const DiscoveredPanel: React.FC<DiscoveredPanelProps> = ({
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false);
   const previousJobIdRef = useRef<string | null>(null);
-  const skipJobMutation = useSkipJobMutation();
-  const { isRescoring, rescoreJob } = useRescoreJob(onJobUpdated);
+  const skipJobMutation = useSkipApplicationMutation();
+  const { isRescoring, rescoreApplication } =
+    useRescoreApplication(onJobUpdated);
 
   useEffect(() => {
     const currentJobId = job?.id ?? null;
@@ -118,7 +119,7 @@ export const DiscoveredPanel: React.FC<DiscoveredPanelProps> = ({
     }
   };
 
-  const handleRescore = () => rescoreJob(job?.id);
+  const handleRescore = () => rescoreApplication(job?.id);
 
   if (!job) {
     return <EmptyState />;
@@ -168,11 +169,11 @@ export const DiscoveredPanel: React.FC<DiscoveredPanelProps> = ({
         />
       )}
 
-      <JobDetailsEditDrawer
+      <ApplicationDetailsEditDrawer
         open={isEditDetailsOpen}
         onOpenChange={setIsEditDetailsOpen}
-        job={job}
-        onJobUpdated={onJobUpdated}
+        application={job}
+        onApplicationUpdated={onJobUpdated}
       />
     </div>
   );

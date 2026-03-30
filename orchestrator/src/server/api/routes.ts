@@ -22,13 +22,16 @@ import { webhookRouter } from "./routes/webhook";
 export const apiRouter = Router();
 
 apiRouter.use("/jobs", jobsRouter);
+apiRouter.use("/applications", jobsRouter);
 apiRouter.use("/jobs/:id/chat", ghostwriterRouter);
+apiRouter.use("/applications/:id/chat", ghostwriterRouter);
 apiRouter.use("/demo", demoRouter);
 apiRouter.use("/settings", settingsRouter);
 apiRouter.use("/pipeline", pipelineRouter);
 apiRouter.use("/post-application", postApplicationProvidersRouter);
 apiRouter.use("/post-application", postApplicationReviewRouter);
 apiRouter.use("/manual-jobs", manualJobsRouter);
+apiRouter.use("/applications/intake", manualJobsRouter);
 apiRouter.use("/webhook", webhookRouter);
 apiRouter.use("/profile", profileRouter);
 apiRouter.use("/database", databaseRouter);

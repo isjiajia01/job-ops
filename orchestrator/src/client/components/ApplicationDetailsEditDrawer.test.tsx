@@ -1,12 +1,12 @@
 import { createJob } from "@shared/testing/factories.js";
-import type { Job } from "@shared/types.js";
+import type { Application } from "@shared/types.js";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import type React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api";
 import { _resetTracerReadinessCache } from "../hooks/useTracerReadiness";
 import { renderWithQueryClient } from "../test/renderWithQueryClient";
-import { JobDetailsEditDrawer } from "./JobDetailsEditDrawer";
+import { ApplicationDetailsEditDrawer } from "./ApplicationDetailsEditDrawer";
 
 const render = (ui: Parameters<typeof renderWithQueryClient>[0]) =>
   renderWithQueryClient(ui);
@@ -29,7 +29,7 @@ vi.mock("@/components/ui/sheet", () => ({
 }));
 
 vi.mock("../api", () => ({
-  updateJob: vi.fn(),
+  updateApplication: vi.fn(),
   checkSponsor: vi.fn(),
   rescoreJob: vi.fn(),
   getTracerReadiness: vi.fn(),
@@ -42,7 +42,7 @@ vi.mock("sonner", () => ({
   },
 }));
 
-describe("JobDetailsEditDrawer", () => {
+describe("ApplicationDetailsEditDrawer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     _resetTracerReadinessCache();
@@ -58,17 +58,17 @@ describe("JobDetailsEditDrawer", () => {
   });
 
   it("saves details and reruns sponsor check when employer changes", async () => {
-    const onJobUpdated = vi.fn().mockResolvedValue(undefined);
+    const onApplicationUpdated = vi.fn().mockResolvedValue(undefined);
     const onOpenChange = vi.fn();
-    vi.mocked(api.updateJob).mockResolvedValue({} as Job);
-    vi.mocked(api.checkSponsor).mockResolvedValue({} as Job);
+    vi.mocked(api.updateApplication).mockResolvedValue({} as Application);
+    vi.mocked(api.checkSponsor).mockResolvedValue({} as Application);
 
     render(
-      <JobDetailsEditDrawer
+      <ApplicationDetailsEditDrawer
         open
         onOpenChange={onOpenChange}
-        job={createJob()}
-        onJobUpdated={onJobUpdated}
+        application={createJob()}
+        onApplicationUpdated={onApplicationUpdated}
       />,
     );
 
@@ -79,7 +79,7 @@ describe("JobDetailsEditDrawer", () => {
     fireEvent.click(screen.getByRole("button", { name: /save details/i }));
 
     await waitFor(() =>
-      expect(api.updateJob).toHaveBeenCalledWith(
+      expect(api.updateApplication).toHaveBeenCalledWith(
         "job-1",
         expect.objectContaining({
           employer: "NewCo",
@@ -88,20 +88,20 @@ describe("JobDetailsEditDrawer", () => {
       ),
     );
     expect(api.checkSponsor).toHaveBeenCalledWith("job-1");
-    expect(onJobUpdated).toHaveBeenCalledTimes(1);
+    expect(onApplicationUpdated).toHaveBeenCalledTimes(1);
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
   it("validates required fields before saving", async () => {
-    const onJobUpdated = vi.fn().mockResolvedValue(undefined);
+    const onApplicationUpdated = vi.fn().mockResolvedValue(undefined);
     const onOpenChange = vi.fn();
 
     render(
-      <JobDetailsEditDrawer
+      <ApplicationDetailsEditDrawer
         open
         onOpenChange={onOpenChange}
-        job={createJob()}
-        onJobUpdated={onJobUpdated}
+        application={createJob()}
+        onApplicationUpdated={onApplicationUpdated}
       />,
     );
 
@@ -112,23 +112,23 @@ describe("JobDetailsEditDrawer", () => {
     fireEvent.click(screen.getByRole("button", { name: /save details/i }));
 
     expect(await screen.findByText("Title is required.")).toBeInTheDocument();
-    expect(api.updateJob).not.toHaveBeenCalled();
-    expect(onJobUpdated).not.toHaveBeenCalled();
+    expect(api.updateApplication).not.toHaveBeenCalled();
+    expect(onApplicationUpdated).not.toHaveBeenCalled();
   });
 
   it("offers a rescore action after successful save", async () => {
-    const onJobUpdated = vi.fn().mockResolvedValue(undefined);
+    const onApplicationUpdated = vi.fn().mockResolvedValue(undefined);
     const onOpenChange = vi.fn();
     const { toast } = await import("sonner");
-    vi.mocked(api.updateJob).mockResolvedValue({} as Job);
-    vi.mocked(api.rescoreJob).mockResolvedValue({} as Job);
+    vi.mocked(api.updateApplication).mockResolvedValue({} as Application);
+    vi.mocked(api.rescoreJob).mockResolvedValue({} as Application);
 
     render(
-      <JobDetailsEditDrawer
+      <ApplicationDetailsEditDrawer
         open
         onOpenChange={onOpenChange}
-        job={createJob()}
-        onJobUpdated={onJobUpdated}
+        application={createJob()}
+        onApplicationUpdated={onApplicationUpdated}
       />,
     );
 
@@ -139,46 +139,46 @@ describe("JobDetailsEditDrawer", () => {
 
     await waitFor(() =>
       expect(vi.mocked(toast.success)).toHaveBeenCalledWith(
-        "Job details updated",
+        "Application details updated",
         expect.any(Object),
       ),
     );
 
     const successCalls = vi.mocked(toast.success).mock.calls;
     const [, payload] =
-      successCalls.find((call) => call[0] === "Job details updated") ?? [];
+      successCalls.find((call) => call[0] === "Application details updated") ?? [];
     expect(payload).toBeTruthy();
 
     (payload as { action?: { onClick?: () => void } }).action?.onClick?.();
 
     await waitFor(() => expect(api.rescoreJob).toHaveBeenCalledWith("job-1"));
-    expect(onJobUpdated).toHaveBeenCalledTimes(2);
+    expect(onApplicationUpdated).toHaveBeenCalledTimes(2);
   });
 
   it("persists tracer-links toggle with job updates", async () => {
-    const onJobUpdated = vi.fn().mockResolvedValue(undefined);
+    const onApplicationUpdated = vi.fn().mockResolvedValue(undefined);
     const onOpenChange = vi.fn();
-    vi.mocked(api.updateJob).mockResolvedValue({} as Job);
+    vi.mocked(api.updateApplication).mockResolvedValue({} as Application);
 
     render(
-      <JobDetailsEditDrawer
+      <ApplicationDetailsEditDrawer
         open
         onOpenChange={onOpenChange}
-        job={createJob({ tracerLinksEnabled: false })}
-        onJobUpdated={onJobUpdated}
+        application={createJob({ tracerLinksEnabled: false })}
+        onApplicationUpdated={onApplicationUpdated}
       />,
     );
 
     await waitFor(() => expect(api.getTracerReadiness).toHaveBeenCalled());
     const tracerToggle = await screen.findByRole("checkbox", {
-      name: "Enable tracer links for this job",
+      name: "Enable tracer links for this application",
     });
     await waitFor(() => expect(tracerToggle).toBeEnabled());
     fireEvent.click(tracerToggle);
     fireEvent.click(screen.getByRole("button", { name: /save details/i }));
 
     await waitFor(() =>
-      expect(api.updateJob).toHaveBeenCalledWith(
+      expect(api.updateApplication).toHaveBeenCalledWith(
         "job-1",
         expect.objectContaining({
           tracerLinksEnabled: true,

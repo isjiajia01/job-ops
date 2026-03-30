@@ -42,6 +42,19 @@ export const queryKeys = {
       [...queryKeys.jobs.all, "stage-events", id] as const,
     tasks: (id: string) => [...queryKeys.jobs.all, "tasks", id] as const,
   },
+  applications: {
+    all: ["applications"] as const,
+    list: (options?: { statuses?: JobStatus[]; view?: "list" | "full" }) =>
+      [...queryKeys.applications.all, "list", options ?? {}] as const,
+    detail: (id: string) =>
+      [...queryKeys.applications.all, "detail", id] as const,
+    stageEvents: (id: string) =>
+      [...queryKeys.applications.all, "stage-events", id] as const,
+    tasks: (id: string) =>
+      [...queryKeys.applications.all, "tasks", id] as const,
+    ghostwriter: (id: string) =>
+      [...queryKeys.applications.all, "ghostwriter", id] as const,
+  },
   pipeline: {
     all: ["pipeline"] as const,
     status: () => [...queryKeys.pipeline.all, "status"] as const,

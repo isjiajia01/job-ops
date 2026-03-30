@@ -94,16 +94,19 @@ export const InProgressBoardPage: React.FC = () => {
   >("updated");
 
   const boardQuery = useQuery({
-    queryKey: queryKeys.jobs.inProgressBoard(),
+    queryKey: queryKeys.applications.list({
+      statuses: ["in_progress"],
+      view: "list",
+    }),
     queryFn: async () => {
-      const response = await api.getJobs({
+      const response = await api.getApplications({
         statuses: ["in_progress"],
         view: "list",
       });
 
       const jobs = response.jobs;
       const eventResults = await Promise.allSettled(
-        jobs.map((job) => api.getJobStageEvents(job.id)),
+        jobs.map((job) => api.getApplicationStageEvents(job.id)),
       );
 
       return jobs.map((job, index) => {
@@ -130,7 +133,7 @@ export const InProgressBoardPage: React.FC = () => {
       jobId: string;
       toStage: ApplicationStage;
     }) =>
-      api.transitionJobStage(jobId, {
+      api.transitionApplicationStage(jobId, {
         toStage,
         metadata: {
           actor: "user",
@@ -249,7 +252,7 @@ export const InProgressBoardPage: React.FC = () => {
             <Button
               size="sm"
               className="h-8 gap-1.5 text-xs"
-              onClick={() => navigate("/jobs/ready")}
+              onClick={() => navigate("/applications")}
             >
               <Plus className="h-3.5 w-3.5" />
               Add
@@ -316,7 +319,7 @@ export const InProgressBoardPage: React.FC = () => {
                         laneCards.map(({ job, latestEventAt, stage }) => (
                           <Link
                             key={job.id}
-                            to={`/job/${job.id}`}
+                            to={`/applications/${job.id}`}
                             draggable={movingJobId !== job.id}
                             onDragStart={(event) => {
                               setDragging({ jobId: job.id, fromStage: stage });

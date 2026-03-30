@@ -11,9 +11,9 @@ const render = (ui: Parameters<typeof renderWithQueryClient>[0]) =>
   renderWithQueryClient(ui);
 
 vi.mock("../api", () => ({
-  getJobs: vi.fn(),
-  getJobStageEvents: vi.fn(),
-  transitionJobStage: vi.fn(),
+  getApplications: vi.fn(),
+  getApplicationStageEvents: vi.fn(),
+  transitionApplicationStage: vi.fn(),
 }));
 
 vi.mock("sonner", () => ({
@@ -66,7 +66,7 @@ const makeEvent = (overrides: Partial<StageEvent>): StageEvent => ({
 beforeEach(() => {
   vi.clearAllMocks();
 
-  vi.mocked(api.getJobs).mockResolvedValue({
+  vi.mocked(api.getApplications).mockResolvedValue({
     jobs: [makeJob({})],
     total: 1,
     byStatus: {
@@ -79,9 +79,9 @@ beforeEach(() => {
       expired: 0,
     },
     revision: "r1",
-  } as Awaited<ReturnType<typeof api.getJobs>>);
-  vi.mocked(api.getJobStageEvents).mockResolvedValue([makeEvent({})]);
-  vi.mocked(api.transitionJobStage).mockResolvedValue(
+  } as Awaited<ReturnType<typeof api.getApplications>>);
+  vi.mocked(api.getApplicationStageEvents).mockResolvedValue([makeEvent({})]);
+  vi.mocked(api.transitionApplicationStage).mockResolvedValue(
     makeEvent({ toStage: "offer", title: "Offer" }),
   );
 });
@@ -95,7 +95,7 @@ describe("InProgressBoardPage", () => {
     );
 
     await waitFor(() => {
-      expect(api.getJobs).toHaveBeenCalledWith({
+      expect(api.getApplications).toHaveBeenCalledWith({
         statuses: ["in_progress"],
         view: "list",
       });
@@ -105,7 +105,7 @@ describe("InProgressBoardPage", () => {
   });
 
   it("shows cards even when no stage events are present", async () => {
-    vi.mocked(api.getJobStageEvents).mockResolvedValue([]);
+    vi.mocked(api.getApplicationStageEvents).mockResolvedValue([]);
 
     render(
       <MemoryRouter>
@@ -140,7 +140,7 @@ describe("InProgressBoardPage", () => {
     fireEvent.drop(offerLane);
 
     await waitFor(() => {
-      expect(api.transitionJobStage).toHaveBeenCalledWith("job-1", {
+      expect(api.transitionApplicationStage).toHaveBeenCalledWith("job-1", {
         toStage: "offer",
         metadata: {
           actor: "user",
@@ -152,7 +152,7 @@ describe("InProgressBoardPage", () => {
   });
 
   it("surfaces load errors", async () => {
-    vi.mocked(api.getJobs).mockRejectedValue(new Error("Failed to load board"));
+    vi.mocked(api.getApplications).mockRejectedValue(new Error("Failed to load board"));
 
     render(
       <MemoryRouter>

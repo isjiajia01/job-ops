@@ -266,8 +266,8 @@ vi.mock("./orchestrator/OrchestratorFilters", () => ({
   ),
 }));
 
-vi.mock("./orchestrator/JobDetailPanel", () => ({
-  JobDetailPanel: () => <div data-testid="detail-panel" />,
+vi.mock("./legacy/LegacyJobDetailPanel", () => ({
+  LegacyJobDetailPanel: () => <div data-testid="detail-panel" />,
 }));
 
 vi.mock("./orchestrator/JobListPanel", () => ({
@@ -420,11 +420,11 @@ describe("OrchestratorPage", () => {
     ) as unknown as typeof window.matchMedia;
 
     render(
-      <MemoryRouter initialEntries={["/jobs/all"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/all"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -440,10 +440,10 @@ describe("OrchestratorPage", () => {
     ) as unknown as typeof window.matchMedia;
 
     render(
-      <MemoryRouter initialEntries={["/jobs/ready"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -461,11 +461,11 @@ describe("OrchestratorPage", () => {
     ) as unknown as typeof window.matchMedia;
 
     render(
-      <MemoryRouter initialEntries={["/jobs/all"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/all"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -490,11 +490,11 @@ describe("OrchestratorPage", () => {
     ) as unknown as typeof window.matchMedia;
 
     const { rerender } = render(
-      <MemoryRouter initialEntries={["/jobs/ready/job-1"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready/job-1"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -507,11 +507,11 @@ describe("OrchestratorPage", () => {
     mockSelectedJob = null;
 
     rerender(
-      <MemoryRouter initialEntries={["/jobs/ready/job-1"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready/job-1"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -527,10 +527,10 @@ describe("OrchestratorPage", () => {
     ) as unknown as typeof window.matchMedia;
 
     render(
-      <MemoryRouter initialEntries={["/jobs/ready"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -550,13 +550,13 @@ describe("OrchestratorPage", () => {
     render(
       <MemoryRouter
         initialEntries={[
-          "/jobs/ready?source=linkedin&sponsor=confirmed&salaryMode=between&salaryMin=60000&salaryMax=90000&q=backend&sort=title-asc",
+          "/legacy/jobs/ready?source=linkedin&sponsor=confirmed&salaryMode=between&salaryMin=60000&salaryMax=90000&q=backend&sort=title-asc",
         ]}
       >
         <LocationWatcher />
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -582,11 +582,11 @@ describe("OrchestratorPage", () => {
     ) as unknown as typeof window.matchMedia;
 
     render(
-      <MemoryRouter initialEntries={["/jobs/ready?q=backend&sort=title-asc"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready?q=backend&sort=title-asc"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -604,11 +604,11 @@ describe("OrchestratorPage", () => {
     ) as unknown as typeof window.matchMedia;
 
     render(
-      <MemoryRouter initialEntries={["/jobs/all"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/all"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -625,11 +625,11 @@ describe("OrchestratorPage", () => {
     ) as unknown as typeof window.matchMedia;
 
     render(
-      <MemoryRouter initialEntries={["/jobs/all"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/all"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -676,10 +676,10 @@ describe("OrchestratorPage", () => {
     ) as unknown as typeof window.matchMedia;
 
     render(
-      <MemoryRouter initialEntries={["/jobs/ready"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -697,10 +697,10 @@ describe("OrchestratorPage", () => {
     ) as unknown as typeof window.matchMedia;
 
     render(
-      <MemoryRouter initialEntries={["/jobs/ready"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -714,10 +714,10 @@ describe("OrchestratorPage", () => {
     ) as unknown as typeof window.matchMedia;
 
     render(
-      <MemoryRouter initialEntries={["/jobs/ready?source=ukvisajobs"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready?source=ukvisajobs"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -738,10 +738,10 @@ describe("OrchestratorPage", () => {
       .mockReturnValue(0 as unknown as NodeJS.Timeout);
 
     render(
-      <MemoryRouter initialEntries={["/jobs/ready"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -787,10 +787,10 @@ describe("OrchestratorPage", () => {
     };
 
     render(
-      <MemoryRouter initialEntries={["/jobs/ready"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -822,10 +822,10 @@ describe("OrchestratorPage", () => {
     };
 
     render(
-      <MemoryRouter initialEntries={["/jobs/ready"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -857,10 +857,10 @@ describe("OrchestratorPage", () => {
     };
 
     render(
-      <MemoryRouter initialEntries={["/jobs/ready"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -887,10 +887,10 @@ describe("OrchestratorPage", () => {
     ) as unknown as typeof window.matchMedia;
 
     render(
-      <MemoryRouter initialEntries={["/jobs/ready"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -911,10 +911,10 @@ describe("OrchestratorPage", () => {
     ) as unknown as typeof window.matchMedia;
 
     render(
-      <MemoryRouter initialEntries={["/jobs/ready"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -935,10 +935,10 @@ describe("OrchestratorPage", () => {
     ) as unknown as typeof window.matchMedia;
 
     render(
-      <MemoryRouter initialEntries={["/jobs/ready"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -964,10 +964,10 @@ describe("OrchestratorPage", () => {
     };
 
     render(
-      <MemoryRouter initialEntries={["/jobs/ready"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -986,11 +986,11 @@ describe("OrchestratorPage", () => {
     ) as unknown as typeof window.matchMedia;
 
     render(
-      <MemoryRouter initialEntries={["/jobs/ready"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -1021,11 +1021,11 @@ describe("OrchestratorPage", () => {
     ) as unknown as typeof window.matchMedia;
 
     render(
-      <MemoryRouter initialEntries={["/jobs/all"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/all"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -1063,11 +1063,11 @@ describe("OrchestratorPage", () => {
     ) as unknown as typeof window.matchMedia;
 
     render(
-      <MemoryRouter initialEntries={["/jobs/ready"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -1116,10 +1116,10 @@ describe("OrchestratorPage", () => {
     ) as unknown as typeof window.matchMedia;
 
     render(
-      <MemoryRouter initialEntries={["/jobs/ready"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -1143,10 +1143,10 @@ describe("OrchestratorPage", () => {
     ) as unknown as typeof window.matchMedia;
 
     render(
-      <MemoryRouter initialEntries={["/jobs/ready"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -1160,11 +1160,11 @@ describe("OrchestratorPage", () => {
     ) as unknown as typeof window.matchMedia;
 
     render(
-      <MemoryRouter initialEntries={["/jobs/ready"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -1194,11 +1194,11 @@ describe("OrchestratorPage", () => {
     ) as unknown as typeof window.matchMedia;
 
     render(
-      <MemoryRouter initialEntries={["/jobs/ready"]}>
+      <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
         </Routes>
       </MemoryRouter>,
     );

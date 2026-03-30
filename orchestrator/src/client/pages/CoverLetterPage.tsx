@@ -78,16 +78,16 @@ export const CoverLetterPage: React.FC = () => {
   const { profile } = useProfile();
 
   const jobQuery = useQuery<Job | null>({
-    queryKey: ["jobs", "detail", id ?? null] as const,
-    queryFn: () => (id ? api.getJob(id) : Promise.resolve(null)),
+    queryKey: ["applications", "detail", id ?? null] as const,
+    queryFn: () => (id ? api.getApplication(id) : Promise.resolve(null)),
     enabled: Boolean(id),
   });
 
   const messagesQuery = useQuery<{ messages: JobChatMessage[] }>({
-    queryKey: ["jobs", "cover-letter", id ?? null] as const,
+    queryKey: ["applications", "cover-letter", id ?? null] as const,
     queryFn: () =>
       id
-        ? api.listJobGhostwriterMessages(id, { limit: 100 })
+        ? api.listApplicationGhostwriterMessages(id, { limit: 100 })
         : Promise.resolve({ messages: [] }),
     enabled: Boolean(id),
   });

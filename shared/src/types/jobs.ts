@@ -234,6 +234,9 @@ export type JobListItem = Pick<
   | "updatedAt"
 >;
 
+export type Application = Job;
+export type ApplicationListItem = JobListItem;
+
 export interface CreateJobInput {
   source: JobSource;
   title: string;

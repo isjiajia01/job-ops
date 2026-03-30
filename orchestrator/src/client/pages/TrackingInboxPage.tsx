@@ -145,12 +145,12 @@ export const TrackingInboxPage: React.FC = () => {
   );
 
   const appliedJobsQuery = useQuery({
-    queryKey: queryKeys.jobs.list({
+    queryKey: queryKeys.applications.list({
       statuses: ["applied", "in_progress"],
       view: "list",
     }),
     queryFn: () =>
-      api.getJobs({
+      api.getApplications({
         statuses: ["applied", "in_progress"],
         view: "list",
       }),

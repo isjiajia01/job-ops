@@ -12,12 +12,13 @@ import { Toaster } from "@/components/ui/sonner";
 import { BasicAuthPrompt } from "./components/BasicAuthPrompt";
 import { OnboardingGate } from "./components/OnboardingGate";
 import { useDemoInfo } from "./hooks/useDemoInfo";
+import { ApplicationsPage } from "./pages/ApplicationsPage";
+import { ApplicationWorkspacePage } from "./pages/ApplicationWorkspacePage";
 import { CoverLetterPage } from "./pages/CoverLetterPage";
 import { CvPage } from "./pages/CvPage";
 import { GmailOauthCallbackPage } from "./pages/GmailOauthCallbackPage";
 import { HomePage } from "./pages/HomePage";
 import { InProgressBoardPage } from "./pages/InProgressBoardPage";
-import { JobPage } from "./pages/JobPage";
 import { OrchestratorPage } from "./pages/OrchestratorPage";
 import { ProfileHubPage } from "./pages/ProfileHubPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -27,22 +28,30 @@ import { VisaSponsorsPage } from "./pages/VisaSponsorsPage";
 
 /** Backwards-compatibility redirects: old URL paths -> new URL paths */
 const REDIRECTS: Array<{ from: string; to: string }> = [
-  { from: "/", to: "/jobs/ready" },
+  { from: "/", to: "/applications" },
   { from: "/home", to: "/overview" },
   { from: "/profilehub", to: "/profile-hub" },
   { from: "/profile", to: "/profile-hub" },
-  { from: "/ready", to: "/jobs/ready" },
-  { from: "/ready/:jobId", to: "/jobs/ready/:jobId" },
-  { from: "/discovered", to: "/jobs/discovered" },
-  { from: "/discovered/:jobId", to: "/jobs/discovered/:jobId" },
-  { from: "/applied", to: "/jobs/applied" },
-  { from: "/applied/:jobId", to: "/jobs/applied/:jobId" },
+  { from: "/ready", to: "/legacy/jobs/ready" },
+  { from: "/ready/:jobId", to: "/legacy/jobs/ready/:jobId" },
+  { from: "/discovered", to: "/legacy/jobs/discovered" },
+  { from: "/discovered/:jobId", to: "/legacy/jobs/discovered/:jobId" },
+  { from: "/applied", to: "/legacy/jobs/applied" },
+  { from: "/applied/:jobId", to: "/legacy/jobs/applied/:jobId" },
   { from: "/in-progress", to: "/applications/in-progress" },
   { from: "/in-progress/:jobId", to: "/applications/in-progress" },
+  { from: "/jobs/ready", to: "/legacy/jobs/ready" },
+  { from: "/jobs/ready/:jobId", to: "/legacy/jobs/ready/:jobId" },
+  { from: "/jobs/discovered", to: "/legacy/jobs/discovered" },
+  { from: "/jobs/discovered/:jobId", to: "/legacy/jobs/discovered/:jobId" },
+  { from: "/jobs/applied", to: "/legacy/jobs/applied" },
+  { from: "/jobs/applied/:jobId", to: "/legacy/jobs/applied/:jobId" },
+  { from: "/jobs/all", to: "/legacy/jobs/all" },
+  { from: "/jobs/all/:jobId", to: "/legacy/jobs/all/:jobId" },
   { from: "/jobs/in_progress", to: "/applications/in-progress" },
   { from: "/jobs/in_progress/:jobId", to: "/applications/in-progress" },
-  { from: "/all", to: "/jobs/all" },
-  { from: "/all/:jobId", to: "/jobs/all/:jobId" },
+  { from: "/all", to: "/legacy/jobs/all" },
+  { from: "/all/:jobId", to: "/legacy/jobs/all/:jobId" },
 ];
 
 const DEMO_WAITLIST_BANNER_DISMISSED_KEY = "jobops.demoWaitlistBannerDismissed";
@@ -136,6 +145,17 @@ export const App: React.FC = () => {
 
                 {/* Application routes */}
                 <Route path="/overview" element={<HomePage />} />
+                <Route path="/applications" element={<ApplicationsPage />} />
+                <Route path="/applications/new" element={<ApplicationsPage />} />
+                <Route
+                  path="/applications/:id"
+                  element={<ApplicationWorkspacePage />}
+                />
+                <Route
+                  path="/applications/:id/cover-letter"
+                  element={<CoverLetterPage />}
+                />
+                <Route path="/applications/:id/cv" element={<CvPage />} />
                 <Route
                   path="/oauth/gmail/callback"
                   element={<GmailOauthCallbackPage />}
@@ -145,7 +165,10 @@ export const App: React.FC = () => {
                   element={<CoverLetterPage />}
                 />
                 <Route path="/job/:id/cv" element={<CvPage />} />
-                <Route path="/job/:id" element={<JobPage />} />
+                <Route
+                  path="/job/:id"
+                  element={<ApplicationWorkspacePage />}
+                />
                 <Route
                   path="/applications/in-progress"
                   element={<InProgressBoardPage />}
@@ -155,9 +178,9 @@ export const App: React.FC = () => {
                 <Route path="/tracer-links" element={<TracerLinksPage />} />
                 <Route path="/visa-sponsors" element={<VisaSponsorsPage />} />
                 <Route path="/tracking-inbox" element={<TrackingInboxPage />} />
-                <Route path="/jobs/:tab" element={<OrchestratorPage />} />
+                <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
                 <Route
-                  path="/jobs/:tab/:jobId"
+                  path="/legacy/jobs/:tab/:jobId"
                   element={<OrchestratorPage />}
                 />
               </Routes>

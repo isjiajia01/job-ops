@@ -51,7 +51,7 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
   });
 
   const loadMessages = useCallback(async () => {
-    const data = await api.listJobGhostwriterMessages(job.id, {
+    const data = await api.listApplicationGhostwriterMessages(job.id, {
       limit: 300,
     });
     setMessages(data.messages);
@@ -180,7 +180,7 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
       streamAbortRef.current = controller;
 
       try {
-        await api.streamJobGhostwriterMessage(
+        await api.streamApplicationGhostwriterMessage(
           job.id,
           { content, signal: controller.signal },
           { onEvent: onStreamEvent },
@@ -206,7 +206,7 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
   const stopStreaming = useCallback(async () => {
     if (!activeRunId) return;
     try {
-      await api.cancelJobGhostwriterRun(job.id, activeRunId);
+      await api.cancelApplicationGhostwriterRun(job.id, activeRunId);
       streamAbortRef.current?.abort();
       streamAbortRef.current = null;
       setIsStreaming(false);
@@ -238,7 +238,7 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
       streamAbortRef.current = controller;
 
       try {
-        await api.streamRegenerateJobGhostwriterMessage(
+        await api.streamRegenerateApplicationGhostwriterMessage(
           job.id,
           assistantMessageId,
           { signal: controller.signal },
@@ -298,7 +298,7 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
       streamAbortRef.current = controller;
 
       try {
-        await api.editJobGhostwriterMessage(
+        await api.editApplicationGhostwriterMessage(
           job.id,
           messageId,
           { content, signal: controller.signal },
@@ -323,7 +323,10 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
   const switchBranch = useCallback(
     async (messageId: string) => {
       try {
-        const result = await api.switchJobGhostwriterBranch(job.id, messageId);
+        const result = await api.switchApplicationGhostwriterBranch(
+          job.id,
+          messageId,
+        );
         setMessages(result.messages);
         setBranches(result.branches);
       } catch (error) {
@@ -341,7 +344,7 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
 
   const resetConversation = useCallback(async () => {
     try {
-      await api.resetJobGhostwriterConversation(job.id);
+      await api.resetApplicationGhostwriterConversation(job.id);
       setMessages([]);
       setBranches([]);
       toast.success("Conversation cleared");
@@ -364,9 +367,10 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
               {job.title} at {job.employer}
             </h4>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              Ghostwriter already has this job description, your resume and your
-              writing style preferences. Ask for tailored response drafts, or
-              concise role-fit talking points.
+              Ghostwriter already has this job description, your resume, and
+              your writing preferences. Start with things like “score my fit for
+              this role”, “rewrite my strongest bullets for this JD”, or
+              “draft a sharper cover letter opening”.
             </p>
           </div>
         ) : (

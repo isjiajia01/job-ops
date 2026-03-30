@@ -38,8 +38,8 @@ vi.mock("./pages/InProgressBoardPage", () => ({
   InProgressBoardPage: () => null,
 }));
 
-vi.mock("./pages/JobPage", () => ({
-  JobPage: () => null,
+vi.mock("./pages/ApplicationWorkspacePage", () => ({
+  ApplicationWorkspacePage: () => null,
 }));
 
 vi.mock("./pages/OrchestratorPage", () => ({

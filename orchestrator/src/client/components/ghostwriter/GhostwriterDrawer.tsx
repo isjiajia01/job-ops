@@ -35,7 +35,7 @@ export const GhostwriterDrawer: React.FC<GhostwriterDrawerProps> = ({
           disabled={!job}
         >
           <PanelRightOpen className="h-3.5 w-3.5" />
-          AI Copilot
+          Side panel
         </Button>
       </SheetTrigger>
 
@@ -45,9 +45,9 @@ export const GhostwriterDrawer: React.FC<GhostwriterDrawerProps> = ({
       >
         <div className="border-b border-border/50 p-4">
           <SheetHeader>
-            <SheetTitle>AI Copilot</SheetTitle>
+            <SheetTitle>Ghostwriter side panel</SheetTitle>
             <SheetDescription>
-              {job && `${job.title} at ${job.employer}.`}
+              {job && `${job.title} at ${job.employer}. Open this when you want a narrower, distraction-free writing panel.`}
             </SheetDescription>
           </SheetHeader>
         </div>

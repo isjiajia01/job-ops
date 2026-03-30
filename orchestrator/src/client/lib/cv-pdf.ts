@@ -230,7 +230,7 @@ function buildPdfBlob(input: {
 
 export async function downloadCvPdfForJob(jobId: string): Promise<void> {
   const [job, profile] = await Promise.all([
-    api.getJob(jobId),
+    api.getApplication(jobId),
     api.getProfile().catch(() => createEmptyResumeProfile() as ResumeProfile),
   ]);
 

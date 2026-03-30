@@ -49,10 +49,10 @@ export const RunModeModal: React.FC<RunModeModalProps> = ({
         <div className="flex h-full flex-col">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
-              Run jobs
+              Legacy intake tools
             </SheetTitle>
             <SheetDescription>
-              Choose Automatic pipeline run or Manual import.
+              Use the older batch pipeline here, or do a manual JD import when you need the legacy orchestrator flow.
             </SheetDescription>
           </SheetHeader>
 
@@ -64,8 +64,8 @@ export const RunModeModal: React.FC<RunModeModalProps> = ({
             className="flex min-h-0 flex-1 flex-col"
           >
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="automatic">Automatic</TabsTrigger>
-              <TabsTrigger value="manual">Manual</TabsTrigger>
+              <TabsTrigger value="automatic">Pipeline</TabsTrigger>
+              <TabsTrigger value="manual">Paste JD</TabsTrigger>
             </TabsList>
 
             <TabsContent value="automatic" className="min-h-0 flex-1">

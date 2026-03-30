@@ -13,7 +13,7 @@ vi.mock("./AutomaticRunTab", () => ({
 }));
 
 describe("RunModeModal", () => {
-  it("switches between Automatic and Manual tabs", () => {
+  it("switches between Pipeline and Paste JD tabs", () => {
     render(
       <RunModeModal
         open
@@ -32,6 +32,6 @@ describe("RunModeModal", () => {
     );
 
     expect(screen.getByTestId("automatic-tab")).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /manual/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /paste jd/i })).toBeInTheDocument();
   });
 });

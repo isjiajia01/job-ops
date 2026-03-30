@@ -198,9 +198,11 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
   const preparedPdfHref = preparedJob?.pdfPath
     ? `/pdfs/resume_${preparedJob.id}.pdf?v=${encodeURIComponent(preparedJob.updatedAt)}`
     : null;
-  const preparedCvHref = preparedJob ? `/job/${preparedJob.id}/cv` : null;
+  const preparedCvHref = preparedJob
+    ? `/applications/${preparedJob.id}/cv`
+    : null;
   const preparedCoverLetterHref = preparedJob
-    ? `/job/${preparedJob.id}/cover-letter`
+    ? `/applications/${preparedJob.id}/cover-letter`
     : null;
   const checklistItems = useMemo(
     () => [
@@ -231,13 +233,15 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
       setWarning(null);
       setIsFetching(true);
 
-      const fetchResponse = await api.fetchJobFromUrl({ url: fetchUrl.trim() });
+      const fetchResponse = await api.fetchApplicationSourceFromUrl({
+        url: fetchUrl.trim(),
+      });
       const fetchedContent = fetchResponse.content;
       const fetchedUrl = fetchResponse.url;
 
       setIsFetching(false);
       setStep("loading");
-      const inferResponse = await api.inferManualJob({
+      const inferResponse = await api.inferApplicationFromJd({
         jobDescription: fetchedContent,
       });
       const normalized = normalizeDraft(inferResponse.job);
@@ -268,7 +272,7 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
       setError(null);
       setWarning(null);
       setStep("loading");
-      const response = await api.inferManualJob({
+      const response = await api.inferApplicationFromJd({
         jobDescription: rawDescription,
       });
       const normalized = normalizeDraft(response.job, rawDescription.trim());
@@ -294,9 +298,10 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
     try {
       setIsImporting(true);
       const payload = toPayload(draft);
-      const created = await api.importManualJob({ job: payload });
-      toast.success("Job imported", {
-        description: "The job was tailored and moved to the ready column.",
+      const created = await api.createApplicationFromDraft({ job: payload });
+      toast.success("Application created", {
+        description:
+          "The JD was imported and is ready for tailoring in the workspace.",
       });
       await onImported(created.id);
       onClose();
@@ -320,7 +325,7 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
       setStep("preparing");
 
       const payload = toPayload(draft);
-      createdJob = await api.importManualJob({ job: payload });
+      createdJob = await api.createApplicationFromDraft({ job: payload });
       setPreparedJob(createdJob);
       await onImported(createdJob.id);
 
@@ -332,7 +337,7 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
       );
 
       const refreshedJob = await api
-        .getJob(createdJob.id)
+        .getApplication(createdJob.id)
         .catch(() => createdJob);
       setPreparedJob(refreshedJob);
       setCoverLetterDraft(
@@ -353,12 +358,12 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
       setError(message);
       if (createdJob) {
         setPreparationWarning(
-          "The CV kit is ready, but cover-letter generation did not complete. You can still open the imported job and retry Ghostwriter.",
+          "The CV kit is ready, but cover-letter generation did not complete. You can still open the application workspace and retry Ghostwriter.",
         );
         setStep("ready");
       } else {
         setPreparationWarning(
-          "The manual job may already be imported even though cover-letter generation did not complete.",
+          "The application may already be imported even though cover-letter generation did not complete.",
         );
         setStep("review");
       }
@@ -802,10 +807,10 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
                   type="button"
                   variant="outline"
                   className="shrink-0 border-emerald-400/30 bg-emerald-500/5 text-emerald-100 hover:bg-emerald-500/10"
-                  onClick={() => navigate(`/job/${preparedJob.id}`)}
+                  onClick={() => navigate(`/applications/${preparedJob.id}`)}
                 >
                   <ExternalLink className="mr-2 h-4 w-4" />
-                  Open in JobOps
+                  Open workspace
                 </Button>
               </div>
             </div>
@@ -955,10 +960,10 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
                 type="button"
                 variant="outline"
                 className="justify-center gap-2"
-                onClick={() => navigate(`/jobs/ready/${preparedJob.id}`)}
+                onClick={() => navigate(`/applications/${preparedJob.id}`)}
               >
                 <ExternalLink className="h-4 w-4" />
-                Go To Ready Column
+                Go To Workspace
               </Button>
               <Button
                 type="button"

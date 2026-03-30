@@ -5,7 +5,7 @@ import type { Job } from "@shared/types.js";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import type React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { JobDetailPanel } from "./JobDetailPanel";
+import { LegacyJobDetailPanel } from "./LegacyJobDetailPanel";
 
 const render = (ui: Parameters<typeof renderWithQueryClient>[0]) =>
   renderWithQueryClient(ui);
@@ -147,16 +147,16 @@ vi.mock("sonner", () => ({
 }));
 
 const renderJobDetailPanel = async (
-  props: React.ComponentProps<typeof JobDetailPanel>,
+  props: React.ComponentProps<typeof LegacyJobDetailPanel>,
 ) => {
-  const rendered = render(<JobDetailPanel {...props} />);
+  const rendered = render(<LegacyJobDetailPanel {...props} />);
   await act(async () => {
     await Promise.resolve();
   });
   return rendered;
 };
 
-describe("JobDetailPanel", () => {
+describe("LegacyJobDetailPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSettings.renderMarkdownInJobDescriptions = true;

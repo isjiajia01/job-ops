@@ -16,7 +16,7 @@ vi.mock("sonner", () => ({
   },
 }));
 
-describe("useRescoreJob", () => {
+describe("useRescoreJob compatibility wrapper", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -30,7 +30,7 @@ describe("useRescoreJob", () => {
     );
 
     await act(async () => {
-      await result.current.rescoreJob("job-1");
+      await result.current.rescoreApplication("job-1");
     });
 
     expect(api.rescoreJob).toHaveBeenCalledWith("job-1");

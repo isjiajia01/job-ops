@@ -56,8 +56,8 @@ export const CvPage: React.FC = () => {
   const { profile } = useProfile();
 
   const jobQuery = useQuery<Job | null>({
-    queryKey: ["jobs", "detail", id ?? null] as const,
-    queryFn: () => (id ? api.getJob(id) : Promise.resolve(null)),
+    queryKey: ["applications", "detail", id ?? null] as const,
+    queryFn: () => (id ? api.getApplication(id) : Promise.resolve(null)),
     enabled: Boolean(id),
   });
 

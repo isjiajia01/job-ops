@@ -12,7 +12,7 @@ vi.mock("../api", () => ({
   postApplicationProviderStatus: vi.fn(),
   getPostApplicationInbox: vi.fn(),
   getPostApplicationRuns: vi.fn(),
-  getJobs: vi.fn(),
+  getApplications: vi.fn(),
   approvePostApplicationInboxItem: vi.fn(),
   denyPostApplicationInboxItem: vi.fn(),
   getPostApplicationRunMessages: vi.fn(),
@@ -98,7 +98,7 @@ beforeEach(() => {
     runs: [],
     total: 0,
   });
-  vi.mocked(api.getJobs).mockResolvedValue({
+  vi.mocked(api.getApplications).mockResolvedValue({
     jobs: [
       {
         id: "job-1",
@@ -157,7 +157,7 @@ beforeEach(() => {
       expired: 0,
     },
     revision: "r1",
-  } as Awaited<ReturnType<typeof api.getJobs>>);
+  } as Awaited<ReturnType<typeof api.getApplications>>);
   vi.mocked(api.approvePostApplicationInboxItem).mockResolvedValue({
     message: makeInboxItem().message,
     stageEventId: "evt-1",
@@ -241,7 +241,7 @@ describe("TrackingInboxPage", () => {
     );
 
     await waitFor(() => {
-      expect(api.getJobs).toHaveBeenCalledWith({
+      expect(api.getApplications).toHaveBeenCalledWith({
         statuses: ["applied", "in_progress"],
         view: "list",
       });

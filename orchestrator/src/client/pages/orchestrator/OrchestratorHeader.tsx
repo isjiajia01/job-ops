@@ -1,7 +1,8 @@
 import { PageHeader, StatusIndicator } from "@client/components/layout";
 import type { JobSource } from "@shared/types.js";
-import { ClipboardPaste, Loader2, Play, Square } from "lucide-react";
+import { ClipboardPaste, FileStack, Loader2, Play, Square } from "lucide-react";
 import type React from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
 interface OrchestratorHeaderProps {
@@ -44,6 +45,12 @@ export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
     </Button>
   ) : (
     <div className="flex items-center gap-2">
+      <Button asChild size="sm" variant="ghost" className="gap-2">
+        <Link to="/applications">
+          <FileStack className="h-4 w-4" />
+          <span className="hidden sm:inline">Applications</span>
+        </Link>
+      </Button>
       <Button
         size="sm"
         variant="outline"
@@ -65,8 +72,9 @@ export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
       icon={() => (
         <img src="/favicon.png" alt="" className="size-8 rounded-lg" />
       )}
-      title="Job Ops"
-      subtitle="Orchestrator"
+      title="Legacy Pipeline"
+      subtitle="Crawler and batch-processing tools kept for fallback workflows"
+      badge="Legacy"
       navOpen={navOpen}
       onNavOpenChange={onNavOpenChange}
       statusIndicator={

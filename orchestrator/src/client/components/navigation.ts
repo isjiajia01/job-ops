@@ -1,12 +1,9 @@
 import {
-  Columns3,
   ContactRound,
+  FileText,
   Home,
   Inbox,
-  LayoutDashboard,
-  Link2,
   Settings,
-  Shield,
 } from "lucide-react";
 
 export type NavLink = {
@@ -19,21 +16,10 @@ export type NavLink = {
 export const NAV_LINKS: NavLink[] = [
   { to: "/overview", label: "Overview", icon: Home },
   {
-    to: "/jobs/ready",
-    label: "Jobs",
-    icon: LayoutDashboard,
-    activePaths: [
-      "/jobs/ready",
-      "/jobs/discovered",
-      "/jobs/applied",
-      "/jobs/all",
-    ],
-  },
-  {
-    to: "/applications/in-progress",
-    label: "In Progress",
-    icon: Columns3,
-    activePaths: ["/applications/in-progress"],
+    to: "/applications",
+    label: "Applications",
+    icon: FileText,
+    activePaths: ["/applications", "/job"],
   },
   {
     to: "/profile-hub",
@@ -42,13 +28,6 @@ export const NAV_LINKS: NavLink[] = [
     activePaths: ["/profile-hub"],
   },
   { to: "/tracking-inbox", label: "Tracking Inbox", icon: Inbox },
-  {
-    to: "/tracer-links",
-    label: "Tracer Links",
-    icon: Link2,
-    activePaths: ["/tracer-links"],
-  },
-  { to: "/visa-sponsors", label: "Visa Sponsors", icon: Shield },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 

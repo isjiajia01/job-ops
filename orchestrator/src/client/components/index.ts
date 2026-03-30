@@ -1,3 +1,4 @@
+export { ApplicationHeader } from "./ApplicationHeader";
 export { DiscoveredPanel } from "./discovered-panel/DiscoveredPanel";
 export { FitAssessment } from "./FitAssessment";
 export { JobHeader } from "./JobHeader";

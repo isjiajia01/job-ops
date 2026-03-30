@@ -4,7 +4,7 @@ import type React from "react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSettings } from "../hooks/useSettings";
-import { JobHeader } from "./JobHeader";
+import { ApplicationHeader } from "./ApplicationHeader";
 
 // Mock useSettings
 vi.mock("../hooks/useSettings", () => ({
@@ -43,7 +43,7 @@ const mockJob = createJob({
   suitabilityReason: "Strong match",
 });
 
-describe("JobHeader", () => {
+describe("ApplicationHeader", () => {
   const renderWithRouter = (ui: React.ReactElement) =>
     render(<MemoryRouter>{ui}</MemoryRouter>);
 
@@ -54,30 +54,32 @@ describe("JobHeader", () => {
     });
   });
 
-  it("renders basic job information", () => {
-    renderWithRouter(<JobHeader job={mockJob} />);
+  it("renders basic application information", () => {
+    renderWithRouter(<ApplicationHeader job={mockJob} />);
     expect(screen.getByText("Software Engineer")).toBeInTheDocument();
     expect(screen.getByText("Tech Corp")).toBeInTheDocument();
     expect(screen.getByText("London")).toBeInTheDocument();
     expect(screen.getByText("£60,000")).toBeInTheDocument();
   });
 
-  it("links the title and view button to the job page", () => {
-    renderWithRouter(<JobHeader job={mockJob} />);
+  it("links the title and workspace button to the application page", () => {
+    renderWithRouter(<ApplicationHeader job={mockJob} />);
 
     expect(
       screen.getByRole("link", { name: "Software Engineer" }),
-    ).toHaveAttribute("href", "/job/job-1");
-    expect(screen.getByRole("link", { name: /view/i })).toHaveAttribute(
+    ).toHaveAttribute("href", "/applications/job-1");
+    expect(
+      screen.getByRole("link", { name: /open workspace/i }),
+    ).toHaveAttribute(
       "href",
-      "/job/job-1",
+      "/applications/job-1",
     );
   });
 
   it("shows 'Check Sponsorship Status' button when sponsorMatchScore is null", async () => {
     const onCheckSponsor = vi.fn().mockResolvedValue(undefined);
     renderWithRouter(
-      <JobHeader job={mockJob} onCheckSponsor={onCheckSponsor} />,
+      <ApplicationHeader job={mockJob} onCheckSponsor={onCheckSponsor} />,
     );
 
     const button = screen.getByText("Check Sponsorship Status");
@@ -96,7 +98,7 @@ describe("JobHeader", () => {
       sponsorMatchScore: 98,
       sponsorMatchNames: '["Tech Corp Ltd"]',
     };
-    renderWithRouter(<JobHeader job={jobWithSponsor} />);
+    renderWithRouter(<ApplicationHeader job={jobWithSponsor} />);
 
     expect(screen.getByText("Confirmed Sponsor")).toBeInTheDocument();
   });
@@ -107,7 +109,7 @@ describe("JobHeader", () => {
       sponsorMatchScore: 85,
       sponsorMatchNames: '["Techy Corp"]',
     };
-    renderWithRouter(<JobHeader job={jobWithPotential} />);
+    renderWithRouter(<ApplicationHeader job={jobWithPotential} />);
 
     expect(screen.getByText("Potential Sponsor")).toBeInTheDocument();
   });
@@ -118,7 +120,7 @@ describe("JobHeader", () => {
       sponsorMatchScore: 40,
       sponsorMatchNames: '["Other Corp"]',
     };
-    renderWithRouter(<JobHeader job={jobNoSponsor} />);
+    renderWithRouter(<ApplicationHeader job={jobNoSponsor} />);
 
     expect(screen.getByText("Sponsor Not Found")).toBeInTheDocument();
   });
@@ -129,7 +131,7 @@ describe("JobHeader", () => {
     });
 
     const jobWithSponsor = { ...mockJob, sponsorMatchScore: 98 };
-    renderWithRouter(<JobHeader job={jobWithSponsor} />);
+    renderWithRouter(<ApplicationHeader job={jobWithSponsor} />);
 
     expect(screen.queryByText("Confirmed Sponsor")).not.toBeInTheDocument();
     expect(
@@ -139,8 +141,8 @@ describe("JobHeader", () => {
 
   it("hides the view button when already on a job page", () => {
     render(
-      <MemoryRouter initialEntries={["/job/job-1"]}>
-        <JobHeader job={mockJob} />
+      <MemoryRouter initialEntries={["/applications/job-1"]}>
+        <ApplicationHeader job={mockJob} />
       </MemoryRouter>,
     );
 

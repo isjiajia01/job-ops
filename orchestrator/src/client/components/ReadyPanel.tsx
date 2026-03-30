@@ -7,7 +7,10 @@
  * Now includes inline tailoring mode for editing and regenerating PDFs without switching tabs.
  */
 
-import type { Job, ResumeProjectCatalogItem } from "@shared/types.js";
+import type {
+  Application,
+  ResumeProjectCatalogItem,
+} from "@shared/types.js";
 import {
   CheckCircle2,
   ChevronUp,
@@ -44,16 +47,16 @@ import {
 } from "@/lib/utils";
 import * as api from "../api";
 import {
-  useMarkAsAppliedMutation,
-  useSkipJobMutation,
-  useUnapplyJobMutation,
-} from "../hooks/queries/useJobMutations";
+  useMarkApplicationAppliedMutation,
+  useSkipApplicationMutation,
+  useUnapplyApplicationMutation,
+} from "../hooks/queries/useApplicationMutations";
 import { useProfile } from "../hooks/useProfile";
-import { useRescoreJob } from "../hooks/useRescoreJob";
-import { FitAssessment, JobHeader, TailoredSummary } from ".";
+import { useRescoreApplication } from "../hooks/useRescoreApplication";
+import { ApplicationHeader, FitAssessment, TailoredSummary } from ".";
 import { TailorMode } from "./discovered-panel/TailorMode";
+import { ApplicationDetailsEditDrawer } from "./ApplicationDetailsEditDrawer";
 import { GhostwriterDrawer } from "./ghostwriter/GhostwriterDrawer";
-import { JobDetailsEditDrawer } from "./JobDetailsEditDrawer";
 import { KbdHint } from "./KbdHint";
 import { ReadySummaryAccordion } from "./ReadySummaryAccordion";
 import { buildReadyPanelGoogleDorks } from "./ready-panel-google-dorks";
@@ -61,7 +64,7 @@ import { buildReadyPanelGoogleDorks } from "./ready-panel-google-dorks";
 type PanelMode = "ready" | "tailor";
 
 interface ReadyPanelProps {
-  job: Job | null;
+  job: Application | null;
   onJobUpdated: () => void | Promise<void>;
   onJobMoved: (jobId: string) => void;
   onTailoringDirtyChange?: (isDirty: boolean) => void;
@@ -77,7 +80,8 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
   const [isMarkingApplied, setIsMarkingApplied] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false);
-  const { isRescoring, rescoreJob } = useRescoreJob(onJobUpdated);
+  const { isRescoring, rescoreApplication } =
+    useRescoreApplication(onJobUpdated);
   const [catalog, setCatalog] = useState<ResumeProjectCatalogItem[]>([]);
   const [recentlyApplied, setRecentlyApplied] = useState<{
     jobId: string;
@@ -86,9 +90,9 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
     timeoutId: ReturnType<typeof setTimeout>;
   } | null>(null);
   const previousJobIdRef = useRef<string | null>(null);
-  const markAsAppliedMutation = useMarkAsAppliedMutation();
-  const unapplyJobMutation = useUnapplyJobMutation();
-  const skipJobMutation = useSkipJobMutation();
+  const markAsAppliedMutation = useMarkApplicationAppliedMutation();
+  const unapplyJobMutation = useUnapplyApplicationMutation();
+  const skipJobMutation = useSkipApplicationMutation();
 
   const { personName } = useProfile();
 
@@ -121,7 +125,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
   const pdfHref = job
     ? `/pdfs/resume_${job.id}.pdf?v=${encodeURIComponent(job.updatedAt)}`
     : "#";
-  const cvHref = job ? `/job/${job.id}/cv` : "#";
+  const cvHref = job ? `/applications/${job.id}/cv` : "#";
 
   const selectedProjectIds = useMemo(() => {
     return job?.selectedProjectIds?.split(",").filter(Boolean) ?? [];
@@ -244,8 +248,8 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
   }, [job, onJobUpdated]);
 
   const handleRescore = useCallback(
-    () => rescoreJob(job?.id),
-    [job?.id, rescoreJob],
+    () => rescoreApplication(job?.id),
+    [job?.id, rescoreApplication],
   );
 
   const handleDownloadCoverLetter = useCallback(() => {
@@ -259,7 +263,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
     });
   }, [job]);
 
-  const coverLetterHref = job ? `/job/${job.id}/cover-letter` : "#";
+  const coverLetterHref = job ? `/applications/${job.id}/cover-letter` : "#";
 
   const handleSkip = useCallback(async () => {
     if (!job) return;
@@ -361,7 +365,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
 
   return (
     <div className="flex flex-col h-full">
-      <JobHeader
+      <ApplicationHeader
         job={job}
         className="pb-4 border-b border-border/40"
         onCheckSponsor={async () => {
@@ -623,11 +627,11 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
         </DropdownMenu>
       </div>
 
-      <JobDetailsEditDrawer
+      <ApplicationDetailsEditDrawer
         open={isEditDetailsOpen}
         onOpenChange={setIsEditDetailsOpen}
-        job={job}
-        onJobUpdated={onJobUpdated}
+        application={job}
+        onApplicationUpdated={onJobUpdated}
       />
 
       {/* ─────────────────────────────────────────────────────────────────────

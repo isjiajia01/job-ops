@@ -10,7 +10,7 @@ import { useDemoInfo } from "../hooks/useDemoInfo";
 import { type FilterTab, tabs } from "./orchestrator/constants";
 import { FloatingJobActionsBar } from "./orchestrator/FloatingJobActionsBar";
 import { JobCommandBar } from "./orchestrator/JobCommandBar";
-import { JobDetailPanel } from "./orchestrator/JobDetailPanel";
+import { LegacyJobDetailPanel } from "./legacy/LegacyJobDetailPanel";
 import { JobListPanel } from "./orchestrator/JobListPanel";
 import { OrchestratorFilters } from "./orchestrator/OrchestratorFilters";
 import { OrchestratorHeader } from "./orchestrator/OrchestratorHeader";
@@ -18,7 +18,7 @@ import { OrchestratorSummary } from "./orchestrator/OrchestratorSummary";
 import { RunModeModal } from "./orchestrator/RunModeModal";
 import { useFilteredJobs } from "./orchestrator/useFilteredJobs";
 import { useJobSelectionActions } from "./orchestrator/useJobSelectionActions";
-import { useKeyboardShortcuts } from "./orchestrator/useKeyboardShortcuts";
+import { useLegacyKeyboardShortcuts } from "./legacy/useLegacyKeyboardShortcuts";
 import { useOrchestratorData } from "./orchestrator/useOrchestratorData";
 import { useOrchestratorFilters } from "./orchestrator/useOrchestratorFilters";
 import { usePipelineControls } from "./orchestrator/usePipelineControls";
@@ -60,8 +60,8 @@ export const OrchestratorPage: React.FC = () => {
       const search = searchParams.toString();
       const suffix = search ? `?${search}` : "";
       const path = newJobId
-        ? `/jobs/${newTab}/${newJobId}${suffix}`
-        : `/jobs/${newTab}${suffix}`;
+        ? `/legacy/jobs/${newTab}/${newJobId}${suffix}`
+        : `/legacy/jobs/${newTab}${suffix}`;
       navigate(path, { replace: isReplace });
     },
     [navigate, searchParams],
@@ -237,7 +237,7 @@ export const OrchestratorPage: React.FC = () => {
     isDetailDrawerOpen ||
     navOpen;
 
-  useKeyboardShortcuts({
+  useLegacyKeyboardShortcuts({
     isAnyModalOpen,
     isAnyModalOpenExcludingCommandBar,
     isAnyModalOpenExcludingHelp,
@@ -273,7 +273,7 @@ export const OrchestratorPage: React.FC = () => {
         nextParams.delete(key);
       }
       const query = nextParams.toString();
-      navigate(`/jobs/${targetTab}/${id}${query ? `?${query}` : ""}`);
+      navigate(`/legacy/jobs/${targetTab}/${id}${query ? `?${query}` : ""}`);
       if (!isDesktop) {
         setIsDetailDrawerOpen(true);
       }
@@ -362,6 +362,27 @@ export const OrchestratorPage: React.FC = () => {
           selectedJobIds.size > 0 ? "pb-36 lg:pb-12" : "pb-12"
         }`}
       >
+        <section className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-300">
+                Legacy pipeline surface
+              </div>
+              <p className="mt-1 text-sm text-amber-100/90">
+                The product has shifted to an application-first workspace. Use this page only for older batch discovery and fallback pipeline operations.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-amber-400/40 bg-amber-500/5 text-amber-50 hover:bg-amber-500/10"
+              onClick={() => navigate("/applications")}
+            >
+              Go to Applications
+            </Button>
+          </div>
+        </section>
+
         <OrchestratorSummary
           stats={stats}
           isPipelineRunning={isPipelineRunning}
@@ -414,7 +435,7 @@ export const OrchestratorPage: React.FC = () => {
             {/* Inspector panel: visually subordinate to list */}
             {isDesktop && (
               <div className="min-w-0 rounded-lg border border-border/40 bg-muted/5 p-4 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
-                <JobDetailPanel
+                <LegacyJobDetailPanel
                   activeTab={activeTab}
                   activeJobs={activeJobs}
                   selectedJob={visibleSelectedJob}
@@ -460,7 +481,7 @@ export const OrchestratorPage: React.FC = () => {
           <DrawerContent className="max-h-[90vh]">
             <div className="flex items-center justify-between px-4 pt-2">
               <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Job details
+                Legacy job details
               </div>
               <DrawerClose asChild>
                 <Button variant="ghost" size="sm" className="h-8 px-2 text-xs">
@@ -469,7 +490,7 @@ export const OrchestratorPage: React.FC = () => {
               </DrawerClose>
             </div>
             <div className="max-h-[calc(90vh-3.5rem)] overflow-y-auto px-4 pb-6 pt-3">
-              <JobDetailPanel
+              <LegacyJobDetailPanel
                 activeTab={activeTab}
                 activeJobs={activeJobs}
                 selectedJob={visibleSelectedJob}

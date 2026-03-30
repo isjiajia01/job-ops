@@ -94,6 +94,10 @@ export interface JobChatRun {
   updatedAt: string;
 }
 
+export type ApplicationChatThread = JobChatThread;
+export type ApplicationChatMessage = JobChatMessage;
+export type ApplicationChatRun = JobChatRun;
+
 export type JobChatStreamEvent =
   | {
       type: "ready";

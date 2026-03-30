@@ -63,22 +63,22 @@ vi.mock("../api", () => ({
   updateJob: vi.fn(),
 }));
 
-vi.mock("./JobDetailsEditDrawer", () => ({
-  JobDetailsEditDrawer: ({
+vi.mock("./ApplicationDetailsEditDrawer", () => ({
+  ApplicationDetailsEditDrawer: ({
     open,
     onOpenChange,
-    onJobUpdated,
+    onApplicationUpdated,
   }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onJobUpdated: () => void | Promise<void>;
+    onApplicationUpdated: () => void | Promise<void>;
   }) =>
     open ? (
-      <div data-testid="job-details-edit-drawer">
+      <div data-testid="application-details-edit-drawer">
         <button
           type="button"
           onClick={() => {
-            void onJobUpdated();
+            void onApplicationUpdated();
             onOpenChange(false);
           }}
         >
@@ -140,12 +140,12 @@ describe("ReadyPanel", () => {
     );
 
     fireEvent.click(screen.getByRole("menuitem", { name: /edit details/i }));
-    expect(screen.getByTestId("job-details-edit-drawer")).toBeInTheDocument();
+    expect(screen.getByTestId("application-details-edit-drawer")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /save details/i }));
     await waitFor(() => expect(onJobUpdated).toHaveBeenCalled());
     expect(
-      screen.queryByTestId("job-details-edit-drawer"),
+      screen.queryByTestId("application-details-edit-drawer"),
     ).not.toBeInTheDocument();
   });
 
