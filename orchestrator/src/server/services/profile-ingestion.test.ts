@@ -102,6 +102,43 @@ describe("profile-ingestion service", () => {
     });
   });
 
+  it("normalizes looser LLM payloads instead of falling back immediately", async () => {
+    mocks.callJson.mockResolvedValue({
+      success: true,
+      data: {
+        items: [
+          {
+            title: "Route planning simulator",
+            summary: "Built a route-planning simulator for thesis work.",
+            tags: ["planning", "python"],
+            confidence: "high",
+            suggestedProject: {
+              name: "Route planning simulator",
+              keywords: ["planning", "python"],
+              role: "Thesis project",
+              impact: "Strong planning signal",
+              roleRelevance: "Useful for planning-heavy roles",
+            },
+          },
+        ],
+      },
+    });
+
+    const result = await ingestProfileCapture({
+      rawText:
+        "I built a route-planning simulator in Python for my thesis and want it used for planning roles.",
+      sourceLabel: "self note",
+    });
+
+    expect(result.mode).toBe("llm");
+    expect(result.items[0]).toMatchObject({
+      kind: "project",
+      suggestedProject: {
+        summary: "Built a route-planning simulator for thesis work.",
+      },
+    });
+  });
+
   it("falls back to heuristic ingestion when the LLM fails", async () => {
     mocks.callJson.mockResolvedValue({
       success: false,

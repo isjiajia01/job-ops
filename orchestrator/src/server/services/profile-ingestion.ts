@@ -351,6 +351,11 @@ function buildSystemPrompt(args: {
     "- Prefer fact items for durable personal truths like target roles, location, work authorization, languages, graduation timing, or strengths.",
     "- Prefer preference items when the user states how Ghostwriter should write, frame, or avoid certain claims.",
     "- Produce concise titles and summaries, but keep suggested payloads concrete.",
+    "- Every item MUST include kind, title, summary, tags, confidence, suggestedFact, suggestedProject, suggestedPreference.",
+    "- If an item is a project, suggestedProject.summary must always be filled with a concrete summary.",
+    "- If an item is not a project, set suggestedProject to null.",
+    "- If an item is not a fact, set suggestedFact to null.",
+    "- If an item is not a preference, set suggestedPreference to null.",
     "- suggestedProject.roleRelevance should explain which role families this evidence supports.",
     "- suggestedProject.impact should explain why the project matters, even if there are no hard metrics.",
     "- suggestedPreference should convert writing wishes into durable instructions.",
@@ -360,6 +365,179 @@ function buildSystemPrompt(args: {
     "Current knowledge digest:",
     args.knowledgeDigest || "(empty)",
   ].join("\n");
+}
+
+function toTrimmedString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function normalizeLooseIngestionItems(
+  raw: unknown,
+  fallbackItems: CandidateKnowledgeInboxItem[],
+  sourceLabel: string | null,
+  rawText: string,
+): CandidateKnowledgeInboxItem[] {
+  const record = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+  const rawItems = Array.isArray(record?.items)
+    ? record?.items
+    : Array.isArray(raw)
+      ? raw
+      : record
+        ? [record]
+        : [];
+
+  const now = new Date().toISOString();
+
+  return rawItems
+    .map((entry, index) => {
+      const item = entry && typeof entry === "object" ? (entry as Record<string, unknown>) : {};
+      const fallback = fallbackItems[index] ?? fallbackItems[0] ?? null;
+      const suggestedProjectRaw =
+        item.suggestedProject && typeof item.suggestedProject === "object"
+          ? (item.suggestedProject as Record<string, unknown>)
+          : item;
+      const suggestedFactRaw =
+        item.suggestedFact && typeof item.suggestedFact === "object"
+          ? (item.suggestedFact as Record<string, unknown>)
+          : item;
+      const suggestedPreferenceRaw =
+        item.suggestedPreference && typeof item.suggestedPreference === "object"
+          ? (item.suggestedPreference as Record<string, unknown>)
+          : item;
+
+      const inferredKind =
+        (toTrimmedString(item.kind) as CandidateKnowledgeInboxItem["kind"] | null) ??
+        inferKind(
+          [
+            toTrimmedString(item.title),
+            toTrimmedString(item.summary),
+            toTrimmedString(item.response),
+            toTrimmedString(item.content),
+            rawText,
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        );
+
+      const title =
+        toTrimmedString(item.title) ??
+        toTrimmedString(item.label) ??
+        toTrimmedString(suggestedProjectRaw.name) ??
+        toTrimmedString(suggestedFactRaw.title) ??
+        toTrimmedString(suggestedPreferenceRaw.label) ??
+        fallback?.title ??
+        titleFromChunk(rawText, `Capture ${index + 1}`);
+
+      const summary =
+        toTrimmedString(item.summary) ??
+        toTrimmedString(item.description) ??
+        toTrimmedString(item.response) ??
+        toTrimmedString(item.content) ??
+        toTrimmedString(suggestedProjectRaw.summary) ??
+        toTrimmedString(suggestedFactRaw.detail) ??
+        toTrimmedString(suggestedPreferenceRaw.instruction) ??
+        fallback?.summary ??
+        firstSentence(rawText).slice(0, 320);
+
+      const tagsSource = Array.isArray(item.tags)
+        ? item.tags
+        : Array.isArray(item.keywords)
+          ? item.keywords
+          : Array.isArray(suggestedProjectRaw.keywords)
+            ? suggestedProjectRaw.keywords
+            : [];
+      const tags = tagsSource
+        .map((tag) => toTrimmedString(tag))
+        .filter((tag): tag is string => Boolean(tag));
+
+      const kind = inferredKind;
+      const suggestedProject =
+        kind === "project"
+          ? {
+              name:
+                toTrimmedString(suggestedProjectRaw.name) ??
+                title,
+              summary:
+                toTrimmedString(suggestedProjectRaw.summary) ??
+                summary,
+              keywords:
+                (Array.isArray(suggestedProjectRaw.keywords)
+                  ? suggestedProjectRaw.keywords
+                  : tags
+                )
+                  .map((tag) => toTrimmedString(tag))
+                  .filter((tag): tag is string => Boolean(tag))
+                  .slice(0, 12),
+              role: toTrimmedString(suggestedProjectRaw.role),
+              impact:
+                toTrimmedString(suggestedProjectRaw.impact) ??
+                firstSentence(summary).slice(0, 400),
+              roleRelevance: toTrimmedString(suggestedProjectRaw.roleRelevance),
+            }
+          : null;
+
+      const suggestedFact =
+        kind === "fact"
+          ? {
+              title: toTrimmedString(suggestedFactRaw.title) ?? title,
+              detail:
+                toTrimmedString(suggestedFactRaw.detail) ??
+                summary,
+            }
+          : null;
+
+      const suggestedPreference =
+        kind === "preference"
+          ? {
+              label: toTrimmedString(suggestedPreferenceRaw.label) ?? title,
+              instruction:
+                toTrimmedString(suggestedPreferenceRaw.instruction) ??
+                summary,
+              kind:
+                (toTrimmedString(suggestedPreferenceRaw.kind) as
+                  | "tone"
+                  | "positioning"
+                  | "guardrail"
+                  | "phrase"
+                  | "priority"
+                  | null) ??
+                (/avoid|do not|don't|never/i.test(rawText)
+                  ? "guardrail"
+                  : "positioning"),
+              strength:
+                (toTrimmedString(suggestedPreferenceRaw.strength) as
+                  | "normal"
+                  | "strong"
+                  | null) ??
+                (/must|always|never|do not|don't/i.test(rawText)
+                  ? "strong"
+                  : "normal"),
+            }
+          : null;
+
+      return candidateKnowledgeInboxItemSchema.parse({
+        id: createId("inbox"),
+        createdAt: now,
+        updatedAt: now,
+        kind,
+        status: "pending",
+        sourceLabel,
+        title,
+        summary,
+        rawText,
+        tags: tags.length ? tags.slice(0, 8) : extractTags(`${title}\n${summary}\n${rawText}`),
+        confidence:
+          (toTrimmedString(item.confidence) as "low" | "medium" | "high" | null) ??
+          fallback?.confidence ??
+          "medium",
+        suggestedFact,
+        suggestedProject,
+        suggestedPreference,
+      });
+    })
+    .filter(Boolean);
 }
 
 export async function ingestProfileCapture(args: {
@@ -411,32 +589,26 @@ export async function ingestProfileCapture(args: {
       maxRetries: 1,
     });
 
-    if (!response.success || !response.data?.items?.length) {
+    if (!response.success || !response.data) {
       logger.warn("Profile ingestion fell back to heuristic digest", {
         error: response.success ? "empty llm response" : response.error,
       });
       return { items: fallbackItems, mode: "fallback" };
     }
 
-    const now = new Date().toISOString();
-    const items = response.data.items.map((item) =>
-      candidateKnowledgeInboxItemSchema.parse({
-        id: createId("inbox"),
-        createdAt: now,
-        updatedAt: now,
-        kind: item.kind,
-        status: "pending",
-        sourceLabel: args.sourceLabel?.trim() || null,
-        title: item.title,
-        summary: item.summary,
-        rawText: trimmed,
-        tags: item.tags,
-        confidence: item.confidence,
-        suggestedFact: item.suggestedFact,
-        suggestedProject: item.suggestedProject,
-        suggestedPreference: item.suggestedPreference,
-      }),
+    const items = normalizeLooseIngestionItems(
+      response.data,
+      fallbackItems,
+      args.sourceLabel?.trim() || null,
+      trimmed,
     );
+
+    if (!items.length) {
+      logger.warn("Profile ingestion normalization produced no items; using fallback", {
+        responseData: response.data,
+      });
+      return { items: fallbackItems, mode: "fallback" };
+    }
 
     return { items, mode: "llm" };
   } catch (error) {
