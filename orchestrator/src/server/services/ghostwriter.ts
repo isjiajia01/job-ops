@@ -7,7 +7,13 @@ import {
 } from "@infra/errors";
 import { logger } from "@infra/logger";
 import { getRequestId } from "@infra/request-context";
-import type { BranchInfo, JobChatMessage, JobChatRun } from "@shared/types";
+import type {
+  BranchInfo,
+  GhostwriterAssistantPayload,
+  GhostwriterCoverLetterKind,
+  JobChatMessage,
+  JobChatRun,
+} from "@shared/types";
 import {
   getGhostwriterDisplayText,
   normalizeGhostwriterAssistantPayload,
@@ -16,10 +22,14 @@ import {
 import * as jobChatRepo from "../repositories/ghostwriter";
 import * as jobsRepo from "../repositories/jobs";
 import { getCandidateKnowledgeBase } from "./candidate-knowledge";
-import { buildJobChatPromptContext } from "./ghostwriter-context";
+import {
+  buildJobChatPromptContext,
+  type GhostwriterEvidencePack,
+} from "./ghostwriter-context";
 import {
   lintCoverLetterDraft,
   sanitizeResumePatch,
+  scoreGhostwriterCandidate,
 } from "./ghostwriter-output-guard";
 import { LlmService } from "./llm/service";
 import type { JsonSchemaDefinition } from "./llm/types";
@@ -59,6 +69,222 @@ const CHAT_RESPONSE_SCHEMA: JsonSchemaDefinition = {
   },
 };
 
+const WRITING_STRATEGY_SCHEMA: JsonSchemaDefinition = {
+  name: "job_chat_writing_strategy",
+  schema: {
+    type: "object",
+    properties: {
+      angle: { type: "string" },
+      strongestEvidence: {
+        type: "array",
+        items: { type: "string" },
+      },
+      weakPoints: {
+        type: "array",
+        items: { type: "string" },
+      },
+      paragraphPlan: {
+        type: "array",
+        items: { type: "string" },
+      },
+      tonePlan: { type: "string" },
+      requiresClarification: { type: "boolean" },
+      clarifyingQuestions: {
+        type: "array",
+        items: { type: "string" },
+      },
+    },
+    required: [
+      "angle",
+      "strongestEvidence",
+      "weakPoints",
+      "paragraphPlan",
+      "tonePlan",
+      "requiresClarification",
+      "clarifyingQuestions",
+    ],
+    additionalProperties: false,
+  },
+};
+
+type GhostwriterTaskKind =
+  | "direct_chat"
+  | "cover_letter"
+  | "application_email"
+  | "resume_patch"
+  | "mixed";
+
+type WritingStrategy = {
+  angle: string;
+  strongestEvidence: string[];
+  weakPoints: string[];
+  paragraphPlan: string[];
+  tonePlan: string;
+  requiresClarification: boolean;
+  clarifyingQuestions: string[];
+};
+
+function classifyGhostwriterTask(prompt: string): GhostwriterTaskKind {
+  const normalized = prompt.toLowerCase();
+  const asksCoverLetter =
+    /cover letter|motivation letter|application letter/.test(normalized);
+  const asksEmail =
+    /application email|apply email|email application|email draft/.test(
+      normalized,
+    );
+  const asksResumePatch =
+    /resume|cv|tailor my cv|update my cv|rewrite my cv|refresh cv/.test(
+      normalized,
+    );
+
+  if ((asksCoverLetter || asksEmail) && asksResumePatch) return "mixed";
+  if (asksEmail) return "application_email";
+  if (asksCoverLetter) return "cover_letter";
+  if (asksResumePatch) return "resume_patch";
+  return "direct_chat";
+}
+
+function buildLocalWritingStrategy(args: {
+  taskKind: GhostwriterTaskKind;
+  evidencePack: GhostwriterEvidencePack;
+}): WritingStrategy {
+  const { taskKind, evidencePack } = args;
+  const paragraphPlan =
+    taskKind === "resume_patch"
+      ? [
+          "Sharpen the tailored summary around the recommended angle.",
+          "Keep the headline disciplined and close to the target role wording.",
+          "Select only skills that reinforce the strongest evidence.",
+        ]
+      : taskKind === "application_email"
+        ? [
+            "Open with a direct, local, non-template note tied to the role.",
+            "State the two strongest evidence-backed reasons for fit.",
+            "Close briefly with what the candidate can contribute next.",
+          ]
+        : [
+            "Open from the work or operating need, not from generic motivation language.",
+            "Use one body paragraph for the strongest evidence-backed fit reason.",
+            "Use another body paragraph for a second practical contribution angle while staying modest about gaps.",
+            "Close briefly with contribution-focused language.",
+          ];
+
+  return {
+    angle: evidencePack.recommendedAngle,
+    strongestEvidence: evidencePack.topEvidence,
+    weakPoints: evidencePack.biggestGaps,
+    paragraphPlan,
+    tonePlan: evidencePack.toneRecommendation,
+    requiresClarification: false,
+    clarifyingQuestions: [],
+  };
+}
+
+function buildStrategySnapshot(strategy: WritingStrategy): string {
+  return [
+    `Angle: ${strategy.angle}`,
+    strategy.strongestEvidence.length > 0
+      ? `Strongest evidence:\n- ${strategy.strongestEvidence.join("\n- ")}`
+      : null,
+    strategy.weakPoints.length > 0
+      ? `Weak points / caution:\n- ${strategy.weakPoints.join("\n- ")}`
+      : null,
+    strategy.paragraphPlan.length > 0
+      ? `Paragraph plan:\n- ${strategy.paragraphPlan.join("\n- ")}`
+      : null,
+    `Tone plan: ${strategy.tonePlan}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function buildBaseLlmMessages(args: {
+  systemPrompt: string;
+  jobSnapshot: string;
+  profileSnapshot: string;
+  companyResearchSnapshot: string;
+  evidencePackSnapshot: string;
+  history: Array<{ role: "user" | "assistant"; content: string }>;
+}) {
+  return [
+    {
+      role: "system" as const,
+      content: args.systemPrompt,
+    },
+    {
+      role: "system" as const,
+      content: `Job Context (JSON):\n${args.jobSnapshot}`,
+    },
+    {
+      role: "system" as const,
+      content: `Profile Context:\n${args.profileSnapshot || "No profile context available."}`,
+    },
+    ...(args.companyResearchSnapshot
+      ? [
+          {
+            role: "system" as const,
+            content: `Company Research Context:\n${args.companyResearchSnapshot}`,
+          },
+        ]
+      : []),
+    {
+      role: "system" as const,
+      content: `Evidence Pack:\n${args.evidencePackSnapshot}`,
+    },
+    ...args.history,
+  ];
+}
+
+function finalizePayloadCandidate(args: {
+  raw: unknown;
+  profile: Awaited<ReturnType<typeof buildJobChatPromptContext>>["profile"];
+  knowledgeBase: Awaited<ReturnType<typeof buildJobChatPromptContext>>["knowledgeBase"];
+}): GhostwriterAssistantPayload {
+  const payload = normalizeGhostwriterAssistantPayload(args.raw);
+  if (!payload) {
+    throw upstreamError("LLM returned an invalid Ghostwriter payload");
+  }
+
+  const { sanitized: sanitizedCoverLetterDraft } = lintCoverLetterDraft(
+    payload.coverLetterDraft,
+  );
+  const sanitizedResumePatch = payload.resumePatch
+    ? sanitizeResumePatch({
+        patch: payload.resumePatch,
+        profile: args.profile,
+        knowledgeBase: args.knowledgeBase,
+      }).sanitized
+    : null;
+
+  return {
+    ...payload,
+    coverLetterDraft: sanitizedCoverLetterDraft,
+    resumePatch: sanitizedResumePatch,
+  };
+}
+
+function rankPayloadCandidates(args: {
+  candidates: GhostwriterAssistantPayload[];
+  evidencePackSnapshot: string;
+  profile: Awaited<ReturnType<typeof buildJobChatPromptContext>>["profile"];
+  knowledgeBase: Awaited<ReturnType<typeof buildJobChatPromptContext>>["knowledgeBase"];
+}): GhostwriterAssistantPayload {
+  const ranked = args.candidates
+    .map((candidate, index) => ({
+      index,
+      candidate,
+      evaluation: scoreGhostwriterCandidate({
+        payload: candidate,
+        evidencePackText: args.evidencePackSnapshot,
+        profile: args.profile,
+        knowledgeBase: args.knowledgeBase,
+      }),
+    }))
+    .sort((a, b) => b.evaluation.score - a.evaluation.score);
+
+  return ranked[0]?.candidate ?? args.candidates[0];
+}
+
 function estimateTokenCount(value: string): number {
   if (!value) return 0;
   return Math.ceil(value.length / 4);
@@ -90,15 +316,23 @@ async function resolveLlmRuntimeSettings(): Promise<LlmRuntimeSettings> {
 async function applyResumePatchToJob(
   jobId: string,
   payload: NonNullable<ReturnType<typeof normalizeGhostwriterAssistantPayload>>,
+  options?: {
+    profile?: Awaited<ReturnType<typeof buildJobChatPromptContext>>["profile"];
+    knowledgeBase?: Awaited<ReturnType<typeof buildJobChatPromptContext>>["knowledgeBase"];
+  },
 ): Promise<void> {
   if (!payload.resumePatch) return;
 
   const [profile, knowledgeBase] = await Promise.all([
-    getProfile().catch(() => ({})),
-    getCandidateKnowledgeBase().catch(() => ({
-      personalFacts: [],
-      projects: [],
-    })),
+    options?.profile
+      ? Promise.resolve(options.profile)
+      : getProfile().catch(() => ({})),
+    options?.knowledgeBase
+      ? Promise.resolve(options.knowledgeBase)
+      : getCandidateKnowledgeBase().catch(() => ({
+          personalFacts: [],
+          projects: [],
+        })),
   ]);
   const { sanitized } = sanitizeResumePatch({
     patch: payload.resumePatch,
@@ -323,65 +557,197 @@ async function runAssistantReply(
       apiKey: llmConfig.apiKey,
     });
 
-    const llmResult = await llm.callJson<{ response: string }>({
-      model: llmConfig.model,
-      messages: [
-        {
-          role: "system",
-          content: context.systemPrompt,
-        },
-        {
-          role: "system",
-          content: `Job Context (JSON):\n${context.jobSnapshot}`,
-        },
-        {
-          role: "system",
-          content: `Profile Context:\n${context.profileSnapshot || "No profile context available."}`,
-        },
-        ...(context.companyResearchSnapshot
-          ? [
-              {
-                role: "system" as const,
-                content: `Company Research Context:\n${context.companyResearchSnapshot}`,
-              },
-            ]
-          : []),
-        ...history,
-        {
-          role: "user",
-          content: options.prompt,
-        },
-      ],
-      jsonSchema: CHAT_RESPONSE_SCHEMA,
-      maxRetries: 1,
-      retryDelayMs: 300,
-      jobId: options.jobId,
-      signal: controller.signal,
+    const taskKind = classifyGhostwriterTask(options.prompt);
+    const baseMessages = buildBaseLlmMessages({
+      systemPrompt: context.systemPrompt,
+      jobSnapshot: context.jobSnapshot,
+      profileSnapshot: context.profileSnapshot,
+      companyResearchSnapshot: context.companyResearchSnapshot,
+      evidencePackSnapshot: context.evidencePackSnapshot,
+      history,
     });
 
-    if (!llmResult.success) {
-      if (controller.signal.aborted) {
-        throw requestTimeout("Chat generation was cancelled");
-      }
-      throw upstreamError("LLM generation failed", {
-        reason: llmResult.error,
+    let structuredPayload: GhostwriterAssistantPayload;
+
+    if (taskKind === "direct_chat") {
+      const llmResult = await llm.callJson<{ response: string }>({
+        model: llmConfig.model,
+        messages: [
+          ...baseMessages,
+          {
+            role: "user",
+            content: options.prompt,
+          },
+        ],
+        jsonSchema: CHAT_RESPONSE_SCHEMA,
+        maxRetries: 1,
+        retryDelayMs: 300,
+        jobId: options.jobId,
+        signal: controller.signal,
       });
+
+      if (!llmResult.success) {
+        if (controller.signal.aborted) {
+          throw requestTimeout("Chat generation was cancelled");
+        }
+        throw upstreamError("LLM generation failed", {
+          reason: llmResult.error,
+        });
+      }
+
+      structuredPayload = finalizePayloadCandidate({
+        raw: llmResult.data,
+        profile: context.profile,
+        knowledgeBase: context.knowledgeBase,
+      });
+    } else {
+      const strategyPrompt = [
+        `Task kind: ${taskKind}`,
+        `User request: ${options.prompt}`,
+        "Build a compact writing strategy using the evidence pack. Focus on the best angle, strongest evidence, weak points to manage, and a practical paragraph plan.",
+        "Set requiresClarification to true only if a good draft would clearly suffer without extra user input.",
+      ].join("\n\n");
+
+      const strategyResult = await llm.callJson<WritingStrategy>({
+        model: llmConfig.model,
+        messages: [
+          ...baseMessages,
+          {
+            role: "system",
+            content:
+              "Return a writing strategy JSON only. Do not draft the final answer yet.",
+          },
+          {
+            role: "user",
+            content: strategyPrompt,
+          },
+        ],
+        jsonSchema: WRITING_STRATEGY_SCHEMA,
+        maxRetries: 1,
+        retryDelayMs: 300,
+        jobId: options.jobId,
+        signal: controller.signal,
+      });
+
+      if (!strategyResult.success) {
+        if (controller.signal.aborted) {
+          throw requestTimeout("Chat generation was cancelled");
+        }
+        throw upstreamError("Ghostwriter strategy generation failed", {
+          reason: strategyResult.error,
+        });
+      }
+
+      const strategy = {
+        ...buildLocalWritingStrategy({
+          taskKind,
+          evidencePack: context.evidencePack,
+        }),
+        ...strategyResult.data,
+      } satisfies WritingStrategy;
+
+      if (strategy.requiresClarification && strategy.clarifyingQuestions.length) {
+        structuredPayload = {
+          response: strategy.clarifyingQuestions
+            .slice(0, 3)
+            .map((question, index) => `${index + 1}. ${question}`)
+            .join("\n"),
+          coverLetterDraft: null,
+          coverLetterKind: null,
+          resumePatch: null,
+        };
+      } else {
+        const strategySnapshot = buildStrategySnapshot(strategy);
+        const variantDirectives: Array<{
+          name: string;
+          coverLetterKind: GhostwriterCoverLetterKind | null;
+          instruction: string;
+        }> = [
+          {
+            name: "conservative",
+            coverLetterKind:
+              taskKind === "application_email" ? "email" : taskKind === "cover_letter" || taskKind === "mixed" ? "letter" : null,
+            instruction:
+              "Variant profile: safest and most disciplined. Keep every claim tightly evidence-backed and understate weak areas rather than stretching them.",
+          },
+          {
+            name: "balanced",
+            coverLetterKind:
+              taskKind === "application_email" ? "email" : taskKind === "cover_letter" || taskKind === "mixed" ? "letter" : null,
+            instruction:
+              "Variant profile: balanced and practical. Prioritize the recommended angle and make the draft feel specific, useful, and employer-need driven.",
+          },
+          {
+            name: "evidence-heavy",
+            coverLetterKind:
+              taskKind === "application_email" ? "email" : taskKind === "cover_letter" || taskKind === "mixed" ? "letter" : null,
+            instruction:
+              "Variant profile: maximize concrete evidence density. Prefer stronger examples over broader motivation language and keep fluff close to zero.",
+          },
+        ];
+
+        const candidatePayloads: GhostwriterAssistantPayload[] = [];
+
+        for (const variant of variantDirectives) {
+          const variantResult = await llm.callJson<GhostwriterAssistantPayload>({
+            model: llmConfig.model,
+            messages: [
+              ...baseMessages,
+              {
+                role: "system",
+                content: `Approved Writing Strategy:\n${strategySnapshot}`,
+              },
+              {
+                role: "system",
+                content: variant.instruction,
+              },
+              {
+                role: "user",
+                content: options.prompt,
+              },
+            ],
+            jsonSchema: CHAT_RESPONSE_SCHEMA,
+            maxRetries: 1,
+            retryDelayMs: 300,
+            jobId: options.jobId,
+            signal: controller.signal,
+          });
+
+          if (!variantResult.success) {
+            if (controller.signal.aborted) {
+              throw requestTimeout("Chat generation was cancelled");
+            }
+            throw upstreamError(`Ghostwriter ${variant.name} draft generation failed`, {
+              reason: variantResult.error,
+            });
+          }
+
+          const candidate = finalizePayloadCandidate({
+            raw: variantResult.data,
+            profile: context.profile,
+            knowledgeBase: context.knowledgeBase,
+          });
+
+          candidatePayloads.push({
+            ...candidate,
+            coverLetterKind:
+              candidate.coverLetterKind ?? variant.coverLetterKind,
+          });
+        }
+
+        structuredPayload = rankPayloadCandidates({
+          candidates: candidatePayloads,
+          evidencePackSnapshot: context.evidencePackSnapshot,
+          profile: context.profile,
+          knowledgeBase: context.knowledgeBase,
+        });
+      }
     }
 
-    const payload = normalizeGhostwriterAssistantPayload(llmResult.data);
-    if (!payload) {
-      throw upstreamError("LLM returned an invalid Ghostwriter payload");
-    }
-
-    const { sanitized: sanitizedCoverLetterDraft } = lintCoverLetterDraft(
-      payload.coverLetterDraft,
-    );
-    const structuredPayload = {
-      ...payload,
-      coverLetterDraft: sanitizedCoverLetterDraft,
-    };
-
-    await applyResumePatchToJob(options.jobId, structuredPayload);
+    await applyResumePatchToJob(options.jobId, structuredPayload, {
+      profile: context.profile,
+      knowledgeBase: context.knowledgeBase,
+    });
 
     const finalText = serializeGhostwriterAssistantPayload(structuredPayload);
     const chunks = chunkText(finalText);

@@ -33,6 +33,7 @@ function buildCoreProtocolSection(): string[] {
     "Before writing, silently classify the user request as one of: direct_chat, cover_letter, application_email, resume_patch, or mixed.",
     "Then satisfy only that task. Do not generate a cover letter or resume update unless the user is actually asking for one.",
     "If the request is underspecified and quality would suffer, ask 1-3 concrete clarifying questions in response and leave coverLetterDraft and resumePatch as null.",
+    "For writing tasks, silently plan first: choose the angle, select the best evidence, note the weak points, and decide what not to claim before drafting.",
     "",
     "Output contract:",
     'Always return valid JSON with this exact shape: {"response":"...","coverLetterDraft":null,"coverLetterKind":null,"resumePatch":null}.',
@@ -75,6 +76,7 @@ function buildLanguageAndPatchSection(args: GhostwriterPromptArgs): string[] {
     "For resume patches, prefer recruiter-facing, evidence-backed wording over biography or motivation language.",
     "For resume patches, do not add tools, scope, achievements, or ownership that are not supported by the supplied profile.",
     "For resume patches, prefer compact statements that improve fit for this job rather than rewriting the whole profile in softer words.",
+    "For resume patches, anchor each important line to a supplied requirement or a supplied piece of evidence; if you cannot anchor it, leave it out.",
   ];
 }
 
@@ -101,6 +103,19 @@ function buildCompanyResearchSection(): string[] {
     "For cover letters, blend company understanding naturally into the opening or one evidence paragraph instead of sounding like copied company marketing.",
     "For resume patches, use company understanding only to improve the tailored summary or headline when it helps position the candidate for this employer's real work.",
     "Do not include company facts that are unsupported by the provided company-research context.",
+  ];
+}
+
+function buildEvidencePackSection(): string[] {
+  return [
+    "",
+    "Evidence-pack rules:",
+    "When an evidence pack is provided, treat it as the primary writing brief: strongest fit reasons, strongest evidence, biggest gaps, recommended angle, forbidden claims, and tone recommendation.",
+    "Prefer the evidence pack over weaker generic cues in the raw profile or job text.",
+    "Use the top evidence to support the strongest claims first instead of spreading attention evenly across the entire profile.",
+    "Respect the biggest gaps and forbidden claims. When the evidence pack says not to imply something, do not sneak it back in through softer wording.",
+    "If the evidence pack recommends a specific angle, keep the draft centered on that angle unless the user explicitly asks for a different emphasis.",
+    "Each major paragraph or CV claim should be traceable to either a top fit reason or a top evidence item from the evidence pack.",
   ];
 }
 
@@ -174,6 +189,7 @@ export function buildGhostwriterSystemPrompt(
     ...buildLanguageAndPatchSection(promptArgs),
     ...buildCoverLetterSection(),
     ...buildCompanyResearchSection(),
+    ...buildEvidencePackSection(),
     ...buildCandidatePositioningSection(),
     ...buildPresetSection(profile),
     ...buildStyleSection(promptArgs),

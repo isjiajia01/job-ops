@@ -1,5 +1,6 @@
 import type {
   CandidateKnowledgeBase,
+  GhostwriterAssistantPayload,
   GhostwriterResumePatch,
   GhostwriterSkillGroup,
   ResumeProfile,
@@ -59,6 +60,19 @@ const COVER_LETTER_GENERIC_OPENING_PREFIXES = [
   "this role is a perfect fit",
   "i believe i am a strong fit",
   "i am confident that i would be a great fit",
+];
+
+const GENERIC_COVER_LETTER_PATTERNS = [
+  /\bi am excited to apply\b/gi,
+  /\bi am writing to express my interest\b/gi,
+  /\bperfect fit\b/gi,
+  /\bdynamic team\b/gi,
+  /\bfast-paced environment\b/gi,
+  /\bpassionate about\b/gi,
+  /\bhighly motivated\b/gi,
+  /\bthrilled to\b/gi,
+  /\bsynergy\b/gi,
+  /\bleverage\b/gi,
 ];
 
 function containsHighRiskPatchLanguage(
@@ -153,6 +167,29 @@ function hasEnoughProfileOverlap(
 
   const overlapCount = tokens.filter((token) => tokenSet.has(token)).length;
   return overlapCount >= 2;
+}
+
+function countRegexMatches(value: string, patterns: RegExp[]): number {
+  return patterns.reduce((total, pattern) => {
+    const matches = value.match(pattern);
+    return total + (matches?.length ?? 0);
+  }, 0);
+}
+
+function countTokenOverlap(value: string, tokenSet: Set<string>): number {
+  const unique = new Set(tokenizeOverlapSource(value));
+  let overlap = 0;
+  for (const token of unique) {
+    if (tokenSet.has(token)) overlap += 1;
+  }
+  return overlap;
+}
+
+function countParagraphs(value: string): number {
+  return value
+    .split(/\n\s*\n/g)
+    .map((part) => part.trim())
+    .filter(Boolean).length;
 }
 
 export function lintCoverLetterDraft(draft: string | null | undefined): {
@@ -266,4 +303,84 @@ export function sanitizeResumePatch(args: {
     },
     removedFields,
   };
+}
+
+export function scoreGhostwriterCandidate(args: {
+  payload: GhostwriterAssistantPayload;
+  evidencePackText?: string | null;
+  profile: ResumeProfile;
+  knowledgeBase: CandidateKnowledgeBase;
+}): {
+  score: number;
+  reasons: string[];
+} {
+  const reasons: string[] = [];
+  const profileEvidenceTokens = buildProfileEvidenceTokenSet(
+    args.profile,
+    args.knowledgeBase,
+  );
+  const evidenceTokens = new Set(profileEvidenceTokens);
+
+  for (const token of tokenizeOverlapSource(args.evidencePackText)) {
+    evidenceTokens.add(token);
+  }
+
+  let score = 0;
+
+  if (args.payload.coverLetterDraft) {
+    const draft = args.payload.coverLetterDraft;
+    const overlap = countTokenOverlap(draft, evidenceTokens);
+    const genericMatches = countRegexMatches(draft, GENERIC_COVER_LETTER_PATTERNS);
+    const paragraphCount = countParagraphs(draft);
+
+    score += Math.min(overlap, 8) * 2;
+    if (overlap > 0) reasons.push(`evidence-overlap:${overlap}`);
+
+    if (paragraphCount >= 2 && paragraphCount <= 4) {
+      score += 3;
+      reasons.push(`paragraph-structure:${paragraphCount}`);
+    }
+
+    if (draft.length >= 170 && draft.length <= 320) {
+      score += 2;
+      reasons.push("good-length");
+    }
+
+    if (containsHighRiskPatchLanguage(draft)) {
+      score -= 6;
+      reasons.push("high-risk-language");
+    }
+
+    if (genericMatches > 0) {
+      score -= genericMatches * 2;
+      reasons.push(`generic-phrases:${genericMatches}`);
+    }
+  }
+
+  if (args.payload.resumePatch) {
+    const sanitizedPatch = sanitizeResumePatch({
+      patch: args.payload.resumePatch,
+      profile: args.profile,
+      knowledgeBase: args.knowledgeBase,
+    }).sanitized;
+
+    if (sanitizedPatch?.tailoredSummary) {
+      score += 3 + Math.min(countTokenOverlap(sanitizedPatch.tailoredSummary, evidenceTokens), 4);
+      reasons.push("resume-summary");
+    }
+
+    if (sanitizedPatch?.tailoredHeadline) {
+      score += 2 + Math.min(countTokenOverlap(sanitizedPatch.tailoredHeadline, evidenceTokens), 2);
+      reasons.push("resume-headline");
+    }
+
+    if (sanitizedPatch?.tailoredSkills?.length) {
+      score += sanitizedPatch.tailoredSkills.length * 2;
+      reasons.push(`resume-skills:${sanitizedPatch.tailoredSkills.length}`);
+    }
+  }
+
+  score += Math.max(args.payload.response.trim().length > 0 ? 1 : 0, 0);
+
+  return { score, reasons };
 }

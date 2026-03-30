@@ -72,6 +72,7 @@ describe("buildGhostwriterSystemPrompt", () => {
     expect(prompt).toContain("Resume-patch rules:");
     expect(prompt).toContain("Cover-letter rules:");
     expect(prompt).toContain("Company-research rules:");
+    expect(prompt).toContain("Evidence-pack rules:");
     expect(prompt).toContain(
       "Writing constraints: Keep responses under 120 words",
     );

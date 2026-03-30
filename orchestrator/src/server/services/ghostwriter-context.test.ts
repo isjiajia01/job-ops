@@ -15,6 +15,10 @@ vi.mock("./company-research", () => ({
   getCompanyResearchNoteForJob: vi.fn(),
 }));
 
+vi.mock("./candidate-knowledge", () => ({
+  getCandidateKnowledgeBase: vi.fn(),
+}));
+
 vi.mock("./writing-style", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./writing-style")>();
 
@@ -25,6 +29,7 @@ vi.mock("./writing-style", async (importOriginal) => {
 });
 
 import { getJobById } from "../repositories/jobs";
+import { getCandidateKnowledgeBase } from "./candidate-knowledge";
 import { getCompanyResearchNoteForJob } from "./company-research";
 import { getProfile } from "./profile";
 import { getWritingStyle } from "./writing-style";
@@ -41,6 +46,11 @@ describe("buildJobChatPromptContext", () => {
       manualLanguage: "english",
     });
     vi.mocked(getCompanyResearchNoteForJob).mockResolvedValue(null);
+    vi.mocked(getCandidateKnowledgeBase).mockResolvedValue({
+      personalFacts: [],
+      projects: [],
+      companyResearchNotes: [],
+    });
   });
 
   it("builds context with style directives and snapshots", async () => {
@@ -172,6 +182,9 @@ describe("buildJobChatPromptContext", () => {
     expect(context.profileSnapshot).toContain("Name: Test User");
     expect(context.profileSnapshot).toContain("Skills:");
     expect(context.companyResearchSnapshot).toBe("");
+    expect(context.evidencePackSnapshot).toContain("Target role summary:");
+    expect(context.evidencePackSnapshot).toContain("Top fit reasons:");
+    expect(context.evidencePack.recommendedAngle).toBeTruthy();
   });
 
   it("includes company research snapshot when available", async () => {

@@ -155,6 +155,26 @@ describe("ghostwriter service", () => {
     mocks.settings.getAllSettings.mockResolvedValue({});
     mocks.buildJobChatPromptContext.mockResolvedValue({
       job: { id: "job-1" },
+      profile: {
+        basics: {
+          name: "Candidate Name",
+          headline:
+            "Planning Analytics Candidate | Python, Excel, Operations Research, Decision Support",
+          summary:
+            "Strongest fit is in planning-oriented and analytics-heavy roles with Python and Excel analysis.",
+        },
+      },
+      knowledgeBase: {
+        personalFacts: [
+          {
+            id: "fact-1",
+            title: "Target roles",
+            detail:
+              "Targeting demand planning, supply planning, logistics planning, and planning analytics roles.",
+          },
+        ],
+        projects: [],
+      },
       style: {
         tone: "professional",
         formality: "medium",
@@ -166,6 +186,17 @@ describe("ghostwriter service", () => {
       profileSnapshot: "profile snapshot",
       companyResearchSnapshot:
         "Company: ACME\nResearch summary: ACME is expanding its analytics-driven operations.",
+      evidencePack: {
+        targetRoleSummary: "Planning-heavy role",
+        topFitReasons: ["Planning fit"],
+        topEvidence: ["DTU planning thesis"],
+        biggestGaps: ["Avoid overstating seniority"],
+        recommendedAngle: "Lead with planning-oriented problem solving.",
+        forbiddenClaims: ["Do not claim senior ownership."],
+        toneRecommendation: "Direct and practical.",
+      },
+      evidencePackSnapshot:
+        "Target role summary: Planning-heavy role\nTop fit reasons:\n- Planning fit",
     });
     mocks.getProfile.mockResolvedValue({
       basics: {
@@ -343,7 +374,7 @@ describe("ghostwriter service", () => {
     );
 
     const llmArg = mocks.llmCallJson.mock.calls[0][0];
-    expect(llmArg.messages.slice(0, 4)).toEqual([
+    expect(llmArg.messages.slice(0, 5)).toEqual([
       { role: "system", content: "system prompt" },
       { role: "system", content: 'Job Context (JSON):\n{"job":"snapshot"}' },
       { role: "system", content: "Profile Context:\nprofile snapshot" },
@@ -351,6 +382,11 @@ describe("ghostwriter service", () => {
         role: "system",
         content:
           "Company Research Context:\nCompany: ACME\nResearch summary: ACME is expanding its analytics-driven operations.",
+      },
+      {
+        role: "system",
+        content:
+          "Evidence Pack:\nTarget role summary: Planning-heavy role\nTop fit reasons:\n- Planning fit",
       },
     ]);
     expect(llmArg.messages.at(-1)).toMatchObject({
@@ -601,7 +637,8 @@ describe("ghostwriter service", () => {
         content: "Here is a stronger draft.",
         draft: "Dear Team,\n\nThis is the letter body.",
         resumePatch: {
-          summary: "Refined summary only",
+          summary:
+            "Planning-oriented analytical profile with Python and Excel decision support.",
         },
       },
     });
@@ -619,7 +656,8 @@ describe("ghostwriter service", () => {
       "Dear Team,\n\nThis is the letter body.",
     );
     expect(parsed.resumePatch).toEqual({
-      tailoredSummary: "Refined summary only",
+      tailoredSummary:
+        "Planning-oriented analytical profile with Python and Excel decision support.",
       tailoredHeadline: null,
       tailoredSkills: null,
     });
