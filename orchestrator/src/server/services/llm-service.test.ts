@@ -316,6 +316,20 @@ describe("parseJsonContent", () => {
     expect(result.foo).toBe("bar");
   });
 
+  it("parses the first balanced JSON object when trailing garbage follows", () => {
+    const result = parseJsonContent<{ foo: string }>(
+      '{"foo":"bar"}\n{"extra":true}',
+    );
+    expect(result.foo).toBe("bar");
+  });
+
+  it("parses arrays when they are the first balanced JSON candidate", () => {
+    const result = parseJsonContent<Array<{ foo: string }>>(
+      'prefix [{"foo":"bar"}] trailing text',
+    );
+    expect(result[0]?.foo).toBe("bar");
+  });
+
   it("throws on completely invalid content", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     expect(() => parseJsonContent("not json at all")).toThrow();

@@ -7,25 +7,72 @@ export function stripMarkdownCodeFences(content: string): string {
     .trim();
 }
 
+function extractBalancedJsonCandidate(content: string): string | null {
+  const start = content.search(/[\[{]/);
+  if (start === -1) return null;
+
+  const opening = content[start];
+  const closing = opening === "{" ? "}" : "]";
+  let depth = 0;
+  let inString = false;
+  let escaping = false;
+
+  for (let index = start; index < content.length; index += 1) {
+    const char = content[index];
+
+    if (inString) {
+      if (escaping) {
+        escaping = false;
+      } else if (char === "\\") {
+        escaping = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === opening) {
+      depth += 1;
+      continue;
+    }
+
+    if (char === closing) {
+      depth -= 1;
+      if (depth === 0) {
+        return content.slice(start, index + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
 export function parseJsonContent<T>(content: string, jobId?: string): T {
-  let candidate = stripMarkdownCodeFences(content);
+  const stripped = stripMarkdownCodeFences(content);
+  const candidates = [
+    stripped,
+    extractBalancedJsonCandidate(stripped),
+  ].filter((candidate): candidate is string => Boolean(candidate));
 
-  const firstBrace = candidate.indexOf("{");
-  const lastBrace = candidate.lastIndexOf("}");
-
-  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    candidate = candidate.substring(firstBrace, lastBrace + 1);
+  let lastError: unknown = null;
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate) as T;
+    } catch (error) {
+      lastError = error;
+    }
   }
 
-  try {
-    return JSON.parse(candidate) as T;
-  } catch (error) {
-    logger.error("Failed to parse LLM JSON content", {
-      jobId: jobId ?? "unknown",
-      sample: candidate.substring(0, 200),
-    });
-    throw new Error(
-      `Failed to parse JSON response: ${error instanceof Error ? error.message : "unknown"}`,
-    );
-  }
+  logger.error("Failed to parse LLM JSON content", {
+    jobId: jobId ?? "unknown",
+    sample: stripped.substring(0, 200),
+  });
+  throw new Error(
+    `Failed to parse JSON response: ${lastError instanceof Error ? lastError.message : "unknown"}`,
+  );
 }
