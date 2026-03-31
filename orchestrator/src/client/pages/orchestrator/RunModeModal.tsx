@@ -52,7 +52,7 @@ export const RunModeModal: React.FC<RunModeModalProps> = ({
               Legacy intake tools
             </SheetTitle>
             <SheetDescription>
-              Use the older batch pipeline here, or do a manual JD import when you need the legacy orchestrator flow.
+              Use the older batch pipeline here, or do a manual JD import when you need the legacy intake flow.
             </SheetDescription>
           </SheetHeader>
 

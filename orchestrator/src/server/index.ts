@@ -47,7 +47,7 @@ async function startServer() {
     console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
-║   🚀 Job Ops Orchestrator                                 ║
+║   🚀 Job Ops Application Workspace                        ║
 ║                                                           ║
 ║   Server running at: http://localhost:${PORT}               ║
 ║                                                           ║

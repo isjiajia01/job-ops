@@ -2,7 +2,7 @@
   "name": "job-ops-orchestrator",
   "version": "0.2.4",
   "type": "module",
-  "description": "Unified orchestrator for job application pipeline",
+  "description": "Application-first workspace for job search, tailoring, and tracking",
   "main": "src/server/index.ts",
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",

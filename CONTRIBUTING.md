@@ -51,8 +51,8 @@ npm run docs:dev
 
 Local URLs:
 
-- Orchestrator UI: `http://localhost:5173`
-- Orchestrator API: `http://localhost:3001`
+- Job Ops UI: `http://localhost:5173`
+- Job Ops API: `http://localhost:3001`
 - Docs site: `http://localhost:3006`
 
 ## How to Make a Change

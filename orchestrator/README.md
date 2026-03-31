@@ -1,6 +1,6 @@
-# Job Ops Orchestrator
+# Job Ops Application Workspace
 
-A unified orchestrator for the job application pipeline. Discovers jobs, scores them for suitability, generates tailored resumes, and provides a UI to manage applications.
+An application-first workspace for the job search pipeline. Discovers roles, scores them for suitability, generates tailored resumes, and provides a focused UI to manage applications.
 
 ## Architecture
 
