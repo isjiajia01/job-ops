@@ -85,11 +85,15 @@ function buildCoverLetterSection(): string[] {
     "",
     "Cover-letter rules:",
     "When writing a cover letter, use natural first-person cover-letter voice.",
-    "For cover letters, keep the draft targeted to the specific role and employer, usually within one page and 3-5 short paragraphs.",
+    "For cover letters, keep the draft targeted to the specific role and employer, usually within one page and 3-4 short paragraphs.",
     "For cover letters, explain why this role and employer are a fit and support that case with 2-3 concrete examples from the provided profile.",
     "For cover letters, each body paragraph should make one clear fit claim and support it with evidence from the provided profile.",
     "For cover letters, do not repeat the resume line by line, do not use placeholders, and avoid generic praise or inflated enthusiasm.",
-    "For cover letters, prefer a clear structure: brief opening, evidence-focused body, concise close.",
+    "For cover letters, prefer this default structure unless the user asks otherwise: a concrete opening tied to the work, 1-2 short evidence paragraphs, and a concise closing.",
+    "For cover letters, the opening should start from the role's work, operating problem, or planning need rather than generic motivation language.",
+    "For cover letters, the closing should be short, useful, and contribution-oriented rather than ceremonial.",
+    "If a portfolio or website link is relevant, place it naturally in the closing or contact-style line, not as an awkward standalone sentence in the middle of the body.",
+    "When including a website, prefer the full URL format including https://.",
     "When reliable company research context is provided, weave 1-2 concrete observations about the employer's business, product, or operating priorities into the fit case naturally.",
     "Use company research only when it is specific and relevant to the role; do not force it into every paragraph and do not present uncertain research as a hard fact.",
   ];
@@ -131,7 +135,9 @@ function buildCandidatePositioningSection(): string[] {
     "Denmark-local style:",
     "For Denmark-local cover letters, keep the tone direct, employer-need driven, and restrained rather than highly enthusiastic or self-promotional.",
     "For Denmark-local cover letters, prefer a local, non-template opening and avoid generic salutations when a more specific opening is possible.",
+    "For Denmark-local cover letters, use a practical 3-part flow: work-focused opening, evidence-focused middle, and a short useful closing.",
     "For Denmark-local cover letters, keep the closing short and useful, with more emphasis on how the candidate can contribute and less on formal courtesy language.",
+    "For Denmark-local cover letters, if a portfolio link helps, place it in the closing or contact context in a restrained way, preferably with the full URL.",
   ];
 }
 

@@ -44,9 +44,9 @@ export const COVER_LETTER_PROMPTS: GhostwriterPromptPreset[] = [
     id: "cover-letter-denmark",
     label: "Concise Denmark Style",
     description:
-      "Direct, modest, employer-need driven, and more restrained in tone.",
+      "Work-first opening, concrete evidence, and a short Denmark-local closing.",
     prompt:
-      "Draft a concise Denmark-style cover letter for this job. Keep it to 3 short paragraphs and under 220 words. Use natural first-person voice, but keep the tone direct, modest, practical, employer-need driven, and sincere. Start with a local, non-template opening and avoid generic salutations like 'Dear Hiring Team' unless no better option is possible. Focus on why this role fits, how my background can help, and 2 concrete examples from the provided profile. End with a short, useful closing that focuses on what I can contribute, not a long polite wrap-up. Use concrete day-to-day details from the provided profile or JD when they make the letter feel more real, but do not invent personal stories or unsupported life details. Avoid overselling, exaggerated enthusiasm, and generic praise. Do not invent experience or repeat the CV line by line.",
+      "Draft a concise Denmark-style cover letter for this job. Keep it to 3-4 short paragraphs and under 240 words. Use natural first-person voice, but keep the tone direct, modest, practical, employer-need driven, and sincere. Use this structure: (1) a work-first opening tied to the role's planning or operating context, (2) one short paragraph with the strongest current evidence, (3) one short paragraph with supporting evidence from internship/project work if useful, and (4) a short useful closing. Avoid generic salutations like 'Dear Hiring Team' unless no better option is possible. Use concrete day-to-day planning detail when it helps the letter feel real. Avoid overselling, exaggerated enthusiasm, generic praise, and CV repetition. If including a portfolio or website link, place it naturally in the closing or contact-style line and use the full URL.",
   },
   {
     id: "cover-letter-email",

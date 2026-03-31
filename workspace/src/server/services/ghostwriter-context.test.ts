@@ -151,7 +151,10 @@ describe("buildJobChatPromptContext", () => {
       "When writing a cover letter, use natural first-person cover-letter voice.",
     );
     expect(context.systemPrompt).toContain(
-      "For cover letters, keep the draft targeted to the specific role and employer, usually within one page and 3-5 short paragraphs.",
+      "For cover letters, keep the draft targeted to the specific role and employer, usually within one page and 3-4 short paragraphs.",
+    );
+    expect(context.systemPrompt).toContain(
+      "For cover letters, prefer this default structure unless the user asks otherwise: a concrete opening tied to the work, 1-2 short evidence paragraphs, and a concise closing.",
     );
     expect(context.systemPrompt).toContain(
       "For cover letters, explain why this role and employer are a fit and support that case with 2-3 concrete examples from the provided profile.",
