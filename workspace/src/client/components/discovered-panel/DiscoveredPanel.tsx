@@ -59,6 +59,11 @@ export const DiscoveredPanel: React.FC<DiscoveredPanelProps> = ({
 
   const handleSkip = async () => {
     if (!job) return;
+    const confirmed = window.confirm(
+      "Delete this draft application from JobOps? This cannot be undone.",
+    );
+    if (!confirmed) return;
+
     try {
       setIsSkipping(true);
       await skipJobMutation.mutateAsync(job.id);
@@ -66,9 +71,9 @@ export const DiscoveredPanel: React.FC<DiscoveredPanelProps> = ({
         action: "skip",
         result: "success",
         from_status: job.status,
-        to_status: "skipped",
+        to_status: "deleted",
       });
-      toast.message("Job skipped");
+      toast.message("Application deleted");
       onJobMoved(job.id);
       await onJobUpdated();
     } catch (error) {
@@ -76,10 +81,10 @@ export const DiscoveredPanel: React.FC<DiscoveredPanelProps> = ({
         action: "skip",
         result: "error",
         from_status: job.status,
-        to_status: "skipped",
+        to_status: "deleted",
       });
       const message =
-        error instanceof Error ? error.message : "Failed to skip job";
+        error instanceof Error ? error.message : "Failed to delete application";
       toast.error(message);
     } finally {
       setIsSkipping(false);

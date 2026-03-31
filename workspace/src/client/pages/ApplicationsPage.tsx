@@ -72,18 +72,23 @@ export const ApplicationsPage: React.FC = () => {
     [applicationsQuery.data],
   );
 
+  const visibleApplications = useMemo(
+    () => applications.filter((job) => job.status !== "skipped"),
+    [applications],
+  );
+
   const filteredApplications = useMemo(
-    () => applications.filter((job) => matchesQuery(job, query)),
-    [applications, query],
+    () => visibleApplications.filter((job) => matchesQuery(job, query)),
+    [visibleApplications, query],
   );
 
   const stats = useMemo(() => {
-    const active = applications.filter((job) =>
+    const active = visibleApplications.filter((job) =>
       ["ready", "applied", "in_progress"].includes(job.status),
     ).length;
-    const drafts = applications.filter((job) => job.status === "discovered").length;
-    const followUp = applications.filter((job) => job.status === "in_progress").length;
-    const avgScoreSource = applications
+    const drafts = visibleApplications.filter((job) => job.status === "discovered").length;
+    const followUp = visibleApplications.filter((job) => job.status === "in_progress").length;
+    const avgScoreSource = visibleApplications
       .map((job) => job.suitabilityScore)
       .filter((score): score is number => typeof score === "number");
     const avgScore =
@@ -95,7 +100,7 @@ export const ApplicationsPage: React.FC = () => {
         : null;
 
     return { active, drafts, followUp, avgScore };
-  }, [applications]);
+  }, [visibleApplications]);
 
   const handleOpenManualImport = () => {
     setManualImportOpen(true);

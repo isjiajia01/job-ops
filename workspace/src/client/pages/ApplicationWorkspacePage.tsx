@@ -308,10 +308,16 @@ export const ApplicationWorkspacePage: React.FC = () => {
   };
 
   const handleSkip = async () => {
+    if (!job) return;
+    const confirmed = window.confirm(
+      `Delete this ${job.status === "ready" ? "ready-to-apply" : "draft"} application from JobOps? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
     await runAction("skip", async () => {
-      if (!job) return;
       await skipJobMutation.mutateAsync(job.id);
-      toast.message("Application skipped");
+      toast.message("Application deleted");
+      navigate("/applications", { replace: true });
     });
   };
 

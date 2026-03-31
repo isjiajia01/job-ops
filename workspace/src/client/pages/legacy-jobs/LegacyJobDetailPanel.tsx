@@ -313,25 +313,30 @@ export const LegacyJobDetailPanel: React.FC<
 
   const handleSkip = async () => {
     if (!selectedJob) return;
+    const confirmed = window.confirm(
+      `Delete this ${selectedJob.status === "ready" ? "ready-to-apply" : "draft"} application from JobOps? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
     try {
       await skipJobMutation.mutateAsync(selectedJob.id);
       trackProductEvent("jobs_job_action_completed", {
         action: "skip",
         result: "success",
         from_status: selectedJob.status,
-        to_status: "skipped",
+        to_status: "deleted",
       });
-      toast.message("Job skipped");
+      toast.message("Application deleted");
       await onJobUpdated();
     } catch (error) {
       trackProductEvent("jobs_job_action_completed", {
         action: "skip",
         result: "error",
         from_status: selectedJob.status,
-        to_status: "skipped",
+        to_status: "deleted",
       });
       const message =
-        error instanceof Error ? error.message : "Failed to skip job";
+        error instanceof Error ? error.message : "Failed to delete application";
       toast.error(message);
     }
   };

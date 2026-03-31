@@ -267,6 +267,10 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
 
   const handleSkip = useCallback(async () => {
     if (!job) return;
+    const confirmed = window.confirm(
+      "Delete this ready-to-apply application from JobOps? This cannot be undone.",
+    );
+    if (!confirmed) return;
 
     try {
       await skipJobMutation.mutateAsync(job.id);
@@ -274,9 +278,9 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
         action: "skip",
         result: "success",
         from_status: job.status,
-        to_status: "skipped",
+        to_status: "deleted",
       });
-      toast.message("Job skipped");
+      toast.message("Application deleted");
       onJobMoved(job.id);
       await onJobUpdated();
     } catch (error) {
@@ -284,9 +288,9 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
         action: "skip",
         result: "error",
         from_status: job.status,
-        to_status: "skipped",
+        to_status: "deleted",
       });
-      const message = error instanceof Error ? error.message : "Failed to skip";
+      const message = error instanceof Error ? error.message : "Failed to delete application";
       toast.error(message);
     }
   }, [job, onJobMoved, onJobUpdated, skipJobMutation]);

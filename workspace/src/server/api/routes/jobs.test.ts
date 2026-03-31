@@ -406,11 +406,14 @@ describe.sequential("Jobs API routes", () => {
     expect(skipBody.data.results[0].ok).toBe(true);
     expect(skipBody.data.results[0].job.status).toBe("skipped");
 
+    const deletedJobRes = await fetch(`${baseUrl}/api/jobs/${job.id}`);
+    expect(deletedJobRes.status).toBe(404);
+
     const deleteRes = await fetch(`${baseUrl}/api/jobs/status/skipped`, {
       method: "DELETE",
     });
     const deleteBody = await deleteRes.json();
-    expect(deleteBody.data.count).toBe(1);
+    expect(deleteBody.data.count).toBe(0);
   });
 
   it("runs skip action with partial failures", async () => {

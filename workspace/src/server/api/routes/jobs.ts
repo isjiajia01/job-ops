@@ -354,8 +354,8 @@ async function executeJobActionForJob(
         });
       }
 
-      const updated = await jobsRepo.updateJob(jobId, { status: "skipped" });
-      if (!updated) {
+      const deleted = await jobsRepo.deleteJobById(jobId);
+      if (deleted === 0) {
         throw new AppError({
           status: 404,
           code: "NOT_FOUND",
@@ -363,7 +363,7 @@ async function executeJobActionForJob(
         });
       }
 
-      return { jobId, ok: true, job: updated };
+      return { jobId, ok: true, job: { ...job, status: "skipped" } };
     }
 
     if (action === "move_to_ready") {

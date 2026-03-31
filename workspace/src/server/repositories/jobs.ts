@@ -402,6 +402,14 @@ export async function getUnscoredDiscoveredJobs(
 }
 
 /**
+ * Delete a single job by id.
+ */
+export async function deleteJobById(id: string): Promise<number> {
+  const result = await db.delete(jobs).where(eq(jobs.id, id)).run();
+  return result.changes;
+}
+
+/**
  * Delete jobs by status.
  */
 export async function deleteJobsByStatus(status: JobStatus): Promise<number> {
