@@ -19,7 +19,7 @@ import { CvPage } from "./pages/CvPage";
 import { GmailOauthCallbackPage } from "./pages/GmailOauthCallbackPage";
 import { HomePage } from "./pages/HomePage";
 import { InProgressBoardPage } from "./pages/InProgressBoardPage";
-import { OrchestratorPage } from "./pages/OrchestratorPage";
+import { LegacyJobsPage } from "./pages/LegacyJobsPage";
 import { ProfileHubPage } from "./pages/ProfileHubPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TracerLinksPage } from "./pages/TracerLinksPage";
@@ -73,7 +73,7 @@ export const App: React.FC = () => {
   const pageKey = React.useMemo(() => {
     const firstSegment = location.pathname.split("/")[1] || "jobs";
     if (firstSegment === "jobs") {
-      return "orchestrator";
+      return "legacy-jobs";
     }
     return firstSegment;
   }, [location.pathname]);
@@ -178,10 +178,10 @@ export const App: React.FC = () => {
                 <Route path="/tracer-links" element={<TracerLinksPage />} />
                 <Route path="/visa-sponsors" element={<VisaSponsorsPage />} />
                 <Route path="/tracking-inbox" element={<TrackingInboxPage />} />
-                <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+                <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
                 <Route
                   path="/legacy/jobs/:tab/:jobId"
-                  element={<OrchestratorPage />}
+                  element={<LegacyJobsPage />}
                 />
               </Routes>
             </div>

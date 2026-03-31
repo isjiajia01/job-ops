@@ -42,8 +42,8 @@ vi.mock("./pages/ApplicationWorkspacePage", () => ({
   ApplicationWorkspacePage: () => null,
 }));
 
-vi.mock("./pages/OrchestratorPage", () => ({
-  OrchestratorPage: () => null,
+vi.mock("./pages/LegacyJobsPage", () => ({
+  LegacyJobsPage: () => null,
 }));
 
 vi.mock("./pages/ProfileHubPage", () => ({

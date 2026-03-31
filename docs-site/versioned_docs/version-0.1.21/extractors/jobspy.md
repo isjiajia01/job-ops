@@ -23,7 +23,7 @@ Key environment variables:
 - `JOBSPY_COUNTRY_INDEED` (default: `UK`)
 - `JOBSPY_LINKEDIN_FETCH_DESCRIPTION` (default: `true`)
 
-## 2) Orchestrator flow
+## 2) Workspace flow
 
 The service in `orchestrator/src/server/services/jobspy.ts`:
 

@@ -59,5 +59,5 @@ Use shortcuts from the Jobs page:
 ## Related pages
 
 - [Keyboard Shortcuts](./keyboard-shortcuts)
-- [Orchestrator](./orchestrator)
+- [Application Workspace](./orchestrator)
 - [Find Jobs and Apply Workflow](../workflows/find-jobs-and-apply-workflow)

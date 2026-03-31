@@ -68,6 +68,6 @@ Use it to quickly answer:
 
 ## Related pages
 
-- [Orchestrator](/docs/next/features/orchestrator)
+- [Application Workspace](/docs/next/features/orchestrator)
 - [Post-Application Tracking](/docs/next/features/post-application-tracking)
 - [Troubleshooting](/docs/next/troubleshooting/common-problems)

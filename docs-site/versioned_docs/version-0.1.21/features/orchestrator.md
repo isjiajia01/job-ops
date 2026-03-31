@@ -1,13 +1,13 @@
 ---
 id: orchestrator
-title: Orchestrator
+title: Application Workspace
 description: Job states, ready flow, and PDF generation/regeneration behavior.
 sidebar_position: 1
 ---
 
 ## What it is
 
-The Orchestrator is the primary jobs workspace in JobOps.
+The Application Workspace is the primary jobs workspace in JobOps.
 
 It controls:
 
@@ -27,7 +27,7 @@ Job states:
 
 ## Why it exists
 
-Orchestrator centralizes the transition from discovered opportunities to application-ready artifacts.
+The Application Workspace centralizes the transition from discovered opportunities to application-ready artifacts.
 
 It exists to ensure:
 

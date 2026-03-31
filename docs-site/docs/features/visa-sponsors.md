@@ -97,6 +97,6 @@ curl -X POST http://localhost:3001/api/visa-sponsors/update/uk
 ## Related pages
 
 - [Add a Visa Sponsor Provider](/docs/next/workflows/add-a-visa-sponsor-provider)
-- [Orchestrator](/docs/next/features/orchestrator)
+- [Application Workspace](/docs/next/features/orchestrator)
 - [Post-Application Tracking](/docs/next/features/post-application-tracking)
 - [Self-Hosting](/docs/next/getting-started/self-hosting)

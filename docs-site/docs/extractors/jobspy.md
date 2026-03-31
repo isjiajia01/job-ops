@@ -29,7 +29,7 @@ Key environment variables:
 - `JOBSPY_LINKEDIN_FETCH_DESCRIPTION` (default: `true`)
 - `JOBSPY_IS_REMOTE` (unset by default)
 
-## 2) Orchestrator flow
+## 2) Workspace flow
 
 The service in `orchestrator/src/server/services/jobspy.ts`:
 

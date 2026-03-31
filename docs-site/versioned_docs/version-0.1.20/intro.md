@@ -18,7 +18,7 @@ Welcome to the JobOps documentation. This site contains guides for setup, config
 
 ## Feature Documentation
 
-- **[Orchestrator](/docs/features/orchestrator)**
+- **[Application Workspace](/docs/features/orchestrator)**
   - Job states explained (`discovered`, `ready`, `applied`, etc.)
   - The ready flow (manual vs auto)
   - PDF generation and regeneration
@@ -49,7 +49,7 @@ Welcome to the JobOps documentation. This site contains guides for setup, config
 
 ### Main Components
 
-- **Orchestrator**: Main application (UI, API, database)
+- **Application Workspace**: Main application (UI, API, database)
 - **Extractors**: Specialized job crawlers
 - **Shared**: Common types and utilities
 

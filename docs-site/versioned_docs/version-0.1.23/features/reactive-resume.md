@@ -226,6 +226,6 @@ Example:
 ## Related pages
 
 - [Settings](./settings)
-- [Orchestrator](./orchestrator)
+- [Application Workspace](./orchestrator)
 - [Ghostwriter](./ghostwriter)
 - [Self-Hosting](../getting-started/self-hosting)

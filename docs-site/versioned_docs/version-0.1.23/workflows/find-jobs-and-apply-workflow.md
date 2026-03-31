@@ -88,7 +88,7 @@ Once a job is marked `applied`, it becomes part of:
 
 ## Related pages
 
-- [Orchestrator](../features/orchestrator)
+- [Application Workspace](../features/orchestrator)
 - [Reactive Resume](../features/reactive-resume)
 - [Settings](../features/settings)
 - [Overview](../features/overview)

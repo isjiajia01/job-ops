@@ -75,5 +75,5 @@ Search (`/`) and Help (`?`) can still open their own dialogs when other blocking
 ## Related pages
 
 - [Job Search Bar](./job-search-bar)
-- [Orchestrator](./orchestrator)
+- [Application Workspace](./orchestrator)
 - [Pipeline Run](./pipeline-run)

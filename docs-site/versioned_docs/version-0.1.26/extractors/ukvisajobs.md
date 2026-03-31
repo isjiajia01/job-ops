@@ -54,7 +54,7 @@ Written to:
 
 Includes per-job JSON files and combined `jobs.json`.
 
-## 5) Orchestrator flow
+## 5) Workspace flow
 
 - Spawns extractor (`npx tsx src/main.ts`)
 - Runs terms sequentially with delay

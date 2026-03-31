@@ -40,7 +40,7 @@ Controls:
 
 ## 4) Progress reporting
 
-Set `JOBOPS_EMIT_PROGRESS=1` for structured progress lines consumable by orchestrator UI.
+Set `JOBOPS_EMIT_PROGRESS=1` for structured progress lines consumable by the application workspace UI.
 
 ## Notes
 

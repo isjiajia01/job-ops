@@ -188,6 +188,6 @@ curl -X POST "http://localhost:3001/api/backups"
 - [Reactive Resume](./reactive-resume)
 - [Database Backups](../getting-started/database-backups)
 - [Overview](./overview)
-- [Orchestrator](./orchestrator)
+- [Application Workspace](./orchestrator)
 - [Ghostwriter](./ghostwriter)
 - [Self-Hosting](../getting-started/self-hosting)

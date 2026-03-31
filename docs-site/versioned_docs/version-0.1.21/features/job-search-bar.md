@@ -68,6 +68,6 @@ Common aliases:
 
 ## Related pages
 
-- [Orchestrator](./orchestrator)
+- [Application Workspace](./orchestrator)
 - [Pipeline Run](./pipeline-run)
 - [Find Jobs and Apply Workflow](../workflows/find-jobs-and-apply-workflow)
