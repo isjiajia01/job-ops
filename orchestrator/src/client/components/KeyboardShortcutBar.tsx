@@ -12,7 +12,7 @@ import {
   groupShortcuts,
   type ShortcutGroup,
 } from "@client/lib/shortcut-map";
-import type { FilterTab } from "@client/pages/orchestrator/constants";
+import type { FilterTab } from "@client/pages/legacy-jobs/constants";
 import type React from "react";
 
 const groupLabel: Record<ShortcutGroup, string> = {

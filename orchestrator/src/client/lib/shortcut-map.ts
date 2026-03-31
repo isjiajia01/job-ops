@@ -1,5 +1,5 @@
 import { getMetaShortcutLabel } from "@client/lib/meta-key";
-import type { FilterTab } from "@client/pages/orchestrator/constants";
+import type { FilterTab } from "@client/pages/legacy-jobs/constants";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

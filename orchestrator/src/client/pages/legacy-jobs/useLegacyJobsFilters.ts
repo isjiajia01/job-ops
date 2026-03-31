@@ -30,7 +30,7 @@ const allowedSortKeys: JobSort["key"][] = [
 ];
 const allowedSortDirections: JobSort["direction"][] = ["asc", "desc"];
 
-export const useOrchestratorFilters = () => {
+export const useLegacyJobsFilters = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {

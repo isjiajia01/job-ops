@@ -1,4 +1,4 @@
-import { TokenizedInput } from "@client/pages/orchestrator/TokenizedInput";
+import { TokenizedInput } from "@client/pages/legacy-jobs/TokenizedInput";
 import { SettingsInput } from "@client/pages/settings/components/SettingsInput";
 import type { ScoringValues } from "@client/pages/settings/types";
 import type { UpdateSettingsInput } from "@shared/settings-schema.js";

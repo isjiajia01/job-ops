@@ -35,7 +35,7 @@ import type {
 } from "./constants";
 import { defaultSortDirection, orderedFilterSources, tabs } from "./constants";
 
-interface OrchestratorFiltersProps {
+interface LegacyJobsFiltersProps {
   activeTab: FilterTab;
   onTabChange: (value: FilterTab) => void;
   counts: Record<FilterTab, number>;
@@ -112,7 +112,7 @@ const getDirectionOptions = (
   ];
 };
 
-export const OrchestratorFilters: React.FC<OrchestratorFiltersProps> = ({
+export const LegacyJobsFilters: React.FC<LegacyJobsFiltersProps> = ({
   activeTab,
   onTabChange,
   counts,

@@ -3,7 +3,7 @@ import type React from "react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
-import { OrchestratorHeader } from "./OrchestratorHeader";
+import { LegacyJobsHeader } from "./LegacyJobsHeader";
 
 vi.mock("@/components/ui/sheet", () => ({
   Sheet: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -22,9 +22,9 @@ vi.mock("@/components/ui/sheet", () => ({
 }));
 
 const renderHeader = (
-  overrides: Partial<React.ComponentProps<typeof OrchestratorHeader>> = {},
+  overrides: Partial<React.ComponentProps<typeof LegacyJobsHeader>> = {},
 ) => {
-  const props: React.ComponentProps<typeof OrchestratorHeader> = {
+  const props: React.ComponentProps<typeof LegacyJobsHeader> = {
     navOpen: false,
     onNavOpenChange: vi.fn(),
     isPipelineRunning: false,
@@ -40,13 +40,13 @@ const renderHeader = (
     props,
     ...render(
       <MemoryRouter>
-        <OrchestratorHeader {...props} />
+        <LegacyJobsHeader {...props} />
       </MemoryRouter>,
     ),
   };
 };
 
-describe("OrchestratorHeader", () => {
+describe("LegacyJobsHeader", () => {
   it("opens automatic run from the navbar button", () => {
     const { props } = renderHeader();
     fireEvent.click(screen.getByRole("button", { name: /run pipeline/i }));

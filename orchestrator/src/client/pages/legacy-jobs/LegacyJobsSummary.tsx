@@ -3,12 +3,12 @@ import { useWelcomeMessage } from "@client/hooks/useWelcomeMessage";
 import type { JobStatus } from "@shared/types.js";
 import type React from "react";
 
-interface OrchestratorSummaryProps {
+interface LegacyJobsSummaryProps {
   stats: Record<JobStatus, number>;
   isPipelineRunning: boolean;
 }
 
-export const OrchestratorSummary: React.FC<OrchestratorSummaryProps> = ({
+export const LegacyJobsSummary: React.FC<LegacyJobsSummaryProps> = ({
   isPipelineRunning,
 }) => {
   const welcomeText = useWelcomeMessage();

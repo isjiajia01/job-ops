@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import {
   defaultStatusToken,
   statusTokens,
-} from "../pages/orchestrator/constants";
+} from "../pages/legacy-jobs/constants";
 
 const STATUS_INDICATOR_BASE_CLASS =
   "inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/80";

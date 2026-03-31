@@ -1,5 +1,5 @@
 /**
- * API client for the orchestrator backend.
+ * API client for the Job Ops application backend.
  */
 
 import type { UpdateSettingsInput } from "@shared/settings-schema";

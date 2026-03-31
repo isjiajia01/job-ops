@@ -5,7 +5,7 @@ import type React from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
-interface OrchestratorHeaderProps {
+interface LegacyJobsHeaderProps {
   navOpen: boolean;
   onNavOpenChange: (open: boolean) => void;
   isPipelineRunning: boolean;
@@ -16,7 +16,7 @@ interface OrchestratorHeaderProps {
   onCancelPipeline: () => void;
 }
 
-export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
+export const LegacyJobsHeader: React.FC<LegacyJobsHeaderProps> = ({
   navOpen,
   onNavOpenChange,
   isPipelineRunning,

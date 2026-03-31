@@ -1,1 +1,1 @@
-export { useLegacyKeyboardShortcuts } from "../orchestrator/useLegacyKeyboardShortcuts";
+export { useLegacyKeyboardShortcuts } from "../legacy-jobs/useLegacyKeyboardShortcuts";

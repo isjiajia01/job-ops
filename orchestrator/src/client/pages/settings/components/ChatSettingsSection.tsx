@@ -1,4 +1,4 @@
-import { TokenizedInput } from "@client/pages/orchestrator/TokenizedInput";
+import { TokenizedInput } from "@client/pages/legacy-jobs/TokenizedInput";
 import {
   getMatchingWritingStylePresetId,
   resolveWritingStyleDraft,

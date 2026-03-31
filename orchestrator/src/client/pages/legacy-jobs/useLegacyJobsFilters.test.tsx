@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SORT } from "./constants";
-import { useOrchestratorFilters } from "./useOrchestratorFilters";
+import { useLegacyJobsFilters } from "./useLegacyJobsFilters";
 
 const createWrapper = (initialEntry: string) => {
   const Wrapper = ({ children }: { children: ReactNode }) => (
@@ -13,9 +13,9 @@ const createWrapper = (initialEntry: string) => {
   return Wrapper;
 };
 
-describe("useOrchestratorFilters", () => {
+describe("useLegacyJobsFilters", () => {
   it("parses a valid sort query param", () => {
-    const { result } = renderHook(() => useOrchestratorFilters(), {
+    const { result } = renderHook(() => useLegacyJobsFilters(), {
       wrapper: createWrapper("/ready?sort=title-asc"),
     });
 
@@ -33,7 +33,7 @@ describe("useOrchestratorFilters", () => {
     ];
 
     for (const entry of cases) {
-      const { result } = renderHook(() => useOrchestratorFilters(), {
+      const { result } = renderHook(() => useLegacyJobsFilters(), {
         wrapper: createWrapper(entry),
       });
       expect(result.current.sort).toEqual(DEFAULT_SORT);

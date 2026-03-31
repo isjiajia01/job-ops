@@ -7,28 +7,28 @@ import { Drawer, DrawerClose, DrawerContent } from "@/components/ui/drawer";
 import { KeyboardShortcutBar } from "../components/KeyboardShortcutBar";
 import { KeyboardShortcutDialog } from "../components/KeyboardShortcutDialog";
 import { useDemoInfo } from "../hooks/useDemoInfo";
-import { type FilterTab, tabs } from "./orchestrator/constants";
-import { FloatingJobActionsBar } from "./orchestrator/FloatingJobActionsBar";
-import { JobCommandBar } from "./orchestrator/JobCommandBar";
+import { type FilterTab, tabs } from "./legacy-jobs/constants";
+import { FloatingJobActionsBar } from "./legacy-jobs/FloatingJobActionsBar";
+import { JobCommandBar } from "./legacy-jobs/JobCommandBar";
 import { LegacyJobDetailPanel } from "./legacy/LegacyJobDetailPanel";
-import { JobListPanel } from "./orchestrator/JobListPanel";
-import { OrchestratorFilters } from "./orchestrator/OrchestratorFilters";
-import { OrchestratorHeader } from "./orchestrator/OrchestratorHeader";
-import { OrchestratorSummary } from "./orchestrator/OrchestratorSummary";
-import { RunModeModal } from "./orchestrator/RunModeModal";
-import { useFilteredJobs } from "./orchestrator/useFilteredJobs";
-import { useJobSelectionActions } from "./orchestrator/useJobSelectionActions";
+import { JobListPanel } from "./legacy-jobs/JobListPanel";
+import { LegacyJobsFilters } from "./legacy-jobs/LegacyJobsFilters";
+import { LegacyJobsHeader } from "./legacy-jobs/LegacyJobsHeader";
+import { LegacyJobsSummary } from "./legacy-jobs/LegacyJobsSummary";
+import { RunModeModal } from "./legacy-jobs/RunModeModal";
+import { useFilteredJobs } from "./legacy-jobs/useFilteredJobs";
+import { useJobSelectionActions } from "./legacy-jobs/useJobSelectionActions";
 import { useLegacyKeyboardShortcuts } from "./legacy/useLegacyKeyboardShortcuts";
-import { useOrchestratorData } from "./orchestrator/useOrchestratorData";
-import { useOrchestratorFilters } from "./orchestrator/useOrchestratorFilters";
-import { usePipelineControls } from "./orchestrator/usePipelineControls";
-import { usePipelineSources } from "./orchestrator/usePipelineSources";
-import { useScrollToJobItem } from "./orchestrator/useScrollToJobItem";
+import { useLegacyJobsData } from "./legacy-jobs/useLegacyJobsData";
+import { useLegacyJobsFilters } from "./legacy-jobs/useLegacyJobsFilters";
+import { usePipelineControls } from "./legacy-jobs/usePipelineControls";
+import { usePipelineSources } from "./legacy-jobs/usePipelineSources";
+import { useScrollToJobItem } from "./legacy-jobs/useScrollToJobItem";
 import {
   getEnabledSources,
   getJobCounts,
   getSourcesWithJobs,
-} from "./orchestrator/utils";
+} from "./legacy-jobs/utils";
 
 export const LegacyJobsPage: React.FC = () => {
   const { tab, jobId } = useParams<{ tab: string; jobId?: string }>();
@@ -44,7 +44,7 @@ export const LegacyJobsPage: React.FC = () => {
     sort,
     setSort,
     resetFilters,
-  } = useOrchestratorFilters();
+  } = useLegacyJobsFilters();
 
   const activeTab = useMemo(() => {
     const validTabs: FilterTab[] = ["ready", "discovered", "applied", "all"];
@@ -112,7 +112,7 @@ export const LegacyJobsPage: React.FC = () => {
     pipelineTerminalEvent,
     setIsRefreshPaused,
     loadJobs,
-  } = useOrchestratorData(selectedJobId);
+  } = useLegacyJobsData(selectedJobId);
   const enabledSources = useMemo(
     () => getEnabledSources(settings ?? null),
     [settings],
@@ -346,7 +346,7 @@ export const LegacyJobsPage: React.FC = () => {
 
   return (
     <>
-      <OrchestratorHeader
+      <LegacyJobsHeader
         navOpen={navOpen}
         onNavOpenChange={setNavOpen}
         isPipelineRunning={isPipelineRunning}
@@ -383,7 +383,7 @@ export const LegacyJobsPage: React.FC = () => {
           </div>
         </section>
 
-        <OrchestratorSummary
+        <LegacyJobsSummary
           stats={stats}
           isPipelineRunning={isPipelineRunning}
         />
@@ -397,7 +397,7 @@ export const LegacyJobsPage: React.FC = () => {
             onOpenChange={setIsCommandBarOpen}
             enabled={!isAnyModalOpenExcludingCommandBar}
           />
-          <OrchestratorFilters
+          <LegacyJobsFilters
             activeTab={activeTab}
             onTabChange={setActiveTab}
             counts={counts}

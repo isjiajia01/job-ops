@@ -1,1 +1,1 @@
-export { LegacyJobDetailPanel } from "../orchestrator/LegacyJobDetailPanel";
+export { LegacyJobDetailPanel } from "../legacy-jobs/LegacyJobDetailPanel";

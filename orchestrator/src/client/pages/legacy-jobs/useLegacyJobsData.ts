@@ -80,7 +80,7 @@ const buildTerminalSignature = ({
   return `${status}:run:${runId ?? "unknown"}`;
 };
 
-export const useOrchestratorData = (selectedJobId: string | null) => {
+export const useLegacyJobsData = (selectedJobId: string | null) => {
   const queryClient = useQueryClient();
   const [jobListItems, setJobListItems] = useState<JobListItem[]>([]);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);

@@ -2,7 +2,7 @@ import { createAppSettings, createJob } from "@shared/testing/factories.js";
 import { describe, expect, it } from "vitest";
 import { getEnabledSources, getJobCounts } from "./utils";
 
-describe("orchestrator utils", () => {
+describe("legacy jobs utils", () => {
   it("enables adzuna only when both app id and key are configured", () => {
     const withCreds = createAppSettings({
       adzunaAppId: "app-id",

@@ -2,9 +2,9 @@ import * as api from "@client/api";
 import { renderHookWithQueryClient } from "@client/test/renderWithQueryClient";
 import { act, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useOrchestratorData } from "./useOrchestratorData";
+import { useLegacyJobsData } from "./useLegacyJobsData";
 
-const renderHook = (callback: () => ReturnType<typeof useOrchestratorData>) =>
+const renderHook = (callback: () => ReturnType<typeof useLegacyJobsData>) =>
   renderHookWithQueryClient(callback);
 
 vi.mock("@client/api", () => ({
@@ -74,7 +74,7 @@ const deferred = <T>(): Deferred<T> => {
   return { promise, resolve };
 };
 
-describe("useOrchestratorData", () => {
+describe("useLegacyJobsData", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useRealTimers();
@@ -103,7 +103,7 @@ describe("useOrchestratorData", () => {
   });
 
   it("applies newest loadJobs response when requests resolve out of order", async () => {
-    const { result } = renderHook(() => useOrchestratorData(null));
+    const { result } = renderHook(() => useLegacyJobsData(null));
 
     await waitFor(() => {
       expect((result.current.jobs[0] as any)?.id).toBe("initial");
@@ -149,7 +149,7 @@ describe("useOrchestratorData", () => {
       statusFilter: null,
     } as any);
 
-    renderHook(() => useOrchestratorData(null));
+    renderHook(() => useLegacyJobsData(null));
 
     await act(async () => {
       await Promise.resolve();
@@ -184,7 +184,7 @@ describe("useOrchestratorData", () => {
         statusFilter: null,
       } as any);
 
-    renderHook(() => useOrchestratorData(null));
+    renderHook(() => useLegacyJobsData(null));
 
     await act(async () => {
       await Promise.resolve();
@@ -206,7 +206,7 @@ describe("useOrchestratorData", () => {
       makeResponse("initial", "rev-initial") as any,
     );
 
-    renderHook(() => useOrchestratorData(null));
+    renderHook(() => useLegacyJobsData(null));
 
     await act(async () => {
       await Promise.resolve();
@@ -262,7 +262,7 @@ describe("useOrchestratorData", () => {
       value: "hidden",
     });
 
-    renderHook(() => useOrchestratorData(null));
+    renderHook(() => useLegacyJobsData(null));
 
     await act(async () => {
       await Promise.resolve();
@@ -290,7 +290,7 @@ describe("useOrchestratorData", () => {
 
   it("throttles revision checks while pipeline SSE is active", async () => {
     vi.useFakeTimers();
-    renderHook(() => useOrchestratorData(null));
+    renderHook(() => useLegacyJobsData(null));
 
     await act(async () => {
       await Promise.resolve();
@@ -343,7 +343,7 @@ describe("useOrchestratorData", () => {
       },
     } as any);
 
-    const { result } = renderHook(() => useOrchestratorData(null));
+    const { result } = renderHook(() => useLegacyJobsData(null));
 
     await act(async () => {
       await Promise.resolve();
@@ -367,7 +367,7 @@ describe("useOrchestratorData", () => {
   });
 
   it("publishes one terminal event when active SSE transitions to completed", async () => {
-    const { result } = renderHook(() => useOrchestratorData(null));
+    const { result } = renderHook(() => useLegacyJobsData(null));
 
     await act(async () => {
       await Promise.resolve();
@@ -430,7 +430,7 @@ describe("useOrchestratorData", () => {
         },
       } as any);
 
-    const { result } = renderHook(() => useOrchestratorData(null));
+    const { result } = renderHook(() => useLegacyJobsData(null));
 
     await act(async () => {
       await Promise.resolve();
@@ -473,7 +473,7 @@ describe("useOrchestratorData", () => {
         },
       } as any);
 
-    const { result } = renderHook(() => useOrchestratorData(null));
+    const { result } = renderHook(() => useLegacyJobsData(null));
 
     await act(async () => {
       await Promise.resolve();
@@ -521,7 +521,7 @@ describe("useOrchestratorData", () => {
         makeResponse("after-terminal", "rev-terminal") as any,
       );
 
-    renderHook(() => useOrchestratorData(null));
+    renderHook(() => useLegacyJobsData(null));
 
     await act(async () => {
       await Promise.resolve();
@@ -546,7 +546,7 @@ describe("useOrchestratorData", () => {
 
   it("falls back to polling pipeline status when SSE disconnects", async () => {
     vi.useFakeTimers();
-    renderHook(() => useOrchestratorData(null));
+    renderHook(() => useLegacyJobsData(null));
 
     await act(async () => {
       await Promise.resolve();
@@ -579,7 +579,7 @@ describe("useOrchestratorData", () => {
       statusFilter: null,
     } as any);
 
-    renderHook(() => useOrchestratorData(null));
+    renderHook(() => useLegacyJobsData(null));
 
     await act(async () => {
       await Promise.resolve();
@@ -604,7 +604,7 @@ describe("useOrchestratorData", () => {
   });
 
   it("closes pipeline SSE connection on unmount", async () => {
-    const { unmount } = renderHook(() => useOrchestratorData(null));
+    const { unmount } = renderHook(() => useLegacyJobsData(null));
 
     await act(async () => {
       await Promise.resolve();
@@ -664,7 +664,7 @@ describe("useOrchestratorData", () => {
       updatedAt: "2026-01-01T00:00:00.000Z",
     } as any);
 
-    const { result } = renderHook(() => useOrchestratorData("job-1"));
+    const { result } = renderHook(() => useLegacyJobsData("job-1"));
 
     await waitFor(() => {
       expect(api.getJobs).toHaveBeenCalledWith({ view: "list" });

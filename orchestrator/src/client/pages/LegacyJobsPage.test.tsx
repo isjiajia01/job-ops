@@ -7,8 +7,8 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api";
 import { renderWithQueryClient } from "../test/renderWithQueryClient";
 import { LegacyJobsPage } from "./LegacyJobsPage";
-import type { AutomaticRunValues } from "./orchestrator/automatic-run";
-import type { FilterTab } from "./orchestrator/constants";
+import type { AutomaticRunValues } from "./legacy-jobs/automatic-run";
+import type { FilterTab } from "./legacy-jobs/constants";
 
 const render = (ui: Parameters<typeof renderWithQueryClient>[0]) =>
   renderWithQueryClient(ui);
@@ -110,8 +110,8 @@ const createMatchMedia = (matches: boolean) =>
     dispatchEvent: vi.fn(),
   }));
 
-vi.mock("./orchestrator/useOrchestratorData", () => ({
-  useOrchestratorData: () => ({
+vi.mock("./legacy-jobs/useLegacyJobsData", () => ({
+  useLegacyJobsData: () => ({
     jobs: mockJobs,
     selectedJob: mockSelectedJob,
     stats: {
@@ -142,7 +142,7 @@ vi.mock("../hooks/useDemoInfo", () => ({
   }),
 }));
 
-vi.mock("./orchestrator/usePipelineSources", () => ({
+vi.mock("./legacy-jobs/usePipelineSources", () => ({
   usePipelineSources: () => ({
     pipelineSources: mockPipelineSources,
     setPipelineSources: vi.fn(),
@@ -160,8 +160,8 @@ vi.mock("../hooks/useSettings", () => ({
   }),
 }));
 
-vi.mock("./orchestrator/OrchestratorHeader", () => ({
-  OrchestratorHeader: ({
+vi.mock("./legacy-jobs/LegacyJobsHeader", () => ({
+  LegacyJobsHeader: ({
     onCancelPipeline,
   }: {
     onCancelPipeline: () => void;
@@ -174,11 +174,11 @@ vi.mock("./orchestrator/OrchestratorHeader", () => ({
   ),
 }));
 
-vi.mock("./orchestrator/OrchestratorSummary", () => ({
-  OrchestratorSummary: () => <div data-testid="summary" />,
+vi.mock("./legacy-jobs/LegacyJobsSummary", () => ({
+  LegacyJobsSummary: () => <div data-testid="summary" />,
 }));
 
-vi.mock("./orchestrator/JobCommandBar", () => ({
+vi.mock("./legacy-jobs/JobCommandBar", () => ({
   JobCommandBar: ({
     onSelectJob,
     open,
@@ -200,8 +200,8 @@ vi.mock("./orchestrator/JobCommandBar", () => ({
   ),
 }));
 
-vi.mock("./orchestrator/OrchestratorFilters", () => ({
-  OrchestratorFilters: ({
+vi.mock("./legacy-jobs/LegacyJobsFilters", () => ({
+  LegacyJobsFilters: ({
     onTabChange,
     onOpenCommandBar,
     onSourceFilterChange,
@@ -270,7 +270,7 @@ vi.mock("./legacy/LegacyJobDetailPanel", () => ({
   LegacyJobDetailPanel: () => <div data-testid="detail-panel" />,
 }));
 
-vi.mock("./orchestrator/JobListPanel", () => ({
+vi.mock("./legacy-jobs/JobListPanel", () => ({
   JobListPanel: ({
     onSelectJob,
     onToggleSelectJob,
@@ -340,7 +340,7 @@ vi.mock("./orchestrator/JobListPanel", () => ({
   ),
 }));
 
-vi.mock("./orchestrator/RunModeModal", () => ({
+vi.mock("./legacy-jobs/RunModeModal", () => ({
   RunModeModal: ({
     onSaveAndRunAutomatic,
   }: {

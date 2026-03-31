@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { FilterTab, JobSort, SponsorFilter } from "./constants";
-import { OrchestratorFilters } from "./OrchestratorFilters";
+import { LegacyJobsFilters } from "./LegacyJobsFilters";
 
 const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
 
@@ -22,7 +22,7 @@ afterAll(() => {
 });
 
 const renderFilters = (
-  overrides?: Partial<ComponentProps<typeof OrchestratorFilters>>,
+  overrides?: Partial<ComponentProps<typeof LegacyJobsFilters>>,
 ) => {
   const props = {
     activeTab: "ready" as FilterTab,
@@ -54,11 +54,11 @@ const renderFilters = (
 
   return {
     props,
-    ...render(<OrchestratorFilters {...props} />),
+    ...render(<LegacyJobsFilters {...props} />),
   };
 };
 
-describe("OrchestratorFilters", () => {
+describe("LegacyJobsFilters", () => {
   it("notifies when tabs and command search shortcut are used", () => {
     const { props } = renderFilters();
 
