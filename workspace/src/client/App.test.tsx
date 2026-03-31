@@ -39,11 +39,11 @@ vi.mock("./pages/InProgressBoardPage", () => ({
 }));
 
 vi.mock("./pages/ApplicationWorkspacePage", () => ({
-  ApplicationWorkspacePage: () => null,
+  ApplicationWorkspacePage: () => <div>application workspace</div>,
 }));
 
-vi.mock("./pages/LegacyJobsPage", () => ({
-  LegacyJobsPage: () => null,
+vi.mock("./pages/ApplicationsPage", () => ({
+  ApplicationsPage: () => <div>applications page</div>,
 }));
 
 vi.mock("./pages/ProfileHubPage", () => ({
@@ -153,5 +153,43 @@ describe("App demo banner", () => {
     );
 
     expect(screen.getByText("profile hub")).toBeInTheDocument();
+  });
+
+  it("redirects legacy jobs routes to the application workspace", () => {
+    vi.mocked(useDemoInfo).mockReturnValue({
+      demoMode: false,
+      resetCadenceHours: 6,
+      lastResetAt: null,
+      nextResetAt: null,
+      baselineVersion: null,
+      baselineName: null,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/legacy/jobs/ready/job-123"]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("application workspace")).toBeInTheDocument();
+  });
+
+  it("redirects legacy jobs tab routes to the applications page", () => {
+    vi.mocked(useDemoInfo).mockReturnValue({
+      demoMode: false,
+      resetCadenceHours: 6,
+      lastResetAt: null,
+      nextResetAt: null,
+      baselineVersion: null,
+      baselineName: null,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("applications page")).toBeInTheDocument();
   });
 });

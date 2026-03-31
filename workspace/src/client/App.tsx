@@ -4,7 +4,14 @@
 
 import { X } from "lucide-react";
 import React, { useRef, useState } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import {
+  Navigate,
+  Route,
+  Routes,
+  generatePath,
+  useLocation,
+  useParams,
+} from "react-router-dom";
 import { CSSTransition, SwitchTransition } from "react-transition-group";
 
 import { Button } from "@/components/ui/button";
@@ -19,7 +26,6 @@ import { CvPage } from "./pages/CvPage";
 import { GmailOauthCallbackPage } from "./pages/GmailOauthCallbackPage";
 import { HomePage } from "./pages/HomePage";
 import { InProgressBoardPage } from "./pages/InProgressBoardPage";
-import { LegacyJobsPage } from "./pages/LegacyJobsPage";
 import { ProfileHubPage } from "./pages/ProfileHubPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TracerLinksPage } from "./pages/TracerLinksPage";
@@ -32,29 +38,37 @@ const REDIRECTS: Array<{ from: string; to: string }> = [
   { from: "/home", to: "/overview" },
   { from: "/profilehub", to: "/profile-hub" },
   { from: "/profile", to: "/profile-hub" },
-  { from: "/ready", to: "/legacy/jobs/ready" },
-  { from: "/ready/:jobId", to: "/legacy/jobs/ready/:jobId" },
-  { from: "/discovered", to: "/legacy/jobs/discovered" },
-  { from: "/discovered/:jobId", to: "/legacy/jobs/discovered/:jobId" },
-  { from: "/applied", to: "/legacy/jobs/applied" },
-  { from: "/applied/:jobId", to: "/legacy/jobs/applied/:jobId" },
+  { from: "/ready", to: "/applications" },
+  { from: "/ready/:jobId", to: "/applications/:jobId" },
+  { from: "/discovered", to: "/applications" },
+  { from: "/discovered/:jobId", to: "/applications/:jobId" },
+  { from: "/applied", to: "/applications" },
+  { from: "/applied/:jobId", to: "/applications/:jobId" },
   { from: "/in-progress", to: "/applications/in-progress" },
   { from: "/in-progress/:jobId", to: "/applications/in-progress" },
-  { from: "/jobs/ready", to: "/legacy/jobs/ready" },
-  { from: "/jobs/ready/:jobId", to: "/legacy/jobs/ready/:jobId" },
-  { from: "/jobs/discovered", to: "/legacy/jobs/discovered" },
-  { from: "/jobs/discovered/:jobId", to: "/legacy/jobs/discovered/:jobId" },
-  { from: "/jobs/applied", to: "/legacy/jobs/applied" },
-  { from: "/jobs/applied/:jobId", to: "/legacy/jobs/applied/:jobId" },
-  { from: "/jobs/all", to: "/legacy/jobs/all" },
-  { from: "/jobs/all/:jobId", to: "/legacy/jobs/all/:jobId" },
+  { from: "/jobs/ready", to: "/applications" },
+  { from: "/jobs/ready/:jobId", to: "/applications/:jobId" },
+  { from: "/jobs/discovered", to: "/applications" },
+  { from: "/jobs/discovered/:jobId", to: "/applications/:jobId" },
+  { from: "/jobs/applied", to: "/applications" },
+  { from: "/jobs/applied/:jobId", to: "/applications/:jobId" },
+  { from: "/jobs/all", to: "/applications" },
+  { from: "/jobs/all/:jobId", to: "/applications/:jobId" },
   { from: "/jobs/in_progress", to: "/applications/in-progress" },
   { from: "/jobs/in_progress/:jobId", to: "/applications/in-progress" },
-  { from: "/all", to: "/legacy/jobs/all" },
-  { from: "/all/:jobId", to: "/legacy/jobs/all/:jobId" },
+  { from: "/all", to: "/applications" },
+  { from: "/all/:jobId", to: "/applications/:jobId" },
 ];
 
 const DEMO_WAITLIST_BANNER_DISMISSED_KEY = "jobops.demoWaitlistBannerDismissed";
+
+const LegacyJobRouteRedirect: React.FC = () => {
+  const { jobId } = useParams<{ tab?: string; jobId?: string }>();
+  if (jobId) {
+    return <Navigate to={generatePath("/applications/:id", { id: jobId })} replace />;
+  }
+  return <Navigate to="/applications" replace />;
+};
 
 export const App: React.FC = () => {
   const location = useLocation();
@@ -71,10 +85,7 @@ export const App: React.FC = () => {
 
   // Determine a stable key for transitions to avoid unnecessary unmounts when switching sub-tabs
   const pageKey = React.useMemo(() => {
-    const firstSegment = location.pathname.split("/")[1] || "jobs";
-    if (firstSegment === "jobs") {
-      return "legacy-jobs";
-    }
+    const firstSegment = location.pathname.split("/")[1] || "applications";
     return firstSegment;
   }, [location.pathname]);
 
@@ -178,10 +189,13 @@ export const App: React.FC = () => {
                 <Route path="/tracer-links" element={<TracerLinksPage />} />
                 <Route path="/visa-sponsors" element={<VisaSponsorsPage />} />
                 <Route path="/tracking-inbox" element={<TrackingInboxPage />} />
-                <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+                <Route
+                  path="/legacy/jobs/:tab"
+                  element={<LegacyJobRouteRedirect />}
+                />
                 <Route
                   path="/legacy/jobs/:tab/:jobId"
-                  element={<LegacyJobsPage />}
+                  element={<LegacyJobRouteRedirect />}
                 />
               </Routes>
             </div>

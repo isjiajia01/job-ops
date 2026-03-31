@@ -539,7 +539,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
                   <Button
                     size="sm"
                     className="h-9 border border-orange-400/50 bg-orange-500/20 text-orange-100 hover:bg-orange-500/30"
-                    onClick={() => navigate(`/legacy/jobs/discovered/${job.id}`)}
+                    onClick={() => navigate(`/applications/${job.id}`)}
                     disabled={isBusy}
                   >
                     <Sparkles className="mr-1.5 h-3.5 w-3.5" />
@@ -589,7 +589,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
                   size="sm"
                   variant="outline"
                   className="h-9 border-border/60 bg-background/30"
-                  onClick={() => navigate(`/legacy/jobs/ready/${job.id}`)}
+                  onClick={() => navigate(`/applications/${job.id}`)}
                   disabled={isBusy}
                 >
                   <Sparkles className="mr-1.5 h-3.5 w-3.5" />
