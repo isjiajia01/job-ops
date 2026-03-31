@@ -7,7 +7,7 @@ sidebar_position: 3
 
 ## What it is
 
-This guide explains how to add a new country's visa sponsor register that is auto-discovered by the orchestrator at startup.
+This guide explains how to add a new country's visa sponsor register that is auto-discovered by the application workspace at startup.
 
 Each provider is a directory under `visa-sponsor-providers/` containing a `manifest.ts` file. The manifest owns only what is country-specific: fetching and parsing the upstream register. Storage, scheduling, caching, and search are handled by the shared service layer.
 
@@ -15,7 +15,7 @@ Provider ids must be registered in `shared/src/visa-sponsor-providers/index.ts` 
 
 ## Why it exists
 
-Without a manifest contract, adding a new country's register required touching multiple orchestrator files.
+Without a manifest contract, adding a new country's register required touching multiple application workspace files.
 
 With the provider system, contributors only need to:
 

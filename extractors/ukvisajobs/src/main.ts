@@ -2,7 +2,7 @@
  * UK Visa Jobs Extractor
  *
  * Fetches job listings from my.ukvisajobs.com that may sponsor work visas.
- * Outputs JSON to stdout for the orchestrator to consume.
+ * Outputs JSON to stdout for the application workspace to consume.
  *
  * Environment variables:
  *   UKVISAJOBS_EMAIL - Login email for auto-refresh

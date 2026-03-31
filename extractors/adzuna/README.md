@@ -1,7 +1,7 @@
 # Adzuna Extractor
 
 Minimal extractor that pulls jobs from Adzuna's search API and writes a dataset
-for orchestrator ingestion.
+for application workspace ingestion.
 
 ## Environment
 

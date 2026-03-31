@@ -39,8 +39,8 @@ Use consistent status/code mapping:
 ## SSE Standards
 
 - Use centralized SSE helpers by default.
-- Server: use `orchestrator/src/server/infra/sse.ts` for setup, data writes, comments, and heartbeats.
-- Client (`EventSource`): use `orchestrator/src/client/lib/sse.ts` for subscription/open/message/error plumbing.
+- Server: use `workspace/src/server/infra/sse.ts` for setup, data writes, comments, and heartbeats.
+- Client (`EventSource`): use `workspace/src/client/lib/sse.ts` for subscription/open/message/error plumbing.
 - Do not duplicate raw SSE setup (`Content-Type`, `Connection`, heartbeat loops, or ad-hoc `JSON.parse` event parsing) when these helpers apply.
 - Keep feature payload types domain-local (pipeline, ghostwriter, bulk actions), but reuse shared transport plumbing.
 
@@ -92,17 +92,17 @@ Run from repository root:
 
 1. `./workspace/node_modules/.bin/biome ci .`
 2. `npm run check:types:shared`
-3. `npm --workspace orchestrator run check:types`
+3. `npm --workspace workspace run check:types`
 4. `npm --workspace gradcracker-extractor run check:types`
 5. `npm --workspace ukvisajobs-extractor run check:types`
-6. `npm --workspace orchestrator run build:client`
-7. `npm --workspace orchestrator run test:run`
+6. `npm --workspace workspace run build:client`
+7. `npm --workspace workspace run test:run`
 
 ### Native module note (better-sqlite3)
 
 If tests fail with a Node ABI mismatch for `better-sqlite3`, rebuild it before running tests:
 
-- `npm --workspace orchestrator rebuild better-sqlite3`
+- `npm --workspace workspace rebuild better-sqlite3`
 
 CI runs on Node 22. If local behavior differs, verify with Node 22 before concluding a change is valid.
 

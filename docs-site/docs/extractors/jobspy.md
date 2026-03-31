@@ -14,7 +14,7 @@ Original websites:
 
 ## Big picture
 
-JobSpy runs as a Python script per search term, writes JSON, then orchestrator ingests and normalizes into internal job shape.
+JobSpy runs as a Python script per search term, writes JSON, then the application workspace ingests and normalizes it into the internal job shape.
 
 ## 1) Inputs and defaults
 

@@ -71,7 +71,7 @@ jobs:
             echo "tag_already_exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Bump orchestrator version files
+      - name: Bump workspace version files
         if: steps.validate.outputs.version_already_set != 'true'
         env:
           RELEASE_VERSION: ${{ inputs.version }}

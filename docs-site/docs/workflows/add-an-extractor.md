@@ -16,7 +16,7 @@ Extractor run logic should also live in the extractor package so the application
 
 ## Why it exists
 
-Without a manifest contract, adding extractors required touching multiple orchestrator files.
+Without a manifest contract, adding extractors required touching multiple application workspace files.
 
 With the manifest system, contributors only need to:
 

@@ -1,7 +1,7 @@
 ---
 id: ukvisajobs
 title: UKVisaJobs Extractor
-description: Authenticated session flow, API pagination, and orchestrator ingestion.
+description: Authenticated session flow, API pagination, and application workspace ingestion.
 sidebar_position: 5
 ---
 

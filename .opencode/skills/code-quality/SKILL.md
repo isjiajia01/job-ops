@@ -1,17 +1,17 @@
 ---
-name: orchestrator-code-quality
+name: workspace-code-quality
 description: Generate a code quality report for the workspace/ folder focusing on duplication, complexity hotspots, and error/logging consistency, using npm run check:all as the primary gate; report only (no code changes).
 license: MIT
 compatibility: opencode
 metadata:
   audience: maintainers
-  repo_area: orchestrator
+  repo_area: workspace
   primary_command: npm run check:all
 ---
 
 ## What I do
 
-- Operate strictly within the `orchestrator/` folder.
+- Operate strictly within the `workspace/` folder.
 - Produce a Markdown report describing:
   1. **Duplication / near-duplication**
   2. **Over-complex functions / “god modules”**
@@ -25,30 +25,30 @@ Use this when you want an evidence-driven code quality assessment and a prioriti
 
 ## Constraints
 
-- Work only in `orchestrator/`. Do not analyze or reference other folders except when required to understand imports into `orchestrator/`.
+- Work only in `workspace/`. Do not analyze or reference other folders except when required to understand imports into `workspace/`.
 - Do not propose changes to tooling. Assume `npm run check:all` is the existing gate.
 - Do not perform refactors. Do not open PRs. Do not rewrite files. Report findings and recommended fixes only.
 
 ## Inputs I expect
 
-- Repository access with an `orchestrator/` directory.
-- Ability to run `npm run check:all` from within `orchestrator/`.
+- Repository access with a `workspace/` directory.
+- Ability to run `npm run check:all` from within `workspace/`.
 - (Optional but recommended) Output logs from `npm run check:all` if the environment cannot run commands.
 
 ## Process
 
 1. **Set working area**
-   - Ensure all investigation is scoped to `orchestrator/`.
+   - Ensure all investigation is scoped to `workspace/`.
 
 2. **Execute quality gate**
-   - Run `npm run check:all` in `orchestrator/`.
+   - Run `npm run check:all` in `workspace/`.
    - Capture:
      - lint errors/warnings (rule IDs, counts, file paths)
      - failing tests (test names, stack traces, determinism vs flakiness indicators)
      - coverage output (if produced by the command)
 
 3. **Assess duplication**
-   - Identify copy/paste and near-duplicate logic patterns in `orchestrator/`:
+   - Identify copy/paste and near-duplicate logic patterns in `workspace/`:
      - repeated parsing/validation
      - repeated error mapping and response shaping
      - repeated API call wrappers / fetch patterns
@@ -84,7 +84,7 @@ Create a single Markdown report containing these sections:
 
 ### 1. Scope and constraints
 
-- Confirm `orchestrator/` scope and reliance on `npm run check:all`.
+- Confirm `workspace/` scope and reliance on `npm run check:all`.
 
 ### 2. Evidence summary
 

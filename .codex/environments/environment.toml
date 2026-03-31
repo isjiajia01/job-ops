@@ -8,4 +8,4 @@ script = ""
 [[actions]]
 name = "Run"
 icon = "run"
-command = "cd orchestrator && npm rebuild && npm run db:migrate && csex"
+command = "cd workspace && npm rebuild && npm run db:migrate && csex"

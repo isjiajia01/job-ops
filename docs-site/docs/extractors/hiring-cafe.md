@@ -11,7 +11,7 @@ Original website: [hiring.cafe](https://hiring.cafe)
 
 Special thanks: Initial implementation inspiration came from [umur957/hiring-cafe-job-scraper](https://github.com/umur957/hiring-cafe-job-scraper).
 
-Hiring Cafe is a browser-backed extractor that queries Hiring Cafe search APIs and maps results into the orchestrator `CreateJobInput` shape.
+Hiring Cafe is a browser-backed extractor that queries Hiring Cafe search APIs and maps results into the application workspace `CreateJobInput` shape.
 
 Implementation split:
 

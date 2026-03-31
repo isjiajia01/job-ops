@@ -1,7 +1,7 @@
 ---
 id: adzuna
 title: Adzuna Extractor
-description: API-based Adzuna extraction with orchestrator ingestion and progress updates.
+description: API-based Adzuna extraction with application workspace ingestion and progress updates.
 sidebar_position: 6
 ---
 
