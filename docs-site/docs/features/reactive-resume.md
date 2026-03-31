@@ -274,6 +274,6 @@ Example:
 ## Related pages
 
 - [Settings](./settings)
-- [Application Workspace](./orchestrator)
+- [Application Workspace](./application-workspace)
 - [Ghostwriter](./ghostwriter)
 - [Self-Hosting](../getting-started/self-hosting)

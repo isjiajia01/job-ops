@@ -114,5 +114,5 @@ For accepted input formats, inference behavior, and limits, see [Manual Import E
 
 - [Find Jobs and Apply Workflow](/docs/next/workflows/find-jobs-and-apply-workflow)
 - [Manual Import Extractor](/docs/next/extractors/manual)
-- [Application Workspace](/docs/next/features/orchestrator)
+- [Application Workspace](/docs/next/features/application-workspace)
 - [Overview](/docs/next/features/overview)

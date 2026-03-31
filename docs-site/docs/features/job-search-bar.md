@@ -72,6 +72,6 @@ Common aliases:
 
 ## Related pages
 
-- [Application Workspace](./orchestrator)
+- [Application Workspace](./application-workspace)
 - [Pipeline Run](./pipeline-run)
 - [Find Jobs and Apply Workflow](../workflows/find-jobs-and-apply-workflow)

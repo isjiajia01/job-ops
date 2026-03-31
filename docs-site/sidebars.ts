@@ -30,7 +30,7 @@ const sidebars: SidebarsConfig = {
         "features/job-search-bar",
         "features/keyboard-shortcuts",
         "features/multi-select-and-bulk-actions",
-        "features/orchestrator",
+        "features/application-workspace",
         "features/settings",
         "features/reactive-resume",
         "features/in-progress-board",

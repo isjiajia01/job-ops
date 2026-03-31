@@ -47,7 +47,7 @@ If you want the serious view of the project, start here:
 - [Documentation Home](https://jobops.dakheera47.com/docs/)
 - [Self-Hosting Guide](https://jobops.dakheera47.com/docs/getting-started/self-hosting)
 - [Feature Overview](https://jobops.dakheera47.com/docs/features/overview)
-- [Application Workspace](https://jobops.dakheera47.com/docs/features/orchestrator)
+- [Application Workspace](https://jobops.dakheera47.com/docs/next/features/application-workspace)
 - [Extractor System](https://jobops.dakheera47.com/docs/extractors/overview)
 - [Troubleshooting](https://jobops.dakheera47.com/docs/troubleshooting/common-problems)
 

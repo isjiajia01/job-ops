@@ -264,6 +264,6 @@ curl -X POST "http://localhost:3001/api/backups"
 - [Reactive Resume](/docs/next/features/reactive-resume)
 - [Database Backups](/docs/next/getting-started/database-backups)
 - [Overview](/docs/next/features/overview)
-- [Application Workspace](/docs/next/features/orchestrator)
+- [Application Workspace](/docs/next/features/application-workspace)
 - [Ghostwriter](/docs/next/features/ghostwriter)
 - [Self-Hosting](/docs/next/getting-started/self-hosting)

@@ -1,8 +1,9 @@
 ---
-id: orchestrator
+id: application-workspace
 title: Application Workspace
 description: Job states, ready flow, and PDF generation/regeneration behavior.
 sidebar_position: 1
+slug: /features/application-workspace
 ---
 
 ## What it is

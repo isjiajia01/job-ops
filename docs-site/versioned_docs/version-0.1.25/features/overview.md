@@ -95,6 +95,6 @@ Use this chart to identify which sources produce genuine engagement versus silen
 
 ## Related pages
 
-- [Application Workspace](/docs/next/features/orchestrator)
+- [Application Workspace](/docs/next/features/application-workspace)
 - [Post-Application Tracking](/docs/next/features/post-application-tracking)
 - [Troubleshooting](/docs/next/troubleshooting/common-problems)

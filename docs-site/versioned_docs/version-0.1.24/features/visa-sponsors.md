@@ -69,6 +69,6 @@ curl -X POST http://localhost:3001/api/visa-sponsors/update
 
 ## Related pages
 
-- [Application Workspace](/docs/next/features/orchestrator)
+- [Application Workspace](/docs/next/features/application-workspace)
 - [Post-Application Tracking](/docs/next/features/post-application-tracking)
 - [Self-Hosting](/docs/next/getting-started/self-hosting)

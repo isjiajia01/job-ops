@@ -35,7 +35,7 @@ Welcome to the JobOps documentation. This site contains guides for setup, config
 
 ## Feature Documentation
 
-- **[Application Workspace](/docs/next/features/orchestrator)**
+- **[Application Workspace](/docs/next/features/application-workspace)**
   - Job states explained (`discovered`, `ready`, `applied`, etc.)
   - The ready flow (manual vs auto)
   - PDF generation and regeneration

@@ -75,6 +75,19 @@ const config: Config = {
       },
     ],
   ],
+  plugins: [
+    [
+      require.resolve("@docusaurus/plugin-client-redirects"),
+      {
+        redirects: [
+          {
+            to: "/next/features/application-workspace",
+            from: ["/next/features/orchestrator"],
+          },
+        ],
+      },
+    ],
+  ],
   presets: [
     [
       "classic",
