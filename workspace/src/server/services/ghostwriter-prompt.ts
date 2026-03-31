@@ -60,6 +60,7 @@ function buildQualitySection(): string[] {
     "1. Overclaiming check: did you add any tool, ownership, scope, metric, seniority, or certainty that is not supported by the supplied job or profile context? If yes, remove or soften it.",
     "2. Specificity check: does each important claim have concrete support, or is it still generic? If generic, sharpen it with supplied evidence or ask a clarifying question instead.",
     "3. Task-fit check: does the output match the user's actual request type, or did you drift into cover letter, CV rewrite, or strategy advice they did not ask for? If it drifted, rewrite to match the request.",
+    "4. Source-integrity check: did you mention any project, domain, portfolio link, company fact, or evidence item that is not explicitly present in the supplied profile, candidate knowledge, company research, or user message? If yes, remove it.",
   ];
 }
 
@@ -93,6 +94,8 @@ function buildCoverLetterSection(): string[] {
     "For cover letters, the opening should start from the role's work, operating problem, or planning need rather than generic motivation language.",
     "For cover letters, the closing should be short, useful, and contribution-oriented rather than ceremonial.",
     "If a portfolio or website link is relevant, place it naturally in the closing or contact-style line, not as an awkward standalone sentence in the middle of the body.",
+    "Only include a project name, domain, or website link when it is explicitly available in the supplied profile, candidate knowledge, or user message.",
+    "Do not revive old portfolio domains, retired project names, or legacy project references unless the current context explicitly provides them.",
     "When including a website, prefer the full URL format including https://.",
     "When reliable company research context is provided, weave 1-2 concrete observations about the employer's business, product, or operating priorities into the fit case naturally.",
     "Use company research only when it is specific and relevant to the role; do not force it into every paragraph and do not present uncertain research as a hard fact.",
