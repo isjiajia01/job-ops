@@ -154,7 +154,16 @@ describe("buildJobChatPromptContext", () => {
       "For cover letters, keep the draft targeted to the specific role and employer, usually within one page and 3-4 short paragraphs.",
     );
     expect(context.systemPrompt).toContain(
-      "For cover letters, prefer this default structure unless the user asks otherwise: a concrete opening tied to the work, 1-2 short evidence paragraphs, and a concise closing.",
+      "For cover letters, prefer this default structure unless the user asks otherwise: salutation line, a concrete opening tied to the work, 1-2 short evidence paragraphs, and a concise closing with sign-off.",
+    );
+    expect(context.systemPrompt).toContain(
+      "For cover letters, include a natural salutation at the top and a natural sign-off at the end unless the user explicitly asks for a no-salutation note or email-style output.",
+    );
+    expect(context.systemPrompt).toContain(
+      "For cover letters, keep salutations and sign-offs simple, restrained, and modern rather than ceremonial or overly warm.",
+    );
+    expect(context.systemPrompt).toContain(
+      "For Denmark-local cover letters, prefer clean sign-offs such as 'Best regards' over more ceremonial closings like 'Yours faithfully' or overly warm closings like 'Warm regards'.",
     );
     expect(context.systemPrompt).toContain(
       "For cover letters, explain why this role and employer are a fit and support that case with 2-3 concrete examples from the provided profile.",
