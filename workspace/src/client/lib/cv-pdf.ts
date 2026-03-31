@@ -259,7 +259,7 @@ export async function downloadCvPdfForJob(jobId: string): Promise<void> {
     .replace(/[^a-z0-9]+/gi, "-")
     .replace(/^-+|-+$/g, "")
     .toLowerCase();
-  const directDownloadName = `${safeFilenamePart(profile.basics?.name || "Unknown")}_${safeFilenamePart(job.employer || "Unknown")}.pdf`;
+  const directDownloadName = `${safeFilenamePart(profile.basics?.name || "Unknown")}_CV_${safeFilenamePart(job.employer || "Unknown")}.pdf`;
 
   if (job.pdfPath) {
     const pdfHref = `/pdfs/resume_${job.id}.pdf?v=${encodeURIComponent(job.updatedAt)}`;
@@ -307,5 +307,5 @@ export async function downloadCvPdfForJob(jobId: string): Promise<void> {
     })),
   });
 
-  triggerDownload(blob, `cv-${safeEmployer}-${safeTitle}.pdf`);
+  triggerDownload(blob, directDownloadName);
 }

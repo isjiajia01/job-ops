@@ -62,6 +62,8 @@ At this stage:
 4. Open the **search links** row when you want quick external research on LinkedIn, GitHub, or the wider web.
 5. Optionally enable tracer links for that specific job.
 6. Download the tailored PDF.
+   - `View CV` / `View Cover Letter` are preview actions.
+   - `Download CV PDF` / `Download Cover Letter PDF` should download directly instead of opening a preview tab first.
 7. Submit your application externally.
 
 ### 5) Mark jobs as applied in JobOps

@@ -1,6 +1,7 @@
 import type { JobChatMessage, ResumeProfile } from "@shared/types";
 import { getGhostwriterCoverLetterDraft } from "@shared/utils/ghostwriter";
 import * as api from "@/client/api";
+import { safeFilenamePart } from "@/lib/utils";
 
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
@@ -231,14 +232,7 @@ export async function downloadCoverLetterPdfForJob(
     throw new Error("No cover letter draft found yet.");
   }
 
-  const safeEmployer = (job.employer || "employer")
-    .replace(/[^a-z0-9]+/gi, "-")
-    .replace(/^-+|-+$/g, "")
-    .toLowerCase();
-  const safeTitle = (job.title || "job")
-    .replace(/[^a-z0-9]+/gi, "-")
-    .replace(/^-+|-+$/g, "")
-    .toLowerCase();
+  const downloadName = `${safeFilenamePart(profile?.basics?.name || "Unknown")}_Cover_Letter_${safeFilenamePart(job.employer || "Unknown")}.pdf`;
 
   const blob = buildPdfBlob({
     personName: profile?.basics?.name || "Candidate Name",
@@ -254,8 +248,8 @@ export async function downloadCoverLetterPdfForJob(
       year: "numeric",
     }),
     content,
-    fileName: `cover-letter-${safeEmployer}-${safeTitle}.pdf`,
+    fileName: downloadName,
   });
 
-  triggerDownload(blob, `cover-letter-${safeEmployer}-${safeTitle}.pdf`);
+  triggerDownload(blob, downloadName);
 }
