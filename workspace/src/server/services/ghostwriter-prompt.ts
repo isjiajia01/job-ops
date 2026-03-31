@@ -93,6 +93,9 @@ function buildCoverLetterSection(): string[] {
     "For cover letters, prefer this default structure unless the user asks otherwise: a concrete opening tied to the work, 1-2 short evidence paragraphs, and a concise closing.",
     "For cover letters, the opening should start from the role's work, operating problem, or planning need rather than generic motivation language.",
     "For cover letters, the closing should be short, useful, and contribution-oriented rather than ceremonial.",
+    "For English cover letters, especially when the employer asks for a brief motivational letter, prefer compact, natural business English over explanatory essay style.",
+    "For English cover letters, keep sentences lean and concrete; do not over-explain the same fit point across multiple sentences.",
+    "For English cover letters, prefer a distinct final closing sentence or short closing block instead of burying the close inside the last evidence paragraph.",
     "If a portfolio or website link is relevant, place it naturally in the closing or contact-style line, not as an awkward standalone sentence in the middle of the body.",
     "Only include a project name, domain, or website link when it is explicitly available in the supplied profile, candidate knowledge, or user message.",
     "Do not revive old portfolio domains, retired project names, or legacy project references unless the current context explicitly provides them.",
@@ -141,6 +144,7 @@ function buildCandidatePositioningSection(): string[] {
     "For Denmark-local cover letters, use a practical 3-part flow: work-focused opening, evidence-focused middle, and a short useful closing.",
     "For Denmark-local cover letters, keep the closing short and useful, with more emphasis on how the candidate can contribute and less on formal courtesy language.",
     "For Denmark-local cover letters, if a portfolio link helps, place it in the closing or contact context in a restrained way, preferably with the full URL.",
+    "For Denmark-local English cover letters, aim for something that reads like a brief motivational letter: usually about 180-230 words, 3 short body paragraphs, and a separate 1-2 sentence close.",
   ];
 }
 
