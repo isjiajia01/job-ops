@@ -25,7 +25,7 @@ export function buildHeaders(args: {
 
   if (args.provider === "openrouter") {
     headers["HTTP-Referer"] = "JobOps";
-    headers["X-Title"] = "JobOpsOrchestrator";
+    headers["X-Title"] = "JobOpsWorkspace";
   }
 
   return headers;

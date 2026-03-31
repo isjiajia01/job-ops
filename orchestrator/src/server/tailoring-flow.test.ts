@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { generateFinalPdf } from "./pipeline/orchestrator";
+import { generateFinalPdf } from "./pipeline/runner";
 import * as jobsRepo from "./repositories/jobs";
 import * as pdfService from "./services/pdf";
 

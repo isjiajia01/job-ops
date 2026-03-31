@@ -154,7 +154,7 @@ export interface Job {
   starting: string | null;
   jobDescription: string | null;
 
-  // Orchestrator enrichments
+  // Application workspace enrichments
   status: JobStatus;
   outcome: JobOutcome | null;
   closedAt: number | null;

@@ -169,7 +169,7 @@ describe("LlmService", () => {
 
     expect(headers.Authorization).toContain("Bearer");
     expect(headers["HTTP-Referer"]).toBe("JobOps");
-    expect(headers["X-Title"]).toBe("JobOpsOrchestrator");
+    expect(headers["X-Title"]).toBe("JobOpsWorkspace");
   });
 
   it("retries on parsing failures when maxRetries is set", async () => {

@@ -7,7 +7,7 @@
 
 import "../config/env";
 import { closeDb } from "../db/index";
-import { runPipeline } from "./orchestrator";
+import { runPipeline } from "./runner";
 
 async function main() {
   console.log("=".repeat(60));

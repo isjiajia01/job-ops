@@ -49,7 +49,7 @@ describe.sequential("pipeline cancellation", () => {
   });
 
   it("marks run as cancelled at checkpoint and resets running state", async () => {
-    const pipeline = await import("./orchestrator");
+    const pipeline = await import("./runner");
     const pipelineRepo = await import("../repositories/pipeline");
     const steps = await import("./steps");
 

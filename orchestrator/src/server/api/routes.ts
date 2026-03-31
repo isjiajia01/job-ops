@@ -1,5 +1,5 @@
 /**
- * API routes for the orchestrator.
+ * API routes for the Job Ops application.
  */
 
 import { Router } from "express";

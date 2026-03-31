@@ -1,5 +1,5 @@
 /**
- * Tests for sponsor match calculation logic in the pipeline orchestrator.
+ * Tests for sponsor match calculation logic in the pipeline runner.
  *
  * These tests verify that during job scoring, the sponsor matching functionality
  * correctly calculates and stores sponsor match scores and names.
@@ -136,7 +136,7 @@ describe("Sponsor Match Calculation", () => {
       ]);
 
       // Import and run pipeline
-      const { runPipeline } = await import("./orchestrator");
+      const { runPipeline } = await import("./runner");
       await runPipeline({ sources: [], enableCrawling: false });
 
       // Verify searchSponsors was called with correct parameters
@@ -186,7 +186,7 @@ describe("Sponsor Match Calculation", () => {
         },
       ]);
 
-      const { runPipeline } = await import("./orchestrator");
+      const { runPipeline } = await import("./runner");
       await runPipeline({ sources: [], enableCrawling: false });
 
       // Should include up to 2 perfect matches
@@ -224,7 +224,7 @@ describe("Sponsor Match Calculation", () => {
         },
       ]);
 
-      const { runPipeline } = await import("./orchestrator");
+      const { runPipeline } = await import("./runner");
       await runPipeline({ sources: [], enableCrawling: false });
 
       // Should only include the top match since none are 100%
@@ -244,7 +244,7 @@ describe("Sponsor Match Calculation", () => {
       // Mock sponsor search returning no matches
       searchSponsors.mockResolvedValue([]);
 
-      const { runPipeline } = await import("./orchestrator");
+      const { runPipeline } = await import("./runner");
       await runPipeline({ sources: [], enableCrawling: false });
 
       // sponsorMatchScore should be 0 (not set) and sponsorMatchNames undefined
@@ -267,7 +267,7 @@ describe("Sponsor Match Calculation", () => {
       const mockJob = createJob({ employer: null as unknown as string });
       getUnscoredDiscoveredJobs.mockResolvedValue([mockJob]);
 
-      const { runPipeline } = await import("./orchestrator");
+      const { runPipeline } = await import("./runner");
       await runPipeline({ sources: [], enableCrawling: false });
 
       // searchSponsors should not be called
@@ -287,7 +287,7 @@ describe("Sponsor Match Calculation", () => {
       const mockJob = createJob({ employer: "" });
       getUnscoredDiscoveredJobs.mockResolvedValue([mockJob]);
 
-      const { runPipeline } = await import("./orchestrator");
+      const { runPipeline } = await import("./runner");
       await runPipeline({ sources: [], enableCrawling: false });
 
       // searchSponsors should not be called for empty string
@@ -301,7 +301,7 @@ describe("Sponsor Match Calculation", () => {
       getUnscoredDiscoveredJobs.mockResolvedValue([mockJob]);
       searchSponsors.mockResolvedValue([]);
 
-      const { runPipeline } = await import("./orchestrator");
+      const { runPipeline } = await import("./runner");
       await runPipeline({ sources: [], enableCrawling: false });
 
       expect(searchSponsors).toHaveBeenCalledWith("Test Company", {
@@ -324,7 +324,7 @@ describe("Sponsor Match Calculation", () => {
         },
       ]);
 
-      const { runPipeline } = await import("./orchestrator");
+      const { runPipeline } = await import("./runner");
       await runPipeline({ sources: [], enableCrawling: false });
 
       // Single perfect match should be reported
@@ -370,7 +370,7 @@ describe("Sponsor Match Calculation", () => {
           },
         ]);
 
-      const { runPipeline } = await import("./orchestrator");
+      const { runPipeline } = await import("./runner");
       await runPipeline({ sources: [], enableCrawling: false });
 
       // Verify both jobs were processed with different sponsor data

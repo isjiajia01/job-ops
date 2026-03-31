@@ -1,5 +1,5 @@
 {
-  "name": "job-ops-orchestrator",
+  "name": "job-ops-workspace",
   "version": "0.2.4",
   "type": "module",
   "description": "Application-first workspace for job search, tailoring, and tracking",

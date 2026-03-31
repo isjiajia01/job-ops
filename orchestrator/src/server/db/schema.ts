@@ -75,7 +75,7 @@ export const jobs = sqliteTable("jobs", {
   vacancyCount: integer("vacancy_count"),
   workFromHomeType: text("work_from_home_type"),
 
-  // Orchestrator enrichments
+  // Application workspace enrichments
   status: text("status", {
     enum: [
       "discovered",
