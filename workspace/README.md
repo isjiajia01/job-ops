@@ -5,7 +5,7 @@ An application-first workspace for the job search pipeline. Discovers roles, sco
 ## Architecture
 
 ```
-orchestrator/
+workspace/
 ├── src/
 │   ├── server/           # Express backend
 │   │   ├── api/          # REST API routes
@@ -26,7 +26,7 @@ orchestrator/
 
 1. **Install dependencies:**
    ```bash
-   cd orchestrator
+   cd workspace
    npm install
    ```
 

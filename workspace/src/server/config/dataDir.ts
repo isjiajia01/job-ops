@@ -18,7 +18,7 @@ export function getDataDir(): string {
     join(parentDir, ".env"),
   ].some((marker) => existsSync(marker));
   const candidates =
-    cwdBase === "orchestrator" && parentLooksLikeRoot
+    cwdBase === "workspace" && parentLooksLikeRoot
       ? [join(parentDir, "data"), join(cwd, "data")]
       : [join(cwd, "data"), join(parentDir, "data")];
 

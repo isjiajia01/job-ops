@@ -90,7 +90,7 @@ Before marking work complete, verify changes with the same checks used by CI.
 
 Run from repository root:
 
-1. `./orchestrator/node_modules/.bin/biome ci .`
+1. `./workspace/node_modules/.bin/biome ci .`
 2. `npm run check:types:shared`
 3. `npm --workspace orchestrator run check:types`
 4. `npm --workspace gradcracker-extractor run check:types`

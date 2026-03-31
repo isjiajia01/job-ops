@@ -10,7 +10,7 @@ const tempRoots: string[] = [];
 const originalCwd = process.cwd();
 
 async function makeTempRepoRoot(): Promise<string> {
-  const testTmpBase = join(originalCwd, "orchestrator", ".tmp");
+  const testTmpBase = join(originalCwd, "workspace", ".tmp");
   await mkdir(testTmpBase, { recursive: true });
   const tempDir = await mkdtemp(join(testTmpBase, "visa-sponsor-discovery-"));
   tempRoots.push(tempDir);

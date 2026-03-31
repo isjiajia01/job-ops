@@ -16,7 +16,7 @@ Hiring Cafe is a browser-backed extractor that queries Hiring Cafe search APIs a
 Implementation split:
 
 1. `extractors/hiringcafe/src/main.ts` builds search state, calls Hiring Cafe APIs, and writes dataset JSON.
-2. `orchestrator/src/server/services/hiring-cafe.ts` runs the extractor, streams progress events, and maps rows for pipeline import.
+2. `workspace/src/server/services/hiring-cafe.ts` runs the extractor, streams progress events, and maps rows for pipeline import.
 
 ## Why it exists
 

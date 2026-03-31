@@ -1,6 +1,6 @@
 ---
 name: orchestrator-code-quality
-description: Generate a code quality report for the orchestrator/ folder focusing on duplication, complexity hotspots, and error/logging consistency, using npm run check:all as the primary gate; report only (no code changes).
+description: Generate a code quality report for the workspace/ folder focusing on duplication, complexity hotspots, and error/logging consistency, using npm run check:all as the primary gate; report only (no code changes).
 license: MIT
 compatibility: opencode
 metadata:

@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { getProfile } from "../orchestrator/src/server/services/profile";
-import { generateTailoring } from "../orchestrator/src/server/services/summary";
+import { getProfile } from "../workspace/src/server/services/profile";
+import { generateTailoring } from "../workspace/src/server/services/summary";
 
 type Fixture = {
   id: string;

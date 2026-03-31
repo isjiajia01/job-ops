@@ -38,7 +38,7 @@ jobs:
         run: npm ci --workspaces --include-workspace-root
         working-directory: .
       - name: Build better-sqlite3
-        run: npm --workspace orchestrator rebuild better-sqlite3
+        run: npm --workspace workspace rebuild better-sqlite3
         working-directory: .
       - name: Run Tests
         run: npm run test:all
@@ -50,7 +50,7 @@ jobs:
     strategy:
       matrix:
         project:
-          - orchestrator
+          - workspace
           - adzuna-extractor
           - hiringcafe-extractor
           - gradcracker-extractor
@@ -78,8 +78,8 @@ jobs:
         working-directory: .
 
       - name: Build ${{ matrix.project }} (client)
-        if: matrix.project == 'orchestrator'
-        run: npm --workspace orchestrator run build:client
+        if: matrix.project == 'workspace'
+        run: npm --workspace workspace run build:client
         working-directory: .
 
   docs:

@@ -6,7 +6,7 @@
       "entry": [],
       "project": []
     },
-    "orchestrator": {
+    "workspace": {
       "entry": [
         "src/server/index.ts",
         "src/server/db/migrate.ts",

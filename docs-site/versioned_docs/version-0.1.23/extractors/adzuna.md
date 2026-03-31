@@ -10,7 +10,7 @@ sidebar_position: 6
 Adzuna is an API-backed extractor implemented in two lean pieces:
 
 1. `extractors/adzuna/src/main.ts` fetches paginated Adzuna search results and writes `jobs.json`.
-2. `orchestrator/src/server/services/adzuna.ts` runs the extractor, parses progress lines, and maps rows into `CreateJobInput`.
+2. `workspace/src/server/services/adzuna.ts` runs the extractor, parses progress lines, and maps rows into `CreateJobInput`.
 
 It de-duplicates in the existing repository path using `sourceJobId` fallback to `jobUrl`.
 

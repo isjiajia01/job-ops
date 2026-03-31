@@ -15,7 +15,7 @@ Docs are versioned using Docusaurus versions, intended to map to release tags.
 
 ## How is the app version managed?
 
-The app version comes from `orchestrator/package.json`.
+The app version comes from `workspace/package.json`.
 
 Releases create a matching `vX.Y.Z` Git tag, and the UI shows that release version in the sidebar footer.
 

@@ -23,7 +23,7 @@ Endpoint:
 
 Service:
 
-- `orchestrator/src/server/services/manualJob.ts`
+- `workspace/src/server/services/manualJob.ts`
 
 Behavior:
 

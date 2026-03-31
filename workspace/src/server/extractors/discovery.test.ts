@@ -7,7 +7,7 @@ import { discoverManifestPaths, loadManifestFromFile } from "./discovery";
 const tempRoots: string[] = [];
 
 async function makeTempRoot(): Promise<string> {
-  const testTmpBase = join(process.cwd(), "orchestrator", ".tmp");
+  const testTmpBase = join(process.cwd(), "workspace", ".tmp");
   await mkdir(testTmpBase, { recursive: true });
   const tempDir = await mkdtemp(join(testTmpBase, "extractor-discovery-"));
   const root = join(tempDir, "extractors");

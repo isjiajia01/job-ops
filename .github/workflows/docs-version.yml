@@ -48,7 +48,7 @@ jobs:
 
       - name: Format generated docs files
         run: |
-          ./orchestrator/node_modules/.bin/biome check --write \
+          ./workspace/node_modules/.bin/biome check --write \
             docs-site/versions.json \
             docs-site/versioned_docs \
             docs-site/versioned_sidebars

@@ -12,7 +12,7 @@ UKVisaJobs is the most complex extractor because authenticated sessions are requ
 Two layers:
 
 1. `extractors/ukvisajobs/src/main.ts` handles login/API calls and dataset output.
-2. `orchestrator/src/server/services/ukvisajobs.ts` executes extractor and ingests/de-dupes output.
+2. `workspace/src/server/services/ukvisajobs.ts` executes extractor and ingests/de-dupes output.
 
 ## 1) Authentication and session cache
 

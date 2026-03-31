@@ -19,7 +19,7 @@ Use the path that matches your change:
 | Path | Main folders | Start command(s) | Canonical docs |
 | --- | --- | --- | --- |
 | Docs/content | `docs-site/docs` | `npm run docs:dev` | [Docs style guide](https://jobops.dakheera47.com/docs/next/reference/documentation-style-guide), [FAQ](https://jobops.dakheera47.com/docs/next/reference/faq) |
-| App/UI/API | `orchestrator`, `shared` | `npm --workspace orchestrator run dev` | [Self-hosting](https://jobops.dakheera47.com/docs/getting-started/self-hosting), [Troubleshooting](https://jobops.dakheera47.com/docs/next/troubleshooting/common-problems) |
+| App/UI/API | `workspace`, `shared` | `npm --workspace workspace run dev` | [Self-hosting](https://jobops.dakheera47.com/docs/getting-started/self-hosting), [Troubleshooting](https://jobops.dakheera47.com/docs/next/troubleshooting/common-problems) |
 | Extractors | `extractors/*`, sometimes `shared` | Relevant type checks + tests | [Add an extractor](https://jobops.dakheera47.com/docs/next/workflows/add-an-extractor), [Extractors overview](https://jobops.dakheera47.com/docs/extractors/overview) |
 
 ## Local Setup (Minimal)
@@ -30,8 +30,8 @@ Contributor baseline from repo root:
 
 ```bash
 npm ci
-npm --workspace orchestrator run db:migrate
-npm --workspace orchestrator run dev
+npm --workspace workspace run db:migrate
+npm --workspace workspace run dev
 ```
 
 If you are working with extractors that use Glassdoor, Indeed, or LinkedIn (powered by python-jobspy), set up the Python venv once:
@@ -74,33 +74,33 @@ Releases are driven from GitHub Actions.
 
 The workflow will:
 
-- bump `orchestrator/package.json`
+- bump `workspace/package.json`
 - update `package-lock.json`
 - commit the version bump to `main`
 - create and push tag `vX.Y.Z`
 - publish the `ghcr.io/.../job-ops` image for that release
 - create the GitHub release using either the custom title or `vX.Y.Z`
 
-The app version shown in the UI is sourced from `orchestrator/package.json`, so the release version, tag, and displayed app version stay aligned even when the GitHub release title is customized separately.
+The app version shown in the UI is sourced from `workspace/package.json`, so the release version, tag, and displayed app version stay aligned even when the GitHub release title is customized separately.
 
 ## Validation Before PR (CI-Parity Checks)
 
 Run from the repository root:
 
 ```bash
-./orchestrator/node_modules/.bin/biome ci .
+./workspace/node_modules/.bin/biome ci .
 npm run check:types:shared
-npm --workspace orchestrator run check:types
+npm --workspace workspace run check:types
 npm --workspace gradcracker-extractor run check:types
 npm --workspace ukvisajobs-extractor run check:types
-npm --workspace orchestrator run build:client
-npm --workspace orchestrator run test:run
+npm --workspace workspace run build:client
+npm --workspace workspace run test:run
 ```
 
 If tests fail due to a `better-sqlite3` Node ABI mismatch, rebuild it and rerun tests:
 
 ```bash
-npm --workspace orchestrator rebuild better-sqlite3
+npm --workspace workspace rebuild better-sqlite3
 ```
 
 CI runs on Node 22. If local behavior differs, verify with Node 22 before concluding a change is valid.

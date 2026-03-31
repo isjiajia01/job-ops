@@ -31,7 +31,7 @@ Key environment variables:
 
 ## 2) Workspace flow
 
-The service in `orchestrator/src/server/services/jobspy.ts`:
+The service in `workspace/src/server/services/jobspy.ts`:
 
 - Builds search-term list from UI or env
 - Runs Python once per term with unique output file

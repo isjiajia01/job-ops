@@ -34,7 +34,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 COPY package*.json ./
 COPY docs-site/package*.json ./docs-site/
 COPY shared/package*.json ./shared/
-COPY orchestrator/package*.json ./orchestrator/
+COPY workspace/package*.json ./workspace/
 COPY extractors/adzuna/package*.json ./extractors/adzuna/
 COPY extractors/hiringcafe/package*.json ./extractors/hiringcafe/
 COPY extractors/gradcracker/package*.json ./extractors/gradcracker/
@@ -54,7 +54,7 @@ RUN npx camoufox-js fetch
 WORKDIR /app
 COPY shared ./shared
 COPY docs-site ./docs-site
-COPY orchestrator ./orchestrator
+COPY workspace ./workspace
 COPY scripts ./scripts
 COPY visa-sponsor-providers ./visa-sponsor-providers
 COPY extractors/adzuna ./extractors/adzuna
@@ -71,7 +71,7 @@ WORKDIR /app/docs-site
 RUN npm run build
 
 # Build client bundle
-WORKDIR /app/orchestrator
+WORKDIR /app/workspace
 RUN npm run build:client
 
 # ============================================================================
@@ -106,7 +106,7 @@ COPY --from=builder /ms-playwright /ms-playwright
 COPY package*.json ./
 COPY docs-site/package*.json ./docs-site/
 COPY shared/package*.json ./shared/
-COPY orchestrator/package*.json ./orchestrator/
+COPY workspace/package*.json ./workspace/
 COPY extractors/adzuna/package*.json ./extractors/adzuna/
 COPY extractors/hiringcafe/package*.json ./extractors/hiringcafe/
 COPY extractors/gradcracker/package*.json ./extractors/gradcracker/
@@ -119,10 +119,10 @@ RUN --mount=type=cache,target=/root/.npm \
     --no-audit --no-fund --progress=false
 
 # Copy built assets and source code from builder
-COPY --from=builder /app/orchestrator/dist ./orchestrator/dist
-COPY --from=builder /app/docs-site/build ./orchestrator/dist/docs
+COPY --from=builder /app/workspace/dist ./workspace/dist
+COPY --from=builder /app/docs-site/build ./workspace/dist/docs
 COPY shared ./shared
-COPY orchestrator ./orchestrator
+COPY workspace ./workspace
 COPY scripts ./scripts
 COPY visa-sponsor-providers ./visa-sponsor-providers
 COPY extractors/adzuna ./extractors/adzuna
@@ -146,5 +146,5 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:3001/health || exit 1
 
-WORKDIR /app/orchestrator
+WORKDIR /app/workspace
 CMD ["sh", "-c", "npx tsx src/server/db/migrate.ts && npm run start"]

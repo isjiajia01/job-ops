@@ -17,7 +17,7 @@ function readAppVersion(): string {
     !/^\d+\.\d+\.\d+$/.test(packageJson.version)
   ) {
     throw new Error(
-      "orchestrator/package.json must contain a semver version in x.y.z format",
+      "workspace/package.json must contain a semver version in x.y.z format",
     );
   }
 
