@@ -1,0 +1,41 @@
+# syntax=docker/dockerfile:1.6
+
+FROM node:22-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV NODE_ENV=production
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    python3 python3-minimal libpython3.11-minimal \
+    python3-pip \
+    build-essential pkg-config \
+    libgtk-3-0 libgtk-3-common \
+    libdbus-glib-1-2 libxt6 libx11-xcb1 libasound2 \
+    curl && \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
+
+WORKDIR /app
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install --no-cache-dir --break-system-packages playwright python-jobspy
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python3 -m playwright install firefox
+
+COPY package*.json ./
+COPY docs-site/package*.json ./docs-site/
+COPY shared/package*.json ./shared/
+COPY workspace/package*.json ./workspace/
+COPY extractors/adzuna/package*.json ./extractors/adzuna/
+COPY extractors/gradcracker/package*.json ./extractors/gradcracker/
+COPY extractors/hiringcafe/package*.json ./extractors/hiringcafe/
+COPY extractors/startupjobs/package*.json ./extractors/startupjobs/
+COPY extractors/ukvisajobs/package*.json ./extractors/ukvisajobs/
+
+RUN --mount=type=cache,target=/root/.npm \
+    npm install --workspaces --include-workspace-root --include=dev \
+    --no-audit --no-fund --progress=false
+
+RUN npx camoufox-js fetch

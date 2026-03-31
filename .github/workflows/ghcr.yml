@@ -60,6 +60,15 @@ jobs:
             type=sha
             type=raw,value=latest,enable=${{ github.event_name == 'push' || inputs.push_latest }}
 
+      - name: Resolve base image
+        id: base
+        run: |
+          if [ "$TARGET_PLATFORMS" = 'linux/arm64' ]; then
+            echo "image=ghcr.io/${{ github.repository_owner }}/job-ops-base:arm64-latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "image=ghcr.io/${{ github.repository_owner }}/job-ops-base:latest" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -67,6 +76,8 @@ jobs:
           file: ./Dockerfile
           push: true
           platforms: ${{ env.TARGET_PLATFORMS }}
+          build-args: |
+            BASE_IMAGE=${{ steps.base.outputs.image }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=job-ops-${{ env.TARGET_PLATFORMS }}
@@ -76,4 +87,5 @@ jobs:
         run: |
           echo "Runner: $RUNNER_OS / $RUNNER_ARCH"
           echo "Target platforms: $TARGET_PLATFORMS"
-          echo "Expected fast path: native ARM runner is used for manual linux/arm64 deploy builds."
+          echo "Base image: ${{ steps.base.outputs.image }}"
+          echo "Expected fast path: native ARM runner is used for manual linux/arm64 deploy builds, reusing a prebuilt dependency base image."
