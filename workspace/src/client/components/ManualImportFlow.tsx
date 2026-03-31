@@ -875,10 +875,6 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
                       className="justify-start gap-2"
                       onClick={() => {
                         if (!preparedJob) return;
-                        if (preparedPdfHref) {
-                          openHref(preparedPdfHref);
-                          return;
-                        }
                         void downloadCvPdfForJob(preparedJob.id).catch(
                           (error) => {
                             const message =

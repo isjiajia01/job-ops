@@ -57,10 +57,12 @@ These jobs already have tailored PDFs generated for the specific job description
 At this stage:
 
 1. Open job details.
-2. Open the **search links** row when you want quick external research on LinkedIn, GitHub, or the wider web.
-3. Optionally enable tracer links for that specific job.
-4. Download the tailored PDF.
-5. Submit your application externally.
+2. Use **Ghostwriter** to tailor the application around that single role.
+3. If the output feels too generic, update **Profile Hub** facts/projects/writing preferences before retrying.
+4. Open the **search links** row when you want quick external research on LinkedIn, GitHub, or the wider web.
+5. Optionally enable tracer links for that specific job.
+6. Download the tailored PDF.
+7. Submit your application externally.
 
 ### 5) Mark jobs as applied in JobOps
 

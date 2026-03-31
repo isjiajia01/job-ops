@@ -2,6 +2,7 @@ import type { ResumeProfile } from "@shared/types";
 import { createEmptyResumeProfile } from "@shared/utils/profile";
 import * as api from "@/client/api";
 import { parseTailoredSkills } from "@/client/components/tailoring-utils";
+import { safeFilenamePart } from "@/lib/utils";
 
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
@@ -88,6 +89,22 @@ function triggerDownload(blob: Blob, fileName: string): void {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+async function downloadExistingPdf(
+  pdfHref: string,
+  fileName: string,
+): Promise<void> {
+  const response = await fetch(pdfHref, {
+    credentials: "same-origin",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to download CV PDF (${response.status})`);
+  }
+
+  const blob = await response.blob();
+  triggerDownload(blob, fileName);
 }
 
 function formatLocation(profile: ResumeProfile | null): string {
@@ -242,6 +259,13 @@ export async function downloadCvPdfForJob(jobId: string): Promise<void> {
     .replace(/[^a-z0-9]+/gi, "-")
     .replace(/^-+|-+$/g, "")
     .toLowerCase();
+  const directDownloadName = `${safeFilenamePart(profile.basics?.name || "Unknown")}_${safeFilenamePart(job.employer || "Unknown")}.pdf`;
+
+  if (job.pdfPath) {
+    const pdfHref = `/pdfs/resume_${job.id}.pdf?v=${encodeURIComponent(job.updatedAt)}`;
+    await downloadExistingPdf(pdfHref, directDownloadName);
+    return;
+  }
 
   const tailoredSkills = parseTailoredSkills(job.tailoredSkills);
   const skills =

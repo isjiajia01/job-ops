@@ -482,10 +482,6 @@ export const ApplicationWorkspacePage: React.FC = () => {
                   variant="outline"
                   className="h-9 border-border/60 bg-background/30"
                   onClick={() => {
-                    if (job.pdfPath && pdfHref) {
-                      window.open(pdfHref, "_blank", "noopener,noreferrer");
-                      return;
-                    }
                     void downloadCvPdfForJob(job.id).catch((error) => {
                       const message =
                         error instanceof Error

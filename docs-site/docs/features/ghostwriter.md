@@ -37,6 +37,27 @@ Typical use cases:
 4. Use the `Copy` button on any completed Ghostwriter reply to copy the full output.
 5. Stop or regenerate responses when needed.
 
+### Recommended personalization loop
+
+Use this loop when Ghostwriter is directionally right but still sounds too generic.
+
+1. Open **Profile Hub** and keep three things current:
+   - personal facts
+   - strongest project evidence cards
+   - writing preferences
+2. Run Ghostwriter on a real target job instead of prompting in the abstract.
+3. Review the output for three failure modes:
+   - generic opening language
+   - weak or abstract evidence usage
+   - tone that feels too polished, sales-heavy, or unlike the candidate
+4. Convert those failures into durable profile memory:
+   - add/update a fact when the system is missing positioning context
+   - add/update a project when the system is underusing a strong proof point
+   - add/update a writing preference when the tone or phrasing is wrong repeatedly
+5. Re-run Ghostwriter on the same job and compare the result before moving on.
+
+This is the fastest way to turn Ghostwriter from "resume-aware" into "candidate-aware" behavior.
+
 ### Writing style settings impact
 
 Global settings affecting generations:

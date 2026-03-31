@@ -82,6 +82,24 @@ When adding or updating user-facing docs:
 - Link related docs with `/docs/...` URLs.
 - Any user-visible behavior change should include corresponding docs updates.
 
+## Ghostwriter personalization workflow
+
+When improving Ghostwriter quality for a real candidate, prefer this loop over prompt-only tweaking:
+
+1. Seed or update `Profile Hub` / `candidateKnowledgeBase` with:
+   - personal facts
+   - strongest project evidence
+   - durable writing preferences
+2. Test on a real target application, not an abstract sample prompt.
+3. Review output for:
+   - generic openings
+   - weak evidence selection
+   - wrong tone / country style / overclaiming
+4. Convert repeated failures into durable profile memory instead of one-off prompt hacks.
+5. Re-run on the same application and only then generalize changes.
+
+Favor durable memory + prompt/rule improvements over per-run manual prompting whenever the issue is recurring.
+
 ## Validation / Verification
 
 Before marking work complete, verify changes with the same checks used by CI.
