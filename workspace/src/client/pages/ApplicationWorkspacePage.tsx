@@ -463,203 +463,188 @@ export const ApplicationWorkspacePage: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              {(pdfHref || cvHref) && (
-                <Button
-                  asChild
-                  size="sm"
-                  className="h-9 border border-orange-400/50 bg-orange-500/20 text-orange-100 hover:bg-orange-500/30"
-                >
-                  <a
-                    href={pdfHref || cvHref || "#"}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <FileText className="mr-1.5 h-3.5 w-3.5" />
-                    View CV
-                  </a>
-                </Button>
-              )}
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+            <div className="grid flex-1 gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+              <div className="rounded-xl border border-border/60 bg-background/20 p-3">
+                <div className="mb-2 text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+                  Workflow actions
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {isReady && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 border-orange-400/50 bg-orange-500/10 text-orange-100 hover:bg-orange-500/20"
+                      onClick={() => void handleMarkApplied()}
+                      disabled={isBusy}
+                    >
+                      <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                      Mark Applied
+                    </Button>
+                  )}
 
-              {job && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-9 border-border/60 bg-background/30"
-                  onClick={() => {
-                    void downloadCvPdfForJob(job.id).catch((error) => {
-                      const message =
-                        error instanceof Error
-                          ? error.message
-                          : "Failed to download CV PDF";
-                      toast.error(message);
-                    });
-                  }}
-                >
-                  <Download className="mr-1.5 h-3.5 w-3.5" />
-                  Download CV PDF
-                </Button>
-              )}
+                  {isReady && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 border-border/60 bg-background/30"
+                      onClick={() => navigate(`/applications/${job.id}`)}
+                      disabled={isBusy}
+                    >
+                      <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                      Open Tailoring Editor
+                    </Button>
+                  )}
 
-              {isReady && (
-                <>
+                  {isDiscovered && (
+                    <Button
+                      size="sm"
+                      className="h-9 border border-orange-400/50 bg-orange-500/20 text-orange-100 hover:bg-orange-500/30"
+                      onClick={() => navigate(`/applications/${job.id}`)}
+                      disabled={isBusy}
+                    >
+                      <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                      Start Ghostwriter
+                    </Button>
+                  )}
+
+                  {isApplied && (
+                    <Button
+                      size="sm"
+                      className="h-9 border border-orange-400/50 bg-orange-500/20 text-orange-100 hover:bg-orange-500/30"
+                      onClick={() => void handleMoveToInProgress()}
+                      disabled={isBusy}
+                    >
+                      <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                      Move to In Progress
+                    </Button>
+                  )}
+
+                  {isApplied && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 border-border/60 bg-background/30"
+                      onClick={handleMoveBackToReady}
+                      disabled={isBusy}
+                    >
+                      <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
+                      Move Back To Drafting
+                    </Button>
+                  )}
+
+                  {isInProgress && (
+                    <Button
+                      size="sm"
+                      className="h-9 border border-orange-400/50 bg-orange-500/20 text-orange-100 hover:bg-orange-500/30"
+                      onClick={() => setIsLogModalOpen(true)}
+                      disabled={!canLogEvents || isBusy}
+                    >
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      Log Event
+                    </Button>
+                  )}
+
+                  {(isReady || isDiscovered) && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 border-border/60 bg-background/30"
+                      onClick={() => void handleSkip()}
+                      disabled={isBusy}
+                    >
+                      <XCircle className="mr-1.5 h-3.5 w-3.5" />
+                      Delete Job
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border/60 bg-background/20 p-3">
+                <div className="mb-2 text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+                  Documents
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {(pdfHref || cvHref) && (
+                    <Button
+                      asChild
+                      size="sm"
+                      className="h-9 border border-orange-400/50 bg-orange-500/20 text-orange-100 hover:bg-orange-500/30"
+                    >
+                      <a
+                        href={pdfHref || cvHref || "#"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <FileText className="mr-1.5 h-3.5 w-3.5" />
+                        View CV
+                      </a>
+                    </Button>
+                  )}
+
+                  {job && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 border-border/60 bg-background/30"
+                      onClick={() => {
+                        void downloadCvPdfForJob(job.id).catch((error) => {
+                          const message =
+                            error instanceof Error
+                              ? error.message
+                              : "Failed to download CV PDF";
+                          toast.error(message);
+                        });
+                      }}
+                    >
+                      <Download className="mr-1.5 h-3.5 w-3.5" />
+                      Download CV PDF
+                    </Button>
+                  )}
+
                   <Button
+                    asChild
                     size="sm"
                     variant="outline"
-                    className="h-9 border-orange-400/50 bg-orange-500/10 text-orange-100 hover:bg-orange-500/20"
-                    onClick={() => void handleMarkApplied()}
-                    disabled={isBusy}
+                    className="h-9 border-border/60 bg-background/30"
                   >
-                    <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                    Mark Applied
+                    <a
+                      href={coverLetterHref || "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <FileText className="mr-1.5 h-3.5 w-3.5" />
+                      View Cover Letter
+                    </a>
                   </Button>
+
                   <Button
                     size="sm"
                     variant="outline"
                     className="h-9 border-border/60 bg-background/30"
-                    onClick={() => void handleSkip()}
-                    disabled={isBusy}
+                    onClick={handleDownloadCoverLetter}
                   >
-                    <XCircle className="mr-1.5 h-3.5 w-3.5" />
-                    Skip Job
+                    <Download className="mr-1.5 h-3.5 w-3.5" />
+                    Download Cover Letter PDF
                   </Button>
-                </>
-              )}
 
-              {isApplied && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-9 border-border/60 bg-background/30"
-                  onClick={handleMoveBackToReady}
-                  disabled={isBusy}
-                >
-                  <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
-                  Move Back To Drafting
-                </Button>
-              )}
-
-              {isDiscovered && (
-                <>
-                  <Button
-                    size="sm"
-                    className="h-9 border border-orange-400/50 bg-orange-500/20 text-orange-100 hover:bg-orange-500/30"
-                    onClick={() => navigate(`/applications/${job.id}`)}
-                    disabled={isBusy}
-                  >
-                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                    Start Ghostwriter
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-9 border-border/60 bg-background/30"
-                    onClick={() => void handleSkip()}
-                    disabled={isBusy}
-                  >
-                    <XCircle className="mr-1.5 h-3.5 w-3.5" />
-                    Skip Job
-                  </Button>
-                </>
-              )}
-
-              {isApplied && (
-                <Button
-                  size="sm"
-                  className="h-9 border border-orange-400/50 bg-orange-500/20 text-orange-100 hover:bg-orange-500/30"
-                  onClick={() => void handleMoveToInProgress()}
-                  disabled={isBusy}
-                >
-                  <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                  Move to In Progress
-                </Button>
-              )}
-
-              {isInProgress && (
-                <Button
-                  size="sm"
-                  className="h-9 border border-orange-400/50 bg-orange-500/20 text-orange-100 hover:bg-orange-500/30"
-                  onClick={() => setIsLogModalOpen(true)}
-                  disabled={!canLogEvents || isBusy}
-                >
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Log Event
-                </Button>
-              )}
+                  {isReady && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 border-border/60 bg-background/30"
+                      onClick={() => void handleRegeneratePdf()}
+                      disabled={isBusy}
+                    >
+                      <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
+                      Regenerate PDF
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              {isReady && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-9 border-border/60 bg-background/30"
-                  onClick={() => navigate(`/applications/${job.id}`)}
-                  disabled={isBusy}
-                >
-                  <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                  Open Tailoring Editor
-                </Button>
-              )}
-
-              {(pdfHref || cvHref) && (
-                <Button
-                  asChild
-                  size="sm"
-                  variant="outline"
-                  className="h-9 border-border/60 bg-background/30"
-                >
-                  <a
-                    href={pdfHref || cvHref || "#"}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <FileText className="mr-1.5 h-3.5 w-3.5" />
-                    View CV
-                  </a>
-                </Button>
-              )}
-
-              <Button
-                asChild
-                size="sm"
-                variant="outline"
-                className="h-9 border-border/60 bg-background/30"
-              >
-                <a
-                  href={coverLetterHref || "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <FileText className="mr-1.5 h-3.5 w-3.5" />
-                  View Cover Letter
-                </a>
-              </Button>
-
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-9 border-border/60 bg-background/30"
-                onClick={handleDownloadCoverLetter}
-              >
-                <Download className="mr-1.5 h-3.5 w-3.5" />
-                Download Cover Letter PDF
-              </Button>
-
-              {isReady && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-9 border-border/60 bg-background/30"
-                  onClick={() => void handleRegeneratePdf()}
-                  disabled={isBusy}
-                >
-                  <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
-                  Regenerate PDF
-                </Button>
-              )}
-
+            <div className="flex items-start justify-end">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
