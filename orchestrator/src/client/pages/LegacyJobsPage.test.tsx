@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api";
 import { renderWithQueryClient } from "../test/renderWithQueryClient";
-import { OrchestratorPage } from "./OrchestratorPage";
+import { LegacyJobsPage } from "./LegacyJobsPage";
 import type { AutomaticRunValues } from "./orchestrator/automatic-run";
 import type { FilterTab } from "./orchestrator/constants";
 
@@ -385,7 +385,7 @@ const pressKeyOn = (
   fireEvent.keyDown(target, { key, ...options });
 };
 
-describe("OrchestratorPage", () => {
+describe("LegacyJobsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
@@ -423,8 +423,8 @@ describe("OrchestratorPage", () => {
       <MemoryRouter initialEntries={["/legacy/jobs/all"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -442,8 +442,8 @@ describe("OrchestratorPage", () => {
     render(
       <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -464,8 +464,8 @@ describe("OrchestratorPage", () => {
       <MemoryRouter initialEntries={["/legacy/jobs/all"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -493,8 +493,8 @@ describe("OrchestratorPage", () => {
       <MemoryRouter initialEntries={["/legacy/jobs/ready/job-1"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -510,8 +510,8 @@ describe("OrchestratorPage", () => {
       <MemoryRouter initialEntries={["/legacy/jobs/ready/job-1"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -529,8 +529,8 @@ describe("OrchestratorPage", () => {
     render(
       <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -555,8 +555,8 @@ describe("OrchestratorPage", () => {
       >
         <LocationWatcher />
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -585,8 +585,8 @@ describe("OrchestratorPage", () => {
       <MemoryRouter initialEntries={["/legacy/jobs/ready?q=backend&sort=title-asc"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -607,8 +607,8 @@ describe("OrchestratorPage", () => {
       <MemoryRouter initialEntries={["/legacy/jobs/all"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -628,8 +628,8 @@ describe("OrchestratorPage", () => {
       <MemoryRouter initialEntries={["/legacy/jobs/all"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -678,8 +678,8 @@ describe("OrchestratorPage", () => {
     render(
       <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -699,8 +699,8 @@ describe("OrchestratorPage", () => {
     render(
       <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -717,7 +717,7 @@ describe("OrchestratorPage", () => {
       <MemoryRouter initialEntries={["/legacy/jobs/ready?source=ukvisajobs"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -740,8 +740,8 @@ describe("OrchestratorPage", () => {
     render(
       <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -789,8 +789,8 @@ describe("OrchestratorPage", () => {
     render(
       <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -824,8 +824,8 @@ describe("OrchestratorPage", () => {
     render(
       <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -859,8 +859,8 @@ describe("OrchestratorPage", () => {
     render(
       <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -889,8 +889,8 @@ describe("OrchestratorPage", () => {
     render(
       <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -913,8 +913,8 @@ describe("OrchestratorPage", () => {
     render(
       <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -937,8 +937,8 @@ describe("OrchestratorPage", () => {
     render(
       <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -966,8 +966,8 @@ describe("OrchestratorPage", () => {
     render(
       <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -989,8 +989,8 @@ describe("OrchestratorPage", () => {
       <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -1024,8 +1024,8 @@ describe("OrchestratorPage", () => {
       <MemoryRouter initialEntries={["/legacy/jobs/all"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -1066,8 +1066,8 @@ describe("OrchestratorPage", () => {
       <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -1118,8 +1118,8 @@ describe("OrchestratorPage", () => {
     render(
       <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -1145,8 +1145,8 @@ describe("OrchestratorPage", () => {
     render(
       <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -1163,8 +1163,8 @@ describe("OrchestratorPage", () => {
       <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -1197,8 +1197,8 @@ describe("OrchestratorPage", () => {
       <MemoryRouter initialEntries={["/legacy/jobs/ready"]}>
         <LocationWatcher />
         <Routes>
-          <Route path="/legacy/jobs/:tab" element={<OrchestratorPage />} />
-          <Route path="/legacy/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+          <Route path="/legacy/jobs/:tab" element={<LegacyJobsPage />} />
+          <Route path="/legacy/jobs/:tab/:jobId" element={<LegacyJobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
