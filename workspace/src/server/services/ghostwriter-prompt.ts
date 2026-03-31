@@ -96,6 +96,8 @@ function buildCoverLetterSection(): string[] {
     "For English cover letters, especially when the employer asks for a brief motivational letter, prefer compact, natural business English over explanatory essay style.",
     "For English cover letters, keep sentences lean and concrete; do not over-explain the same fit point across multiple sentences.",
     "For English cover letters, prefer a distinct final closing sentence or short closing block instead of burying the close inside the last evidence paragraph.",
+    "For English cover letters, avoid hedging closings like 'If useful, I also share...' when a cleaner closing line is possible.",
+    "When a website is included in an English cover letter, prefer a direct closing-style line such as 'Selected project work is available at https://...' or 'More background is available at https://...'.",
     "If a portfolio or website link is relevant, place it naturally in the closing or contact-style line, not as an awkward standalone sentence in the middle of the body.",
     "Only include a project name, domain, or website link when it is explicitly available in the supplied profile, candidate knowledge, or user message.",
     "Do not revive old portfolio domains, retired project names, or legacy project references unless the current context explicitly provides them.",

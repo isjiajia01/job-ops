@@ -27,15 +27,17 @@ concurrency:
 
 jobs:
   docker:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.platforms == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     env:
       GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.repository_owner }}
       GHCR_TOKEN: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+      TARGET_PLATFORMS: ${{ github.event_name == 'workflow_dispatch' && inputs.platforms || 'linux/amd64,linux/arm64' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up QEMU
+        if: env.TARGET_PLATFORMS != 'linux/arm64'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
@@ -64,8 +66,14 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          platforms: ${{ github.event_name == 'workflow_dispatch' && inputs.platforms || 'linux/amd64,linux/arm64' }}
+          platforms: ${{ env.TARGET_PLATFORMS }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=job-ops-${{ env.TARGET_PLATFORMS }}
+          cache-to: type=gha,mode=max,scope=job-ops-${{ env.TARGET_PLATFORMS }}
+
+      - name: Build summary
+        run: |
+          echo "Runner: $RUNNER_OS / $RUNNER_ARCH"
+          echo "Target platforms: $TARGET_PLATFORMS"
+          echo "Expected fast path: native ARM runner is used for manual linux/arm64 deploy builds."

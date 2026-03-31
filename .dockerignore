@@ -5,6 +5,8 @@
 
 # Build outputs
 **/dist
+**/build
+**/.docusaurus
 **/*.pyc
 
 # Data (mounted as volume)
