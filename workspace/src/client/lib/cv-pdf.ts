@@ -2,6 +2,10 @@ import type { ResumeProfile } from "@shared/types";
 import { createEmptyResumeProfile } from "@shared/utils/profile";
 import * as api from "@/client/api";
 import { parseTailoredSkills } from "@/client/components/tailoring-utils";
+import {
+  type DownloadableDocument,
+  triggerDownload,
+} from "@/client/lib/file-download";
 import { safeFilenamePart } from "@/lib/utils";
 
 const PAGE_WIDTH = 595.28;
@@ -80,21 +84,10 @@ function wrapText(text: string, maxWidth: number, fontSize: number): string[] {
   return lines;
 }
 
-function triggerDownload(blob: Blob, fileName: string): void {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
-
 async function downloadExistingPdf(
   pdfHref: string,
   fileName: string,
-): Promise<void> {
+): Promise<Blob> {
   const response = await fetch(pdfHref, {
     credentials: "same-origin",
   });
@@ -103,8 +96,7 @@ async function downloadExistingPdf(
     throw new Error(`Failed to download CV PDF (${response.status})`);
   }
 
-  const blob = await response.blob();
-  triggerDownload(blob, fileName);
+  return response.blob();
 }
 
 function formatLocation(profile: ResumeProfile | null): string {
@@ -245,7 +237,9 @@ function buildPdfBlob(input: {
   return new Blob([parts.join("\n")], { type: "application/pdf" });
 }
 
-export async function downloadCvPdfForJob(jobId: string): Promise<void> {
+export async function getCvPdfDocumentForJob(
+  jobId: string,
+): Promise<DownloadableDocument> {
   const [job, profile] = await Promise.all([
     api.getApplication(jobId),
     api.getProfile().catch(() => createEmptyResumeProfile() as ResumeProfile),
@@ -263,8 +257,11 @@ export async function downloadCvPdfForJob(jobId: string): Promise<void> {
 
   if (job.pdfPath) {
     const pdfHref = `/pdfs/resume_${job.id}.pdf?v=${encodeURIComponent(job.updatedAt)}`;
-    await downloadExistingPdf(pdfHref, directDownloadName);
-    return;
+    const blob = await downloadExistingPdf(pdfHref, directDownloadName);
+    return {
+      blob,
+      fileName: directDownloadName,
+    };
   }
 
   const tailoredSkills = parseTailoredSkills(job.tailoredSkills);
@@ -307,5 +304,13 @@ export async function downloadCvPdfForJob(jobId: string): Promise<void> {
     })),
   });
 
-  triggerDownload(blob, directDownloadName);
+  return {
+    blob,
+    fileName: directDownloadName,
+  };
+}
+
+export async function downloadCvPdfForJob(jobId: string): Promise<void> {
+  const document = await getCvPdfDocumentForJob(jobId);
+  triggerDownload(document.blob, document.fileName);
 }

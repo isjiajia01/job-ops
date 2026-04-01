@@ -1,6 +1,10 @@
 import type { JobChatMessage, ResumeProfile } from "@shared/types";
 import { getGhostwriterCoverLetterDraft } from "@shared/utils/ghostwriter";
 import * as api from "@/client/api";
+import {
+  type DownloadableDocument,
+  triggerDownload,
+} from "@/client/lib/file-download";
 import { safeFilenamePart } from "@/lib/utils";
 
 const PAGE_WIDTH = 595.28;
@@ -201,20 +205,9 @@ function buildPdfBlob(input: CoverLetterPdfInput): Blob {
   return new Blob([parts.join("\n")], { type: "application/pdf" });
 }
 
-function triggerDownload(blob: Blob, fileName: string): void {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
-
-export async function downloadCoverLetterPdfForJob(
+export async function getCoverLetterPdfDocumentForJob(
   jobId: string,
-): Promise<void> {
+): Promise<DownloadableDocument> {
   const [job, profile, data] = await Promise.all([
     api.getApplication(jobId),
     api.getProfile().catch(() => null),
@@ -251,5 +244,15 @@ export async function downloadCoverLetterPdfForJob(
     fileName: downloadName,
   });
 
-  triggerDownload(blob, downloadName);
+  return {
+    blob,
+    fileName: downloadName,
+  };
+}
+
+export async function downloadCoverLetterPdfForJob(
+  jobId: string,
+): Promise<void> {
+  const document = await getCoverLetterPdfDocumentForJob(jobId);
+  triggerDownload(document.blob, document.fileName);
 }

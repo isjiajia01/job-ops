@@ -17,6 +17,7 @@ import {
   DollarSign,
   Download,
   Edit2,
+  ExternalLink,
   FileText,
   MessageSquareText,
   MoreHorizontal,
@@ -39,6 +40,7 @@ import {
   useUpdateApplicationMutation,
 } from "@/client/hooks/queries/useApplicationMutations";
 import { useQueryErrorToast } from "@/client/hooks/useQueryErrorToast";
+import { saveApplicationDocumentsWithPrompt } from "@/client/lib/application-document-bundle";
 import { queryKeys } from "@/client/lib/queryKeys";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -278,8 +280,17 @@ export const ApplicationWorkspacePage: React.FC = () => {
   const handleExportDocuments = React.useCallback(() => {
     if (!job) return;
     void runAction("export-documents", async () => {
-      const result = await api.exportApplicationDocuments(job.id);
-      toast.success(`Saved CV + cover letter to ${result.directoryPath}`);
+      const result = await saveApplicationDocumentsWithPrompt(job.id);
+      if (result.method === "directory-picker") {
+        toast.success("Saved CV + cover letter to selected folder", {
+          description: result.fileNames.join(" · "),
+        });
+        return;
+      }
+
+      toast.success("Started CV + cover letter download", {
+        description: result.fileNames.join(" · "),
+      });
     });
   }, [job, runAction]);
 
@@ -371,6 +382,42 @@ export const ApplicationWorkspacePage: React.FC = () => {
   const isReady = job?.status === "ready";
   const isApplied = job?.status === "applied";
   const isInProgress = job?.status === "in_progress";
+  const workspaceFocusTitle = isDiscovered
+    ? "Decide whether this role is worth tailoring"
+    : isReady
+      ? "Finish the package and submit with confidence"
+      : isApplied
+        ? "Keep the submission tidy and ready for follow-up"
+        : "Track the live process without the clutter";
+  const workspaceFocusDescription = isDiscovered
+    ? "Review fit, generate a first pass, and only keep applications that deserve attention."
+    : isReady
+      ? "Use Ghostwriter, CV preview, and the cover letter in one place, then download the final package when it is ready."
+      : isApplied
+        ? "The writing work is mostly done now — keep the timeline, notes, and next actions focused."
+        : "This workspace should help you see the signal fast: current stage, next step, and the few links that matter.";
+  const quickFacts = job
+    ? [
+        { label: "Location", value: job.location },
+        { label: "Deadline", value: job.deadline },
+        { label: "Salary", value: job.salary },
+        { label: "Source", value: job.source },
+      ].filter((fact): fact is { label: string; value: string } =>
+        Boolean(fact.value?.trim()),
+      )
+    : [];
+  const referenceLinks = job
+    ? [
+        { label: "Source listing", href: job.jobUrl },
+        { label: "Apply link", href: job.applicationLink },
+        {
+          label: "Company site",
+          href: job.companyUrlDirect || job.employerUrl,
+        },
+      ].filter((link): link is { label: string; href: string } =>
+        Boolean(link.href?.trim()),
+      )
+    : [];
 
   if (!id) {
     return null;
@@ -402,200 +449,195 @@ export const ApplicationWorkspacePage: React.FC = () => {
       )}
 
       {job && (
-        <div className="rounded-2xl border border-border/60 bg-card/80 p-5 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/65">
-          <div className="mb-4 grid gap-3 lg:grid-cols-3">
-            <div className="rounded-xl border border-border/60 bg-background/40 p-4">
-              <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-                Workspace focus
-              </div>
-              <div className="mt-2 text-base font-semibold">
-                Tailor the story for this application
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Use Ghostwriter, CV preview, and cover letter tools around this
-                single role instead of hopping between pipeline screens.
-              </p>
-            </div>
-            <div className="rounded-xl border border-border/60 bg-background/40 p-4">
-              <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-                Current state
-              </div>
-              <div className="mt-2 text-base font-semibold">
-                {currentStage
-                  ? STAGE_LABELS[currentStage as ApplicationStage] ||
-                    currentStage
-                  : job.status}
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {job.outcome
-                  ? `Outcome: ${job.outcome.replace(/_/g, " ")}`
-                  : "Open application — keep tailoring, applying, or logging follow-up steps."}
-              </p>
-            </div>
-            <div className="rounded-xl border border-border/60 bg-background/40 p-4">
-              <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-                Next assets
-              </div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {cvHref && (
-                  <Button asChild size="sm" variant="outline" className="h-8">
-                    <a href={cvHref} target="_blank" rel="noopener noreferrer">
-                      <FileText className="mr-1.5 h-3.5 w-3.5" />
-                      CV Preview
-                    </a>
-                  </Button>
+        <div className="rounded-2xl border border-border/60 bg-card/85 p-5 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/70">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="flex-1 space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  variant="secondary"
+                  className="px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em]"
+                >
+                  {currentStage
+                    ? STAGE_LABELS[currentStage as ApplicationStage] ||
+                      currentStage
+                    : job.status}
+                </Badge>
+                {job.outcome && (
+                  <Badge variant="outline" className="px-3 py-1 text-xs">
+                    Outcome: {job.outcome.replace(/_/g, " ")}
+                  </Badge>
                 )}
-                {coverLetterHref && (
-                  <Button asChild size="sm" variant="outline" className="h-8">
-                    <a
-                      href={coverLetterHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <FileText className="mr-1.5 h-3.5 w-3.5" />
-                      Cover Letter
-                    </a>
-                  </Button>
+                {typeof job.suitabilityScore === "number" && (
+                  <Badge variant="outline" className="px-3 py-1 text-xs">
+                    Match {job.suitabilityScore}%
+                  </Badge>
                 )}
               </div>
-            </div>
-          </div>
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-            <div className="grid flex-1 gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-              <div className="rounded-xl border border-border/60 bg-background/20 p-3">
-                <div className="mb-2 text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-                  Workflow actions
+
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)]">
+                <div className="rounded-xl border border-border/60 bg-background/30 p-4">
+                  <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                    Workspace focus
+                  </div>
+                  <div className="mt-2 text-lg font-semibold">
+                    {workspaceFocusTitle}
+                  </div>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+                    {workspaceFocusDescription}
+                  </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {isReady && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-9 border-orange-400/50 bg-orange-500/10 text-orange-100 hover:bg-orange-500/20"
-                      onClick={() => void handleMarkApplied()}
-                      disabled={isBusy}
-                    >
-                      <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                      Mark Applied
-                    </Button>
-                  )}
 
-                  {isReady && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-9 border-border/60 bg-background/30"
-                      onClick={() => navigate(`/applications/${job.id}`)}
-                      disabled={isBusy}
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                  {quickFacts.slice(0, 3).map((fact) => (
+                    <div
+                      key={fact.label}
+                      className="rounded-xl border border-border/60 bg-background/20 p-3"
                     >
-                      <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                      Open Tailoring Editor
-                    </Button>
-                  )}
-
-                  {isDiscovered && (
-                    <Button
-                      size="sm"
-                      className="h-9 border border-orange-400/50 bg-orange-500/20 text-orange-100 hover:bg-orange-500/30"
-                      onClick={() => navigate(`/applications/${job.id}`)}
-                      disabled={isBusy}
-                    >
-                      <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                      Start Ghostwriter
-                    </Button>
-                  )}
-
-                  {isApplied && (
-                    <Button
-                      size="sm"
-                      className="h-9 border border-orange-400/50 bg-orange-500/20 text-orange-100 hover:bg-orange-500/30"
-                      onClick={() => void handleMoveToInProgress()}
-                      disabled={isBusy}
-                    >
-                      <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                      Move to In Progress
-                    </Button>
-                  )}
-
-                  {isApplied && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-9 border-border/60 bg-background/30"
-                      onClick={handleMoveBackToReady}
-                      disabled={isBusy}
-                    >
-                      <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
-                      Move Back To Drafting
-                    </Button>
-                  )}
-
-                  {isInProgress && (
-                    <Button
-                      size="sm"
-                      className="h-9 border border-orange-400/50 bg-orange-500/20 text-orange-100 hover:bg-orange-500/30"
-                      onClick={() => setIsLogModalOpen(true)}
-                      disabled={!canLogEvents || isBusy}
-                    >
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      Log Event
-                    </Button>
-                  )}
-
-                  {(isReady || isDiscovered) && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-9 border-border/60 bg-background/30"
-                      onClick={() => void handleSkip()}
-                      disabled={isBusy}
-                    >
-                      <XCircle className="mr-1.5 h-3.5 w-3.5" />
-                      Delete Job
-                    </Button>
-                  )}
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                        {fact.label}
+                      </div>
+                      <div className="mt-1 text-sm font-medium leading-5 text-foreground/90">
+                        {fact.value}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
-              <div className="rounded-xl border border-border/60 bg-background/20 p-3">
-                <div className="mb-2 text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-                  Documents
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+                <div className="rounded-xl border border-border/60 bg-background/20 p-3">
+                  <div className="mb-2 text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+                    Do next
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {isReady && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-9 border-orange-400/50 bg-orange-500/10 text-orange-100 hover:bg-orange-500/20"
+                        onClick={() => void handleMarkApplied()}
+                        disabled={isBusy}
+                      >
+                        <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                        Mark Applied
+                      </Button>
+                    )}
+
+                    {isReady && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-9 border-border/60 bg-background/30"
+                        onClick={() => navigate(`/applications/${job.id}`)}
+                        disabled={isBusy}
+                      >
+                        <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                        Open Tailoring Editor
+                      </Button>
+                    )}
+
+                    {isDiscovered && (
+                      <Button
+                        size="sm"
+                        className="h-9 border border-orange-400/50 bg-orange-500/20 text-orange-100 hover:bg-orange-500/30"
+                        onClick={() => navigate(`/applications/${job.id}`)}
+                        disabled={isBusy}
+                      >
+                        <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                        Start Ghostwriter
+                      </Button>
+                    )}
+
+                    {isApplied && (
+                      <Button
+                        size="sm"
+                        className="h-9 border border-orange-400/50 bg-orange-500/20 text-orange-100 hover:bg-orange-500/30"
+                        onClick={() => void handleMoveToInProgress()}
+                        disabled={isBusy}
+                      >
+                        <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                        Move to In Progress
+                      </Button>
+                    )}
+
+                    {isApplied && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-9 border-border/60 bg-background/30"
+                        onClick={handleMoveBackToReady}
+                        disabled={isBusy}
+                      >
+                        <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
+                        Move Back To Drafting
+                      </Button>
+                    )}
+
+                    {isInProgress && (
+                      <Button
+                        size="sm"
+                        className="h-9 border border-orange-400/50 bg-orange-500/20 text-orange-100 hover:bg-orange-500/30"
+                        onClick={() => setIsLogModalOpen(true)}
+                        disabled={!canLogEvents || isBusy}
+                      >
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Log Event
+                      </Button>
+                    )}
+
+                    {(isReady || isDiscovered) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-9 border-border/60 bg-background/30"
+                        onClick={() => void handleSkip()}
+                        disabled={isBusy}
+                      >
+                        <XCircle className="mr-1.5 h-3.5 w-3.5" />
+                        Delete Job
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {(pdfHref || cvHref) && (
+
+                <div className="rounded-xl border border-border/60 bg-background/20 p-3">
+                  <div className="mb-2 text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+                    Documents
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {(pdfHref || cvHref) && (
+                      <Button
+                        asChild
+                        size="sm"
+                        className="h-9 border border-orange-400/50 bg-orange-500/20 text-orange-100 hover:bg-orange-500/30"
+                      >
+                        <a
+                          href={pdfHref || cvHref || "#"}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <FileText className="mr-1.5 h-3.5 w-3.5" />
+                          View CV
+                        </a>
+                      </Button>
+                    )}
+
                     <Button
                       asChild
                       size="sm"
-                      className="h-9 border border-orange-400/50 bg-orange-500/20 text-orange-100 hover:bg-orange-500/30"
+                      variant="outline"
+                      className="h-9 border-border/60 bg-background/30"
                     >
                       <a
-                        href={pdfHref || cvHref || "#"}
+                        href={coverLetterHref || "#"}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
                         <FileText className="mr-1.5 h-3.5 w-3.5" />
-                        View CV
+                        View Cover Letter
                       </a>
                     </Button>
-                  )}
 
-                  <Button
-                    asChild
-                    size="sm"
-                    variant="outline"
-                    className="h-9 border-border/60 bg-background/30"
-                  >
-                    <a
-                      href={coverLetterHref || "#"}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <FileText className="mr-1.5 h-3.5 w-3.5" />
-                      View Cover Letter
-                    </a>
-                  </Button>
-
-                  {job && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -604,22 +646,22 @@ export const ApplicationWorkspacePage: React.FC = () => {
                       disabled={isBusy}
                     >
                       <Download className="mr-1.5 h-3.5 w-3.5" />
-                      Save CV + Cover Letter
+                      Download CV + Cover Letter
                     </Button>
-                  )}
 
-                  {isReady && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-9 border-border/60 bg-background/30"
-                      onClick={() => void handleRegeneratePdf()}
-                      disabled={isBusy}
-                    >
-                      <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
-                      Regenerate PDF
-                    </Button>
-                  )}
+                    {isReady && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-9 border-border/60 bg-background/30"
+                        onClick={() => void handleRegeneratePdf()}
+                        disabled={isBusy}
+                      >
+                        <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
+                        Regenerate PDF
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -741,42 +783,89 @@ export const ApplicationWorkspacePage: React.FC = () => {
         <div className="space-y-4">
           <Card className="border-border/50">
             <CardHeader>
-              <div className="flex items-center justify-between gap-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <CalendarClock className="h-4 w-4" />
-                  Workspace details
-                </CardTitle>
-                <GhostwriterDrawer job={job} triggerClassName="h-8 text-xs" />
-              </div>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <CalendarClock className="h-4 w-4" />
+                Application brief
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Current Stage
-                </div>
-                <div className="mt-1 text-sm font-medium">
-                  {currentStage
-                    ? STAGE_LABELS[currentStage as ApplicationStage] ||
-                      currentStage
-                    : job?.status}
-                </div>
-              </div>
-              <div>
-                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Outcome
-                </div>
-                <div className="mt-1 text-sm font-medium">
-                  {job?.outcome ? job.outcome.replace(/_/g, " ") : "Open"}
-                </div>
-              </div>
-              {job?.closedAt && (
-                <div>
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                    Closed On
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                <div className="rounded-lg border border-border/60 bg-muted/10 p-3">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Current stage
                   </div>
                   <div className="mt-1 text-sm font-medium">
-                    {formatTimestamp(job.closedAt)}
+                    {currentStage
+                      ? STAGE_LABELS[currentStage as ApplicationStage] ||
+                        currentStage
+                      : job?.status}
                   </div>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-muted/10 p-3">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Outcome
+                  </div>
+                  <div className="mt-1 text-sm font-medium">
+                    {job?.outcome ? job.outcome.replace(/_/g, " ") : "Open"}
+                  </div>
+                </div>
+                {quickFacts.map((fact) => (
+                  <div
+                    key={fact.label}
+                    className="rounded-lg border border-border/60 bg-muted/10 p-3"
+                  >
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                      {fact.label}
+                    </div>
+                    <div className="mt-1 text-sm font-medium leading-5 text-foreground/90">
+                      {fact.value}
+                    </div>
+                  </div>
+                ))}
+                {job?.closedAt && (
+                  <div className="rounded-lg border border-border/60 bg-muted/10 p-3">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                      Closed on
+                    </div>
+                    <div className="mt-1 text-sm font-medium">
+                      {formatTimestamp(job.closedAt)}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {referenceLinks.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Key links
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {referenceLinks.map((link) => (
+                      <Button
+                        key={link.label}
+                        asChild
+                        size="sm"
+                        variant="outline"
+                        className="h-8 border-border/60 bg-background/40"
+                      >
+                        <a href={link.href} target="_blank" rel="noreferrer">
+                          <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                          {link.label}
+                        </a>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {job?.suitabilityReason && (
+                <div className="rounded-lg border border-border/60 bg-background/30 p-3">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Match rationale
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    {job.suitabilityReason}
+                  </p>
                 </div>
               )}
             </CardContent>
