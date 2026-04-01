@@ -556,8 +556,8 @@ function buildFallbackBulletResponse(
 
   const candidateLines = [
     ...lead.strongestClaims,
-    ...lead.supportSignals,
     ...(support?.strongestClaims ?? []),
+    ...lead.supportSignals,
     ...(support?.supportSignals ?? []),
   ]
     .map(normalizeBulletSentence)
@@ -565,6 +565,12 @@ function buildFallbackBulletResponse(
       (line) =>
         line.length >= 28 &&
         !/^lead module:|^support module:|^optional third signal:/i.test(line) &&
+        !/^strong evidence\b|^use this as\b|^lead with\b|^support for\b/i.test(
+          line,
+        ) &&
+        !/especially useful when a role values|rather than a generic school project/i.test(
+          line,
+        ) &&
         !/@/.test(line),
     );
 
