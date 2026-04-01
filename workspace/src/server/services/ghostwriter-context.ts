@@ -14,10 +14,27 @@ import { buildGhostwriterSystemPrompt } from "./ghostwriter-prompt";
 import { getProfile } from "./profile";
 import { getWritingStyle, type WritingStyle } from "./writing-style";
 
+export type GhostwriterExperienceModule = {
+  id: string;
+  label: string;
+  sourceType: "knowledge_project" | "profile_project" | "profile_experience";
+  roleFamilyHints: string[];
+  strongestClaims: string[];
+  preferredFraming: string;
+  supportSignals: string[];
+  score: number;
+};
+
 export type GhostwriterEvidencePack = {
   targetRoleSummary: string;
+  targetRoleFamily: string;
+  voiceProfile: string[];
   topFitReasons: string[];
   topEvidence: string[];
+  experienceFrames: string[];
+  evidenceStory: string[];
+  experienceBank: GhostwriterExperienceModule[];
+  selectedNarrative: string[];
   biggestGaps: string[];
   recommendedAngle: string;
   forbiddenClaims: string[];
@@ -45,7 +62,10 @@ const MAX_EXPERIENCE = 5;
 const MAX_ITEM_TEXT = 320;
 const MAX_PERSONAL_FACTS = 12;
 const MAX_CUSTOM_PROJECTS = 8;
+const MAX_WRITING_PREFERENCES = 8;
 const MAX_EVIDENCE_LINES = 5;
+const MAX_EXPERIENCE_FRAMES = 4;
+const MAX_EXPERIENCE_BANK = 6;
 
 const PLANNING_KEYWORDS = [
   "planning",
@@ -98,6 +118,53 @@ const SENIORITY_KEYWORDS = [
   "director",
   "specialist",
   "owner",
+];
+
+const ROLE_FAMILY_KEYWORDS: Array<{
+  family: string;
+  keywords: string[];
+}> = [
+  {
+    family: "planning-and-operations",
+    keywords: [
+      "planning",
+      "forecast",
+      "forecasting",
+      "demand",
+      "supply planning",
+      "logistics",
+      "operations",
+      "routing",
+      "scheduling",
+    ],
+  },
+  {
+    family: "analytics-and-decision-support",
+    keywords: [
+      "analytics",
+      "analysis",
+      "excel",
+      "python",
+      "sql",
+      "reporting",
+      "dashboard",
+      "decision support",
+      "business intelligence",
+    ],
+  },
+  {
+    family: "optimization-and-research",
+    keywords: [
+      "optimization",
+      "optimisation",
+      "operations research",
+      "model",
+      "modelling",
+      "simulation",
+      "heuristic",
+      "algorithm",
+    ],
+  },
 ];
 
 const DOMAIN_TOOLS = [
@@ -173,6 +240,12 @@ function collectProfileText(
       item.impact,
       ...item.keywords,
     ]),
+    ...(knowledgeBase.writingPreferences ?? []).flatMap((item) => [
+      item.label,
+      item.instruction,
+      item.kind,
+      item.strength,
+    ]),
   ]
     .filter(Boolean)
     .join(" ")
@@ -246,10 +319,20 @@ function buildProfileSnapshot(
       compactJoin([
         `${item.name}${item.role ? ` (${item.role})` : ""}: ${truncate(item.summary, MAX_ITEM_TEXT)}`,
         item.impact ? `Impact: ${truncate(item.impact, MAX_ITEM_TEXT)}` : null,
+        item.roleRelevance
+          ? `Role relevance: ${truncate(item.roleRelevance, MAX_ITEM_TEXT)}`
+          : null,
         item.keywords.length > 0
           ? `Keywords: ${item.keywords.slice(0, 8).join(", ")}`
           : null,
       ]),
+    );
+
+  const writingPreferences = (knowledgeBase.writingPreferences ?? [])
+    .slice(0, MAX_WRITING_PREFERENCES)
+    .map(
+      (item) =>
+        `${item.label} [${item.kind}/${item.strength}]: ${truncate(item.instruction, MAX_ITEM_TEXT)}`,
     );
 
   return compactJoin([
@@ -268,6 +351,9 @@ function buildProfileSnapshot(
     customProjects.length > 0
       ? `Shared project notes:\n- ${customProjects.join("\n- ")}`
       : null,
+    writingPreferences.length > 0
+      ? `Shared writing preferences:\n- ${writingPreferences.join("\n- ")}`
+      : null,
   ]);
 }
 
@@ -280,6 +366,68 @@ function buildCompanyResearchSnapshot(
     note.source ? `Source: ${note.source}` : null,
     `Research summary: ${truncate(note.summary, 1200)}`,
   ]);
+}
+
+function getExperienceFrameCandidates(
+  profile: ResumeProfile,
+  knowledgeBase: CandidateKnowledgeBase,
+): string[] {
+  const profileProjects = (profile.sections?.projects?.items ?? [])
+    .filter((item) => item.visible !== false)
+    .map((item) => {
+      const lower =
+        `${item.name} ${item.summary} ${item.description} ${(item.keywords ?? []).join(" ")}`.toLowerCase();
+      const frame =
+        /mover|last-mile|rolling-horizon|routing|delivery|thesis|optimization research/.test(
+          lower,
+        )
+          ? "Frame as operations-linked optimisation work under real delivery constraints rather than a generic academic project."
+          : /forecast|planning|optimization|decision support|analysis/.test(
+                lower,
+              )
+            ? "Frame as practical planning and decision-support work with concrete operational constraints."
+            : "Frame around the most concrete operational problem solved, not generic project language.";
+
+      return compactJoin([
+        `${item.name}${item.date ? ` (${item.date})` : ""}`,
+        truncate(item.summary || item.description, MAX_ITEM_TEXT),
+        `Preferred framing: ${frame}`,
+      ]);
+    });
+
+  const knowledgeProjects = (knowledgeBase.projects ?? []).map((item) => {
+    const lower =
+      `${item.name} ${item.role ?? ""} ${item.summary} ${item.impact ?? ""} ${item.keywords.join(" ")}`.toLowerCase();
+    const frame = /collaboration|mover/.test(lower)
+      ? "Frame as a collaboration tied to real operations, not a standalone school exercise."
+      : item.impact
+        ? `Frame: ${truncate(item.impact, MAX_ITEM_TEXT)}`
+        : "Frame with the most role-relevant operational angle first.";
+
+    return compactJoin([
+      `${item.name}${item.role ? ` (${item.role})` : ""}`,
+      truncate(item.summary, MAX_ITEM_TEXT),
+      frame,
+      item.cvBullets?.length
+        ? `Reusable evidence: ${item.cvBullets.slice(0, 2).join(" | ")}`
+        : null,
+    ]);
+  });
+
+  const preferenceFrames = (knowledgeBase.writingPreferences ?? [])
+    .filter(
+      (item) =>
+        item.kind === "positioning" ||
+        item.kind === "priority" ||
+        item.kind === "guardrail",
+    )
+    .map(
+      (item) => `${item.label}: ${truncate(item.instruction, MAX_ITEM_TEXT)}`,
+    );
+
+  return [...knowledgeProjects, ...profileProjects, ...preferenceFrames].filter(
+    Boolean,
+  );
 }
 
 function getEvidenceCandidates(
@@ -304,8 +452,8 @@ function getEvidenceCandidates(
       ]),
     );
 
-  const personalFacts = (knowledgeBase.personalFacts ?? []).map((item) =>
-    `${item.title}: ${truncate(item.detail, MAX_ITEM_TEXT)}`,
+  const personalFacts = (knowledgeBase.personalFacts ?? []).map(
+    (item) => `${item.title}: ${truncate(item.detail, MAX_ITEM_TEXT)}`,
   );
 
   const customProjects = (knowledgeBase.projects ?? []).map((item) =>
@@ -316,24 +464,255 @@ function getEvidenceCandidates(
     ]),
   );
 
-  return [...experience, ...projects, ...personalFacts, ...customProjects].filter(
-    Boolean,
-  );
+  return [
+    ...experience,
+    ...projects,
+    ...personalFacts,
+    ...customProjects,
+  ].filter(Boolean);
 }
 
-function scoreEvidenceCandidate(candidate: string, jobTokens: Set<string>): number {
+function scoreEvidenceCandidate(
+  candidate: string,
+  jobTokens: Set<string>,
+): number {
   const tokens = new Set(tokenize(candidate));
   let score = 0;
   for (const token of tokens) {
     if (jobTokens.has(token)) score += 2;
   }
-  if (/python|excel|sql|forecast|planning|operations research|optimization/i.test(candidate)) {
+  if (
+    /python|excel|sql|forecast|planning|operations research|optimization/i.test(
+      candidate,
+    )
+  ) {
     score += 2;
   }
-  if (/intern|thesis|master|project|automation|reporting|analysis/i.test(candidate)) {
+  if (
+    /intern|thesis|master|project|automation|reporting|analysis/i.test(
+      candidate,
+    )
+  ) {
     score += 1;
   }
   return score;
+}
+
+function detectTargetRoleFamily(jobText: string): string {
+  const ranked = ROLE_FAMILY_KEYWORDS.map((item) => ({
+    family: item.family,
+    score: item.keywords.filter((keyword) => jobText.includes(keyword)).length,
+  })).sort((a, b) => b.score - a.score);
+
+  return ranked[0] && ranked[0].score > 0
+    ? ranked[0].family
+    : "general-analytical";
+}
+
+function detectRoleFamilyHints(text: string): string[] {
+  const lower = text.toLowerCase();
+  return ROLE_FAMILY_KEYWORDS.filter((item) =>
+    item.keywords.some((keyword) => lower.includes(keyword)),
+  ).map((item) => item.family);
+}
+
+function buildExperienceBank(args: {
+  profile: ResumeProfile;
+  knowledgeBase: CandidateKnowledgeBase;
+  jobTokens: Set<string>;
+  targetRoleFamily: string;
+}): GhostwriterExperienceModule[] {
+  const modules: GhostwriterExperienceModule[] = [];
+
+  for (const item of args.knowledgeBase.projects ?? []) {
+    const raw = [
+      item.name,
+      item.role,
+      item.summary,
+      item.impact,
+      item.roleRelevance,
+      ...(item.keywords ?? []),
+      ...((item.cvBullets ?? []).slice(0, 3) ?? []),
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const roleFamilyHints = detectRoleFamilyHints(raw);
+    const strongestClaims = [
+      item.summary,
+      item.impact,
+      ...((item.cvBullets ?? []).slice(0, 2) ?? []),
+    ].filter(Boolean) as string[];
+    const preferredFraming =
+      /mover|collaboration|delivery|rolling-horizon|routing/i.test(raw)
+        ? "Use this as operations-linked planning and optimisation work in a real delivery context."
+        : item.roleRelevance?.trim() ||
+          item.impact?.trim() ||
+          "Lead with the most practical operational or decision-support angle.";
+    const score =
+      scoreEvidenceCandidate(raw, args.jobTokens) +
+      (roleFamilyHints.includes(args.targetRoleFamily) ? 4 : 0) +
+      (/mover|thesis|delivery|planning|optimization/i.test(raw) ? 1 : 0);
+
+    modules.push({
+      id: `knowledge:${item.name}`,
+      label: item.name,
+      sourceType: "knowledge_project",
+      roleFamilyHints,
+      strongestClaims: strongestClaims.slice(0, 3),
+      preferredFraming,
+      supportSignals: [
+        ...(item.keywords ?? []).slice(0, 5),
+        ...(item.roleRelevance ? [item.roleRelevance] : []),
+      ].slice(0, 5),
+      score,
+    });
+  }
+
+  for (const item of args.profile.sections?.projects?.items ?? []) {
+    if (item.visible === false) continue;
+    const raw = [
+      item.name,
+      item.description,
+      item.summary,
+      ...(item.keywords ?? []),
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const roleFamilyHints = detectRoleFamilyHints(raw);
+    const strongestClaims = [item.summary, item.description].filter(
+      Boolean,
+    ) as string[];
+    const preferredFraming =
+      /delivery|routing|rolling-horizon|planning|optimization/i.test(raw)
+        ? "Frame as a concrete planning/optimisation system rather than a generic school project."
+        : "Frame around the clearest concrete problem solved.";
+    const score =
+      scoreEvidenceCandidate(raw, args.jobTokens) +
+      (roleFamilyHints.includes(args.targetRoleFamily) ? 3 : 0);
+
+    modules.push({
+      id: `project:${item.id}`,
+      label: item.name,
+      sourceType: "profile_project",
+      roleFamilyHints,
+      strongestClaims: strongestClaims.slice(0, 3),
+      preferredFraming,
+      supportSignals: (item.keywords ?? []).slice(0, 5),
+      score,
+    });
+  }
+
+  for (const item of args.profile.sections?.experience?.items ?? []) {
+    if (item.visible === false) continue;
+    const raw = [item.company, item.position, item.location, item.summary]
+      .filter(Boolean)
+      .join(" ");
+    const roleFamilyHints = detectRoleFamilyHints(raw);
+    const strongestClaims = [
+      `${item.position} @ ${item.company}`,
+      item.summary,
+    ].filter(Boolean) as string[];
+    const preferredFraming =
+      /reporting|excel|python|analysis|decision-ready/i.test(raw)
+        ? "Use this as supporting evidence that you can turn analysis into practical decision support."
+        : "Use this to show grounded execution and collaboration support.";
+    const score =
+      scoreEvidenceCandidate(raw, args.jobTokens) +
+      (roleFamilyHints.includes(args.targetRoleFamily) ? 2 : 0);
+
+    modules.push({
+      id: `experience:${item.id}`,
+      label: `${item.position} @ ${item.company}`,
+      sourceType: "profile_experience",
+      roleFamilyHints,
+      strongestClaims: strongestClaims.slice(0, 3),
+      preferredFraming,
+      supportSignals: roleFamilyHints.slice(0, 4),
+      score,
+    });
+  }
+
+  return modules
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_EXPERIENCE_BANK);
+}
+
+function buildVoiceProfile(knowledgeBase: CandidateKnowledgeBase): string[] {
+  const tonePrefs = (knowledgeBase.writingPreferences ?? [])
+    .filter(
+      (item) =>
+        item.kind === "tone" ||
+        item.kind === "phrase" ||
+        item.kind === "guardrail" ||
+        item.kind === "priority",
+    )
+    .sort((a, b) =>
+      a.strength === b.strength ? 0 : a.strength === "strong" ? -1 : 1,
+    )
+    .map(
+      (item) => `${item.label}: ${truncate(item.instruction, MAX_ITEM_TEXT)}`,
+    );
+
+  return tonePrefs.slice(0, 6);
+}
+
+function buildSelectedNarrative(args: {
+  targetRoleFamily: string;
+  experienceBank: GhostwriterExperienceModule[];
+}): string[] {
+  const [lead, support, tertiary] = args.experienceBank;
+  const lines: string[] = [];
+
+  if (lead) {
+    lines.push(`Lead module: ${lead.label} — ${lead.preferredFraming}`);
+  }
+  if (support) {
+    lines.push(
+      `Support module: ${support.label} — use it to reinforce the same ${args.targetRoleFamily} story without repeating the lead module.`,
+    );
+  }
+  if (tertiary) {
+    lines.push(
+      `Optional third signal: ${tertiary.label} — use only if it sharpens credibility or range for this role.`,
+    );
+  }
+
+  if (lines.length === 0) {
+    lines.push(
+      "No strong module detected; lead with the clearest evidence-backed example and keep the narrative modest.",
+    );
+  }
+
+  return lines.slice(0, 4);
+}
+
+function buildEvidenceStory(args: {
+  targetRoleFamily: string;
+  topEvidence: string[];
+  experienceFrames: string[];
+}): string[] {
+  const intro =
+    args.targetRoleFamily === "planning-and-operations"
+      ? "Lead with evidence that shows practical planning under operational constraints, then support it with analytics or automation work."
+      : args.targetRoleFamily === "optimization-and-research"
+        ? "Lead with optimisation and modelling work, then translate it into decision-support value for real operations."
+        : args.targetRoleFamily === "analytics-and-decision-support"
+          ? "Lead with analytical decision-support work, then reinforce it with planning or optimisation examples that make the analysis feel operationally grounded."
+          : "Lead with the clearest evidence of structured problem solving and useful execution support.";
+
+  const storyLines = [intro];
+  if (args.topEvidence[0]) {
+    storyLines.push(`Primary anchor: ${args.topEvidence[0]}`);
+  }
+  if (args.experienceFrames[0]) {
+    storyLines.push(
+      `Package the primary anchor like this: ${args.experienceFrames[0]}`,
+    );
+  }
+  if (args.topEvidence[1]) {
+    storyLines.push(`Supporting anchor: ${args.topEvidence[1]}`);
+  }
+  return storyLines.slice(0, 4);
 }
 
 function buildGhostwriterEvidencePack(args: {
@@ -356,6 +735,7 @@ function buildGhostwriterEvidencePack(args: {
 
   const profileText = collectProfileText(args.profile, args.knowledgeBase);
   const jobTokens = new Set(tokenize(jobText));
+  const targetRoleFamily = detectTargetRoleFamily(jobText);
 
   const topFitReasons: string[] = [];
 
@@ -400,6 +780,38 @@ function buildGhostwriterEvidencePack(args: {
     .sort((a, b) => b.score - a.score)
     .slice(0, MAX_EVIDENCE_LINES)
     .map((item) => item.candidate);
+
+  const experienceFrames = getExperienceFrameCandidates(
+    args.profile,
+    args.knowledgeBase,
+  )
+    .map((candidate) => ({
+      candidate,
+      score: scoreEvidenceCandidate(candidate, jobTokens),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_EXPERIENCE_FRAMES)
+    .map((item) => item.candidate);
+
+  const voiceProfile = buildVoiceProfile(args.knowledgeBase);
+
+  const experienceBank = buildExperienceBank({
+    profile: args.profile,
+    knowledgeBase: args.knowledgeBase,
+    jobTokens,
+    targetRoleFamily,
+  });
+
+  const selectedNarrative = buildSelectedNarrative({
+    targetRoleFamily,
+    experienceBank,
+  });
+
+  const evidenceStory = buildEvidenceStory({
+    targetRoleFamily,
+    topEvidence,
+    experienceFrames,
+  });
 
   const biggestGaps: string[] = [];
 
@@ -451,7 +863,7 @@ function buildGhostwriterEvidencePack(args: {
 
   const recommendedAngle =
     topFitReasons[0] && topEvidence[0]
-      ? `Lead with ${topFitReasons[0].toLowerCase()} Ground the case in evidence such as ${topEvidence[0]}. Keep the tone specific, modest, and employer-need driven.`
+      ? `Lead with ${topFitReasons[0].toLowerCase()} Ground the case in evidence such as ${topEvidence[0]}${experienceFrames[0] ? ` and package it using framing such as ${experienceFrames[0]}.` : "."} Keep the tone specific, modest, and employer-need driven.`
       : "Lead with the strongest evidence-backed fit and keep the tone direct, modest, and practical.";
 
   const forbiddenClaims = Array.from(
@@ -462,16 +874,23 @@ function buildGhostwriterEvidencePack(args: {
     ]),
   ).slice(0, 5);
 
-  const toneRecommendation = /denmark|copenhagen|dtu|aarhus|aalborg|odense/i.test(
-    `${args.job.location ?? ""} ${profileText}`,
-  )
-    ? "Use Denmark-local tone: restrained, direct, modest, concrete, and employer-need driven."
-    : "Use a direct, practical, evidence-backed tone with low fluff and disciplined claims.";
+  const toneRecommendation =
+    /denmark|copenhagen|dtu|aarhus|aalborg|odense/i.test(
+      `${args.job.location ?? ""} ${profileText}`,
+    )
+      ? "Use Denmark-local tone: restrained, direct, modest, concrete, and employer-need driven."
+      : "Use a direct, practical, evidence-backed tone with low fluff and disciplined claims.";
 
   return {
     targetRoleSummary,
+    targetRoleFamily,
+    voiceProfile,
     topFitReasons: topFitReasons.slice(0, 3),
     topEvidence: topEvidence.slice(0, 4),
+    experienceFrames: experienceFrames.slice(0, 4),
+    evidenceStory: evidenceStory.slice(0, 4),
+    experienceBank,
+    selectedNarrative,
     biggestGaps: biggestGaps.slice(0, 3),
     recommendedAngle,
     forbiddenClaims,
@@ -482,11 +901,32 @@ function buildGhostwriterEvidencePack(args: {
 function buildEvidencePackSnapshot(pack: GhostwriterEvidencePack): string {
   return compactJoin([
     `Target role summary: ${pack.targetRoleSummary}`,
+    `Target role family: ${pack.targetRoleFamily}`,
+    pack.voiceProfile.length > 0
+      ? `Voice profile:\n- ${pack.voiceProfile.join("\n- ")}`
+      : null,
     pack.topFitReasons.length > 0
       ? `Top fit reasons:\n- ${pack.topFitReasons.join("\n- ")}`
       : null,
     pack.topEvidence.length > 0
       ? `Top evidence:\n- ${pack.topEvidence.join("\n- ")}`
+      : null,
+    pack.experienceFrames.length > 0
+      ? `Preferred experience framing:\n- ${pack.experienceFrames.join("\n- ")}`
+      : null,
+    pack.evidenceStory.length > 0
+      ? `Evidence story plan:\n- ${pack.evidenceStory.join("\n- ")}`
+      : null,
+    pack.selectedNarrative.length > 0
+      ? `Selected narrative modules:\n- ${pack.selectedNarrative.join("\n- ")}`
+      : null,
+    pack.experienceBank.length > 0
+      ? `Experience bank:\n- ${pack.experienceBank
+          .map(
+            (item) =>
+              `${item.label} [${item.sourceType}; score=${item.score}] — ${item.preferredFraming}`,
+          )
+          .join("\n- ")}`
       : null,
     pack.biggestGaps.length > 0
       ? `Biggest gaps / caution points:\n- ${pack.biggestGaps.join("\n- ")}`

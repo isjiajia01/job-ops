@@ -67,12 +67,27 @@ describe("buildGhostwriterSystemPrompt", () => {
       'Always return valid JSON with this exact shape: {"response":"...","coverLetterDraft":null,"coverLetterKind":null,"resumePatch":null}.',
     );
     expect(prompt).toContain("Task routing:");
+    expect(prompt).toContain(
+      "Before writing, silently classify the user request as one of: direct_chat, memory_update, cover_letter, application_email, resume_patch, or mixed.",
+    );
     expect(prompt).toContain("Quality rubric:");
     expect(prompt).toContain("Preflight self-check:");
     expect(prompt).toContain("Resume-patch rules:");
     expect(prompt).toContain("Cover-letter rules:");
     expect(prompt).toContain("Company-research rules:");
     expect(prompt).toContain("Evidence-pack rules:");
+    expect(prompt).toContain(
+      "When preferred experience framing is provided, use it to package the candidate's thesis, projects, and internships in the most job-relevant way without changing the underlying facts.",
+    );
+    expect(prompt).toContain(
+      "Use the evidence story plan to decide which experience leads, which one supports it, and how to connect them into one role-relevant narrative.",
+    );
+    expect(prompt).toContain(
+      "Use selected narrative modules as the default cast list for the draft: lead module first, support module second, optional third signal only when it clearly helps.",
+    );
+    expect(prompt).toContain(
+      "Use the voice profile to imitate the candidate's preferred writing behavior: direct, restrained, low-fluff, and closer to ready-to-send wording than explanatory meta-discussion.",
+    );
     expect(prompt).toContain(
       "Writing constraints: Keep responses under 120 words",
     );
@@ -153,6 +168,9 @@ describe("buildGhostwriterSystemPrompt", () => {
     );
     expect(prompt).toContain(
       "For resume patches, use company understanding only to improve the tailored summary or headline when it helps position the candidate for this employer's real work.",
+    );
+    expect(prompt).toContain(
+      "When the user asks for direct wording, job-description-style bullets, or a ready-to-paste passage, provide the draft first and keep caveats brief and secondary.",
     );
   });
 });

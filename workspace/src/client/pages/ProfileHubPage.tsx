@@ -50,7 +50,7 @@ function asText(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-function firstSentence(text: string): string {
+function _firstSentence(text: string): string {
   const sentence = text
     .split(/(?<=[.!?])\s+/)
     .map((part) => part.trim())
@@ -86,13 +86,17 @@ function formatRelativeDate(value: string): string {
 }
 
 function inferPreferenceKind(
-  item: Pick<CandidateKnowledgeInboxItem, "kind" | "title" | "summary" | "rawText" | "tags">,
+  item: Pick<
+    CandidateKnowledgeInboxItem,
+    "kind" | "title" | "summary" | "rawText" | "tags"
+  >,
 ): GhostwriterWritingPreference["kind"] {
   const corpus = [item.title, item.summary, item.rawText, ...(item.tags ?? [])]
     .join(" ")
     .toLowerCase();
 
-  if (/tone|direct|grounded|warm|modest|voice|sound/.test(corpus)) return "tone";
+  if (/tone|direct|grounded|warm|modest|voice|sound/.test(corpus))
+    return "tone";
   if (/avoid|do not|don't|never|no hype|no fluff|don't claim/.test(corpus)) {
     return "guardrail";
   }
@@ -101,7 +105,9 @@ function inferPreferenceKind(
   return "positioning";
 }
 
-function inferPreferenceStrength(text: string): GhostwriterWritingPreference["strength"] {
+function inferPreferenceStrength(
+  text: string,
+): GhostwriterWritingPreference["strength"] {
   return /must|always|never|do not|don't|avoid/.test(text.toLowerCase())
     ? "strong"
     : "normal";
@@ -116,14 +122,18 @@ function generateProjectCvBullets(input: {
   return [
     input.role ? `${input.role}: ${input.summary}` : input.summary,
     input.impact ? `Impact: ${input.impact}` : null,
-    input.keywords?.length ? `Tools / themes: ${input.keywords.slice(0, 5).join(", ")}` : null,
+    input.keywords?.length
+      ? `Tools / themes: ${input.keywords.slice(0, 5).join(", ")}`
+      : null,
   ]
     .map((item) => (typeof item === "string" ? normalizeBullet(item) : null))
     .filter((item): item is string => Boolean(item))
     .slice(0, 4);
 }
 
-function inboxItemToProject(item: CandidateKnowledgeInboxItem): CandidateKnowledgeProject {
+function inboxItemToProject(
+  item: CandidateKnowledgeInboxItem,
+): CandidateKnowledgeProject {
   if (item.suggestedProject) {
     return {
       id: createId("knowledge-project"),
@@ -132,6 +142,7 @@ function inboxItemToProject(item: CandidateKnowledgeInboxItem): CandidateKnowled
       keywords: item.suggestedProject.keywords,
       role: item.suggestedProject.role,
       impact: item.suggestedProject.impact,
+      roleRelevance: item.suggestedProject.roleRelevance,
       cvBullets: generateProjectCvBullets({
         summary: item.suggestedProject.summary,
         impact: item.suggestedProject.impact,
@@ -148,6 +159,7 @@ function inboxItemToProject(item: CandidateKnowledgeInboxItem): CandidateKnowled
     keywords: item.tags,
     role: null,
     impact: item.summary,
+    roleRelevance: null,
     cvBullets: generateProjectCvBullets({
       summary: item.rawText,
       impact: item.summary,
@@ -167,7 +179,9 @@ function inboxItemToFact(item: CandidateKnowledgeInboxItem): FactItem {
   return { id: createId("fact"), title: item.title, detail: item.rawText };
 }
 
-function inboxItemToPreference(item: CandidateKnowledgeInboxItem): GhostwriterWritingPreference {
+function inboxItemToPreference(
+  item: CandidateKnowledgeInboxItem,
+): GhostwriterWritingPreference {
   if (item.suggestedPreference) {
     return {
       id: createId("preference"),
@@ -207,10 +221,15 @@ function toKnowledgeBase(input: {
         ...item,
         name: item.name.trim(),
         summary: item.summary.trim(),
-        keywords: item.keywords.map((keyword) => keyword.trim()).filter(Boolean),
+        keywords: item.keywords
+          .map((keyword) => keyword.trim())
+          .filter(Boolean),
         role: item.role?.trim() || null,
         impact: item.impact?.trim() || null,
-        cvBullets: (item.cvBullets ?? []).map((bullet) => bullet.trim()).filter(Boolean),
+        roleRelevance: item.roleRelevance?.trim() || null,
+        cvBullets: (item.cvBullets ?? [])
+          .map((bullet) => bullet.trim())
+          .filter(Boolean),
       })),
     companyResearchNotes: [],
     writingPreferences: input.preferences
@@ -244,8 +263,12 @@ export const ProfileHubPage: React.FC = () => {
   const [summary, setSummary] = useState("");
   const [facts, setFacts] = useState<FactItem[]>([]);
   const [projects, setProjects] = useState<CandidateKnowledgeProject[]>([]);
-  const [preferences, setPreferences] = useState<GhostwriterWritingPreference[]>([]);
-  const [inboxItems, setInboxItems] = useState<CandidateKnowledgeInboxItem[]>([]);
+  const [preferences, setPreferences] = useState<
+    GhostwriterWritingPreference[]
+  >([]);
+  const [inboxItems, setInboxItems] = useState<CandidateKnowledgeInboxItem[]>(
+    [],
+  );
   const [selectedInboxId, setSelectedInboxId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDigesting, setIsDigesting] = useState(false);
@@ -260,15 +283,22 @@ export const ProfileHubPage: React.FC = () => {
     queryFn: api.getCandidateKnowledgeBase,
   });
 
-  const sourceProfile = useMemo(() => internalProfileQuery.data ?? profile ?? null, [
-    internalProfileQuery.data,
-    profile,
-  ]);
+  const sourceProfile = useMemo(
+    () => internalProfileQuery.data ?? profile ?? null,
+    [internalProfileQuery.data, profile],
+  );
 
   useEffect(() => {
     if (!sourceProfile) return;
-    setHeadline(asText(sourceProfile.basics?.headline ?? sourceProfile.basics?.label));
-    setSummary(asText(sourceProfile.sections?.summary?.content ?? sourceProfile.basics?.summary));
+    setHeadline(
+      asText(sourceProfile.basics?.headline ?? sourceProfile.basics?.label),
+    );
+    setSummary(
+      asText(
+        sourceProfile.sections?.summary?.content ??
+          sourceProfile.basics?.summary,
+      ),
+    );
   }, [sourceProfile]);
 
   useEffect(() => {
@@ -281,13 +311,20 @@ export const ProfileHubPage: React.FC = () => {
         detail: item.detail,
       })),
     );
-    setProjects((knowledge.projects ?? []).map((item) => ({ ...item, cvBullets: item.cvBullets ?? [] })));
+    setProjects(
+      (knowledge.projects ?? []).map((item) => ({
+        ...item,
+        cvBullets: item.cvBullets ?? [],
+      })),
+    );
     setPreferences(knowledge.writingPreferences ?? []);
     setInboxItems(knowledge.inboxItems ?? []);
   }, [knowledgeQuery.data]);
 
   const isBootstrapping =
-    profileLoading || internalProfileQuery.isLoading || knowledgeQuery.isLoading;
+    profileLoading ||
+    internalProfileQuery.isLoading ||
+    knowledgeQuery.isLoading;
 
   const pendingInbox = useMemo(
     () => inboxItems.filter((item) => item.status === "pending"),
@@ -302,7 +339,7 @@ export const ProfileHubPage: React.FC = () => {
     setSelectedInboxId((current) =>
       current && pendingInbox.some((item) => item.id === current)
         ? current
-        : pendingInbox[0]?.id ?? null,
+        : (pendingInbox[0]?.id ?? null),
     );
   }, [pendingInbox]);
 
@@ -319,7 +356,9 @@ export const ProfileHubPage: React.FC = () => {
   const handleDigest = async () => {
     const rawText = captureText.trim();
     if (!rawText) {
-      toast.error("Paste a project note, writing preference, or personal fact first");
+      toast.error(
+        "Paste a project note, writing preference, or personal fact first",
+      );
       return;
     }
 
@@ -337,7 +376,9 @@ export const ProfileHubPage: React.FC = () => {
         `Added ${result.items.length} inbox item${result.items.length === 1 ? "" : "s"} via ${result.mode === "llm" ? "AI ingestion" : "fallback digest"}`,
       );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to digest capture");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to digest capture",
+      );
     } finally {
       setIsDigesting(false);
     }
@@ -355,11 +396,15 @@ export const ProfileHubPage: React.FC = () => {
       ]);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.profile.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.profile.knowledge() }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.profile.knowledge(),
+        }),
       ]);
       toast.success("Profile Hub saved");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to save Profile Hub");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save Profile Hub",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -407,7 +452,10 @@ export const ProfileHubPage: React.FC = () => {
     const blob = new Blob(
       [
         JSON.stringify(
-          { profile: { basics: { headline, summary } }, knowledgeBase: activeKnowledgeBase },
+          {
+            profile: { basics: { headline, summary } },
+            knowledgeBase: activeKnowledgeBase,
+          },
           null,
           2,
         ),
@@ -467,29 +515,48 @@ export const ProfileHubPage: React.FC = () => {
       <PageMain>
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-xl border border-border/60 bg-card/40 p-4">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Pending inbox</div>
-            <div className="mt-2 text-3xl font-semibold tracking-tight">{pendingInbox.length}</div>
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+              Pending inbox
+            </div>
+            <div className="mt-2 text-3xl font-semibold tracking-tight">
+              {pendingInbox.length}
+            </div>
           </div>
           <div className="rounded-xl border border-border/60 bg-card/40 p-4">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Projects</div>
-            <div className="mt-2 text-3xl font-semibold tracking-tight">{projects.length}</div>
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+              Projects
+            </div>
+            <div className="mt-2 text-3xl font-semibold tracking-tight">
+              {projects.length}
+            </div>
           </div>
           <div className="rounded-xl border border-border/60 bg-card/40 p-4">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Facts</div>
-            <div className="mt-2 text-3xl font-semibold tracking-tight">{facts.length}</div>
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+              Facts
+            </div>
+            <div className="mt-2 text-3xl font-semibold tracking-tight">
+              {facts.length}
+            </div>
           </div>
           <div className="rounded-xl border border-border/60 bg-card/40 p-4">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Rules</div>
-            <div className="mt-2 text-3xl font-semibold tracking-tight">{preferences.length}</div>
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+              Rules
+            </div>
+            <div className="mt-2 text-3xl font-semibold tracking-tight">
+              {preferences.length}
+            </div>
           </div>
         </section>
 
         <section className="mt-4 rounded-xl border border-border/60 bg-card/40 p-4 md:p-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="text-lg font-semibold tracking-tight">New material</h2>
+              <h2 className="text-lg font-semibold tracking-tight">
+                New material
+              </h2>
               <p className="text-sm text-muted-foreground">
-                Paste rough notes. AI will turn them into an inbox item you can review like an application draft.
+                Paste rough notes. AI will turn them into an inbox item you can
+                review like an application draft.
               </p>
             </div>
             <div className="w-full md:w-72">
@@ -507,7 +574,11 @@ export const ProfileHubPage: React.FC = () => {
               placeholder="Paste a project update, writing preference, or personal fact…"
               className="min-h-[120px] xl:flex-1"
             />
-            <Button onClick={handleDigest} disabled={isDigesting} className="xl:self-start">
+            <Button
+              onClick={handleDigest}
+              disabled={isDigesting}
+              className="xl:self-start"
+            >
               {isDigesting ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
@@ -522,9 +593,12 @@ export const ProfileHubPage: React.FC = () => {
           <div className="rounded-xl border border-border/60 bg-card/40 p-4 md:p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold tracking-tight">Inbox tracker</h2>
+                <h2 className="text-lg font-semibold tracking-tight">
+                  Inbox tracker
+                </h2>
                 <p className="text-sm text-muted-foreground">
-                  Triage pending material in a table, then open one item on the right to clean it up.
+                  Triage pending material in a table, then open one item on the
+                  right to clean it up.
                 </p>
               </div>
               <Badge variant="outline">{pendingInbox.length} pending</Badge>
@@ -556,18 +630,28 @@ export const ProfileHubPage: React.FC = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={selectedInboxId === item.id ? "default" : "outline"}>
+                        <Badge
+                          variant={
+                            selectedInboxId === item.id ? "default" : "outline"
+                          }
+                        >
                           {item.kind}
                         </Badge>
                       </TableCell>
                       <TableCell>{item.sourceLabel ?? "—"}</TableCell>
-                      <TableCell>{formatRelativeDate(item.updatedAt)}</TableCell>
+                      <TableCell>
+                        {formatRelativeDate(item.updatedAt)}
+                      </TableCell>
                     </TableRow>
                   ))}
                   {pendingInbox.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="py-10 text-center text-sm text-muted-foreground">
-                        No pending inbox items. Paste new material above to start.
+                      <TableCell
+                        colSpan={4}
+                        className="py-10 text-center text-sm text-muted-foreground"
+                      >
+                        No pending inbox items. Paste new material above to
+                        start.
                       </TableCell>
                     </TableRow>
                   )}
@@ -580,12 +664,17 @@ export const ProfileHubPage: React.FC = () => {
             <section className="rounded-xl border border-border/60 bg-card/40 p-4 md:p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-semibold tracking-tight">Selected item</h2>
+                  <h2 className="text-lg font-semibold tracking-tight">
+                    Selected item
+                  </h2>
                   <p className="text-sm text-muted-foreground">
-                    Edit the draft, then accept it into projects, facts, or rules.
+                    Edit the draft, then accept it into projects, facts, or
+                    rules.
                   </p>
                 </div>
-                {selectedInboxItem ? <Badge variant="outline">{selectedInboxItem.kind}</Badge> : null}
+                {selectedInboxItem ? (
+                  <Badge variant="outline">{selectedInboxItem.kind}</Badge>
+                ) : null}
               </div>
 
               {!selectedInboxItem ? (
@@ -597,13 +686,19 @@ export const ProfileHubPage: React.FC = () => {
                   <Input
                     value={selectedInboxItem.title}
                     onChange={(event) =>
-                      updateSelectedInbox((item) => ({ ...item, title: event.target.value }))
+                      updateSelectedInbox((item) => ({
+                        ...item,
+                        title: event.target.value,
+                      }))
                     }
                   />
                   <Textarea
                     value={selectedInboxItem.summary}
                     onChange={(event) =>
-                      updateSelectedInbox((item) => ({ ...item, summary: event.target.value }))
+                      updateSelectedInbox((item) => ({
+                        ...item,
+                        summary: event.target.value,
+                      }))
                     }
                     className="min-h-[88px]"
                   />
@@ -624,14 +719,19 @@ export const ProfileHubPage: React.FC = () => {
                   <Textarea
                     value={selectedInboxItem.rawText}
                     onChange={(event) =>
-                      updateSelectedInbox((item) => ({ ...item, rawText: event.target.value }))
+                      updateSelectedInbox((item) => ({
+                        ...item,
+                        rawText: event.target.value,
+                      }))
                     }
                     className="min-h-[120px]"
                   />
 
                   {selectedInboxItem.suggestedProject && (
                     <div className="rounded-lg border border-border/60 bg-background/30 p-3">
-                      <div className="text-sm font-medium">Starter CV bullets</div>
+                      <div className="text-sm font-medium">
+                        Starter CV bullets
+                      </div>
                       <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
                         {generateProjectCvBullets({
                           summary: selectedInboxItem.suggestedProject.summary,
@@ -648,7 +748,12 @@ export const ProfileHubPage: React.FC = () => {
                   )}
 
                   <div className="flex flex-wrap gap-2 pt-1">
-                    <Button size="sm" onClick={() => acceptInboxItem(selectedInboxItem, "project")}>
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        acceptInboxItem(selectedInboxItem, "project")
+                      }
+                    >
                       <Check className="mr-2 h-4 w-4" />
                       Accept as project
                     </Button>
@@ -662,7 +767,9 @@ export const ProfileHubPage: React.FC = () => {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => acceptInboxItem(selectedInboxItem, "preference")}
+                      onClick={() =>
+                        acceptInboxItem(selectedInboxItem, "preference")
+                      }
                     >
                       Accept as rule
                     </Button>
@@ -681,21 +788,33 @@ export const ProfileHubPage: React.FC = () => {
             <section className="rounded-xl border border-border/60 bg-card/40 p-4 md:p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-semibold tracking-tight">Workspace snapshot</h2>
+                  <h2 className="text-lg font-semibold tracking-tight">
+                    Workspace snapshot
+                  </h2>
                   <p className="text-sm text-muted-foreground">
                     Keep just the writing essentials visible here.
                   </p>
                 </div>
-                <Badge variant="outline">{projects.length + facts.length + preferences.length} saved</Badge>
+                <Badge variant="outline">
+                  {projects.length + facts.length + preferences.length} saved
+                </Badge>
               </div>
 
               <div className="mt-4 space-y-4">
                 <div>
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Headline</div>
-                  <Input value={headline} onChange={(event) => setHeadline(event.target.value)} className="mt-2" />
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Headline
+                  </div>
+                  <Input
+                    value={headline}
+                    onChange={(event) => setHeadline(event.target.value)}
+                    className="mt-2"
+                  />
                 </div>
                 <div>
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Core summary</div>
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Core summary
+                  </div>
                   <Textarea
                     value={summary}
                     onChange={(event) => setSummary(event.target.value)}
@@ -704,10 +823,15 @@ export const ProfileHubPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Projects</div>
+                  <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+                    Projects
+                  </div>
                   <div className="space-y-2">
                     {projects.slice(0, 3).map((project) => (
-                      <div key={project.id} className="rounded-lg border border-border/60 bg-background/30 p-3">
+                      <div
+                        key={project.id}
+                        className="rounded-lg border border-border/60 bg-background/30 p-3"
+                      >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="font-medium">{project.name}</div>
@@ -718,18 +842,44 @@ export const ProfileHubPage: React.FC = () => {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => setProjects((current) => current.filter((row) => row.id !== project.id))}
+                            onClick={() =>
+                              setProjects((current) =>
+                                current.filter((row) => row.id !== project.id),
+                              )
+                            }
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
+                        <Textarea
+                          value={project.roleRelevance ?? ""}
+                          onChange={(event) =>
+                            setProjects((current) =>
+                              current.map((row) =>
+                                row.id === project.id
+                                  ? {
+                                      ...row,
+                                      roleRelevance: event.target.value,
+                                    }
+                                  : row,
+                              ),
+                            )
+                          }
+                          className="mt-3 min-h-[72px]"
+                          placeholder="Role relevance / canonical framing for Ghostwriter"
+                        />
                         <Textarea
                           value={bulletsToText(project.cvBullets)}
                           onChange={(event) =>
                             setProjects((current) =>
                               current.map((row) =>
                                 row.id === project.id
-                                  ? { ...row, cvBullets: parseBulletLines(event.target.value) }
+                                  ? {
+                                      ...row,
+                                      cvBullets: parseBulletLines(
+                                        event.target.value,
+                                      ),
+                                    }
                                   : row,
                               ),
                             )
@@ -740,7 +890,9 @@ export const ProfileHubPage: React.FC = () => {
                       </div>
                     ))}
                     {projects.length === 0 && (
-                      <div className="text-sm text-muted-foreground">No projects saved yet.</div>
+                      <div className="text-sm text-muted-foreground">
+                        No projects saved yet.
+                      </div>
                     )}
                   </div>
                   {!!projects.length && (
@@ -769,10 +921,15 @@ export const ProfileHubPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Facts</div>
+                  <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+                    Facts
+                  </div>
                   <div className="space-y-2">
                     {facts.slice(0, 3).map((fact) => (
-                      <div key={fact.id} className="rounded-lg border border-border/60 bg-background/30 p-3">
+                      <div
+                        key={fact.id}
+                        className="rounded-lg border border-border/60 bg-background/30 p-3"
+                      >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="font-medium">{fact.title}</div>
@@ -783,7 +940,11 @@ export const ProfileHubPage: React.FC = () => {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => setFacts((current) => current.filter((row) => row.id !== fact.id))}
+                            onClick={() =>
+                              setFacts((current) =>
+                                current.filter((row) => row.id !== fact.id),
+                              )
+                            }
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -791,13 +952,17 @@ export const ProfileHubPage: React.FC = () => {
                       </div>
                     ))}
                     {facts.length === 0 && (
-                      <div className="text-sm text-muted-foreground">No facts saved yet.</div>
+                      <div className="text-sm text-muted-foreground">
+                        No facts saved yet.
+                      </div>
                     )}
                   </div>
                 </div>
 
                 <div>
-                  <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Rules</div>
+                  <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+                    Rules
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {preferences.slice(0, 6).map((rule) => (
                       <Badge key={rule.id} variant="outline">
@@ -805,7 +970,9 @@ export const ProfileHubPage: React.FC = () => {
                       </Badge>
                     ))}
                     {preferences.length === 0 && (
-                      <span className="text-sm text-muted-foreground">No rules saved yet.</span>
+                      <span className="text-sm text-muted-foreground">
+                        No rules saved yet.
+                      </span>
                     )}
                   </div>
                 </div>

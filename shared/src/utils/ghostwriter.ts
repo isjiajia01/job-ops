@@ -33,6 +33,7 @@ export const candidateKnowledgeProjectSchema = z.object({
   keywords: z.array(z.string().trim().min(1).max(80)).max(12),
   role: z.string().trim().max(200).nullable().default(null),
   impact: z.string().trim().max(1200).nullable().default(null),
+  roleRelevance: z.string().trim().max(1200).nullable().default(null),
   cvBullets: z.array(z.string().trim().min(1).max(240)).max(8).default([]),
 });
 
@@ -87,7 +88,9 @@ export const candidateKnowledgeInboxItemSchema = z.object({
   rawText: z.string().trim().min(1).max(12000),
   tags: z.array(z.string().trim().min(1).max(80)).max(20).default([]),
   confidence: z.enum(["low", "medium", "high"]).default("medium"),
-  suggestedFact: candidateKnowledgeInboxSuggestedFactSchema.nullable().default(null),
+  suggestedFact: candidateKnowledgeInboxSuggestedFactSchema
+    .nullable()
+    .default(null),
   suggestedProject: candidateKnowledgeInboxSuggestedProjectSchema
     .nullable()
     .default(null),

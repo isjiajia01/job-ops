@@ -87,6 +87,7 @@ describe("candidate-knowledge service", () => {
       keywords: ["Python", "Excel"],
       role: null,
       impact: null,
+      roleRelevance: null,
       cvBullets: ["Led dashboard rollout"],
     });
   });

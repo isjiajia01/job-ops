@@ -145,6 +145,11 @@ function buildProfileEvidenceTokenSet(
     for (const keyword of project.keywords ?? []) addTokens(keyword);
   }
 
+  for (const preference of knowledgeBase.writingPreferences ?? []) {
+    addTokens(preference.label);
+    addTokens(preference.instruction);
+  }
+
   return tokenSet;
 }
 
@@ -330,7 +335,10 @@ export function scoreGhostwriterCandidate(args: {
   if (args.payload.coverLetterDraft) {
     const draft = args.payload.coverLetterDraft;
     const overlap = countTokenOverlap(draft, evidenceTokens);
-    const genericMatches = countRegexMatches(draft, GENERIC_COVER_LETTER_PATTERNS);
+    const genericMatches = countRegexMatches(
+      draft,
+      GENERIC_COVER_LETTER_PATTERNS,
+    );
     const paragraphCount = countParagraphs(draft);
 
     score += Math.min(overlap, 8) * 2;
@@ -365,12 +373,22 @@ export function scoreGhostwriterCandidate(args: {
     }).sanitized;
 
     if (sanitizedPatch?.tailoredSummary) {
-      score += 3 + Math.min(countTokenOverlap(sanitizedPatch.tailoredSummary, evidenceTokens), 4);
+      score +=
+        3 +
+        Math.min(
+          countTokenOverlap(sanitizedPatch.tailoredSummary, evidenceTokens),
+          4,
+        );
       reasons.push("resume-summary");
     }
 
     if (sanitizedPatch?.tailoredHeadline) {
-      score += 2 + Math.min(countTokenOverlap(sanitizedPatch.tailoredHeadline, evidenceTokens), 2);
+      score +=
+        2 +
+        Math.min(
+          countTokenOverlap(sanitizedPatch.tailoredHeadline, evidenceTokens),
+          2,
+        );
       reasons.push("resume-headline");
     }
 

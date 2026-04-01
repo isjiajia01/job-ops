@@ -50,6 +50,7 @@ describe("buildJobChatPromptContext", () => {
       personalFacts: [],
       projects: [],
       companyResearchNotes: [],
+      writingPreferences: [],
     });
   });
 
@@ -118,7 +119,7 @@ describe("buildJobChatPromptContext", () => {
     );
     expect(context.systemPrompt).toContain("Task routing:");
     expect(context.systemPrompt).toContain(
-      "Before writing, silently classify the user request as one of: direct_chat, cover_letter, application_email, resume_patch, or mixed.",
+      "Before writing, silently classify the user request as one of: direct_chat, memory_update, cover_letter, application_email, resume_patch, or mixed.",
     );
     expect(context.systemPrompt).toContain(
       'Put all user-visible chat text inside "response". Keep it concise, direct, and useful.',
@@ -195,8 +196,194 @@ describe("buildJobChatPromptContext", () => {
     expect(context.profileSnapshot).toContain("Skills:");
     expect(context.companyResearchSnapshot).toBe("");
     expect(context.evidencePackSnapshot).toContain("Target role summary:");
+    expect(context.evidencePackSnapshot).toContain("Target role family:");
     expect(context.evidencePackSnapshot).toContain("Top fit reasons:");
+    expect(Array.isArray(context.evidencePack.voiceProfile)).toBe(true);
+    expect(Array.isArray(context.evidencePack.experienceFrames)).toBe(true);
+    expect(Array.isArray(context.evidencePack.evidenceStory)).toBe(true);
+    expect(Array.isArray(context.evidencePack.experienceBank)).toBe(true);
+    expect(Array.isArray(context.evidencePack.selectedNarrative)).toBe(true);
     expect(context.evidencePack.recommendedAngle).toBeTruthy();
+  });
+
+  it("includes shared writing preferences in the profile snapshot", async () => {
+    const job = createJob({
+      id: "job-ctx-writing-prefs",
+      title: "Planning Analyst",
+      employer: "Mover",
+    });
+    vi.mocked(getJobById).mockResolvedValue(job);
+    vi.mocked(getProfile).mockResolvedValue({
+      basics: {
+        name: "Test User",
+      },
+    });
+    vi.mocked(getCandidateKnowledgeBase).mockResolvedValue({
+      personalFacts: [],
+      projects: [],
+      companyResearchNotes: [],
+      writingPreferences: [
+        {
+          id: "pref-1",
+          label: "Frame thesis as collaboration",
+          instruction:
+            "Describe the DTU thesis as work done in collaboration with Mover and real operational planning constraints.",
+          kind: "positioning",
+          strength: "strong",
+        },
+      ],
+    });
+
+    const context = await buildJobChatPromptContext(job.id);
+
+    expect(context.profileSnapshot).toContain("Shared writing preferences:");
+    expect(context.profileSnapshot).toContain(
+      "Frame thesis as collaboration [positioning/strong]",
+    );
+    expect(context.evidencePackSnapshot).toContain(
+      "Preferred experience framing:",
+    );
+    expect(context.evidencePackSnapshot).toContain("Evidence story plan:");
+    expect(context.evidencePackSnapshot).toContain(
+      "Selected narrative modules:",
+    );
+    expect(Array.isArray(context.evidencePack.experienceBank)).toBe(true);
+  });
+
+  it("selects a role-aware lead module and support module from the experience bank", async () => {
+    const job = createJob({
+      id: "job-ctx-narrative",
+      title: "Planning Analyst",
+      employer: "LEGO",
+      jobDescription:
+        "Planning role with operational constraints, analytics support, forecasting-adjacent work, and coordination across execution teams.",
+    });
+    vi.mocked(getJobById).mockResolvedValue(job);
+    vi.mocked(getProfile).mockResolvedValue({
+      basics: {
+        name: "Test User",
+        headline: "Planning and optimisation candidate",
+      },
+      sections: {
+        experience: {
+          items: [
+            {
+              id: "exp-1",
+              visible: true,
+              company: "DaJiao",
+              position: "Business Analysis Intern",
+              location: "",
+              date: "2022 - 2023",
+              summary:
+                "Automated reporting workflows using Python and Excel and translated operational data into decision-ready materials.",
+            },
+          ],
+        },
+      },
+    });
+    vi.mocked(getCandidateKnowledgeBase).mockResolvedValue({
+      personalFacts: [],
+      projects: [
+        {
+          id: "project-mover-dtu-thesis",
+          name: "Mover x DTU Master's Thesis",
+          summary:
+            "Optimization research in collaboration with Mover on rolling-horizon last-mile planning under operational constraints.",
+          keywords: ["planning", "routing", "optimization", "delivery"],
+          role: "Master's Thesis / Optimization Research (in collaboration with Mover)",
+          impact:
+            "Strong evidence for planning and decision-support roles in real operational contexts.",
+          cvBullets: [
+            "Working on a multi-day rolling-horizon planning problem in last-mile delivery.",
+          ],
+        },
+      ],
+      companyResearchNotes: [],
+      writingPreferences: [
+        {
+          id: "pref-1",
+          label: "Frame thesis as collaboration",
+          instruction:
+            "Treat the DTU thesis as operations-linked collaboration work, not a standalone school project.",
+          kind: "positioning",
+          strength: "strong",
+        },
+      ],
+    });
+
+    const context = await buildJobChatPromptContext(job.id);
+
+    expect(context.evidencePack.targetRoleFamily).toBe(
+      "planning-and-operations",
+    );
+    expect(context.evidencePack.experienceBank[0]?.label).toContain("Mover");
+    expect(context.evidencePack.selectedNarrative[0]).toContain("Lead module");
+    expect(context.evidencePack.selectedNarrative.join(" ")).toContain(
+      "Support module",
+    );
+  });
+
+  it("regresses to internship-led narrative for analytics-heavy roles", async () => {
+    const job = createJob({
+      id: "job-ctx-analytics-narrative",
+      title: "Analytics Specialist",
+      employer: "ACME",
+      jobDescription:
+        "Analytics role focused on reporting, Python, Excel, SQL, dashboards, and decision support for business stakeholders.",
+    });
+    vi.mocked(getJobById).mockResolvedValue(job);
+    vi.mocked(getProfile).mockResolvedValue({
+      basics: {
+        name: "Test User",
+      },
+      sections: {
+        experience: {
+          items: [
+            {
+              id: "exp-1",
+              visible: true,
+              company: "DaJiao",
+              position: "Business Analysis Intern",
+              location: "",
+              date: "2022 - 2023",
+              summary:
+                "Automated reporting workflows using Python and Excel and translated operational data into decision-ready materials.",
+            },
+          ],
+        },
+      },
+    });
+    vi.mocked(getCandidateKnowledgeBase).mockResolvedValue({
+      personalFacts: [],
+      projects: [
+        {
+          id: "project-mover-dtu-thesis",
+          name: "Mover x DTU Master's Thesis",
+          summary:
+            "Optimization research in collaboration with Mover on rolling-horizon last-mile planning under operational constraints.",
+          keywords: ["planning", "routing", "optimization", "delivery"],
+          role: "Master's Thesis / Optimization Research (in collaboration with Mover)",
+          impact:
+            "Strong evidence for planning and decision-support roles in real operational contexts.",
+          roleRelevance:
+            "Best used as lead evidence for planning and optimisation roles.",
+          cvBullets: [
+            "Working on a multi-day rolling-horizon planning problem in last-mile delivery.",
+          ],
+        },
+      ],
+      companyResearchNotes: [],
+      writingPreferences: [],
+    });
+
+    const context = await buildJobChatPromptContext(job.id);
+
+    expect(context.evidencePack.targetRoleFamily).toBe(
+      "analytics-and-decision-support",
+    );
+    expect(context.evidencePack.experienceBank[0]?.label).toContain(
+      "Business Analysis Intern",
+    );
   });
 
   it("includes company research snapshot when available", async () => {

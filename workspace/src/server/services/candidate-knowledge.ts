@@ -4,6 +4,7 @@ import type {
   CandidateKnowledgeBase,
   CandidateKnowledgeFact,
   CandidateKnowledgeProject,
+  GhostwriterWritingPreference,
 } from "@shared/types";
 import { candidateKnowledgeBaseSchema } from "@shared/utils/ghostwriter";
 import * as settingsRepo from "../repositories/settings";
@@ -71,6 +72,7 @@ export async function addCandidateKnowledgeProject(input: {
   keywords?: string[];
   role?: string | null;
   impact?: string | null;
+  roleRelevance?: string | null;
   cvBullets?: string[];
 }): Promise<CandidateKnowledgeProject> {
   const knowledgeBase = await getCandidateKnowledgeBase();
@@ -81,7 +83,10 @@ export async function addCandidateKnowledgeProject(input: {
     keywords: (input.keywords ?? []).map((item) => item.trim()).filter(Boolean),
     role: input.role?.trim() || null,
     impact: input.impact?.trim() || null,
-    cvBullets: (input.cvBullets ?? []).map((item) => item.trim()).filter(Boolean),
+    roleRelevance: input.roleRelevance?.trim() || null,
+    cvBullets: (input.cvBullets ?? [])
+      .map((item) => item.trim())
+      .filter(Boolean),
   };
 
   await saveCandidateKnowledgeBase({
@@ -90,6 +95,32 @@ export async function addCandidateKnowledgeProject(input: {
   });
 
   return project;
+}
+
+export async function addCandidateKnowledgePreference(input: {
+  label: string;
+  instruction: string;
+  kind?: GhostwriterWritingPreference["kind"];
+  strength?: GhostwriterWritingPreference["strength"];
+}): Promise<GhostwriterWritingPreference> {
+  const knowledgeBase = await getCandidateKnowledgeBase();
+  const preference: GhostwriterWritingPreference = {
+    id: crypto.randomUUID(),
+    label: input.label.trim(),
+    instruction: input.instruction.trim(),
+    kind: input.kind ?? "positioning",
+    strength: input.strength ?? "normal",
+  };
+
+  await saveCandidateKnowledgeBase({
+    ...knowledgeBase,
+    writingPreferences: [
+      ...(knowledgeBase.writingPreferences ?? []),
+      preference,
+    ],
+  });
+
+  return preference;
 }
 
 export async function deleteCandidateKnowledgeProject(

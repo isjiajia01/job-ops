@@ -25,6 +25,7 @@ export interface CandidateKnowledgeProject {
   keywords: string[];
   role: string | null;
   impact: string | null;
+  roleRelevance?: string | null;
   cvBullets?: string[];
 }
 

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   buildJobChatPromptContext: vi.fn(),
   getProfile: vi.fn(),
   getCandidateKnowledgeBase: vi.fn(),
+  saveCandidateKnowledgeBase: vi.fn(),
   llmCallJson: vi.fn(),
   repo: {
     getOrCreateThreadForJob: vi.fn(),
@@ -58,6 +59,7 @@ vi.mock("./profile", () => ({
 
 vi.mock("./candidate-knowledge", () => ({
   getCandidateKnowledgeBase: mocks.getCandidateKnowledgeBase,
+  saveCandidateKnowledgeBase: mocks.saveCandidateKnowledgeBase,
 }));
 
 vi.mock("../repositories/settings", () => ({
@@ -188,8 +190,34 @@ describe("ghostwriter service", () => {
         "Company: ACME\nResearch summary: ACME is expanding its analytics-driven operations.",
       evidencePack: {
         targetRoleSummary: "Planning-heavy role",
+        targetRoleFamily: "planning-and-operations",
+        voiceProfile: ["Use direct, restrained, employer-need-driven wording."],
         topFitReasons: ["Planning fit"],
         topEvidence: ["DTU planning thesis"],
+        experienceFrames: [
+          "Mover x DTU Master's Thesis: Frame as operations-linked optimisation work under real delivery constraints.",
+        ],
+        evidenceStory: [
+          "Lead with planning evidence under operational constraints, then reinforce it with analytical support work.",
+        ],
+        experienceBank: [
+          {
+            id: "knowledge:mover-thesis",
+            label: "Mover x DTU Master's Thesis",
+            sourceType: "knowledge_project",
+            roleFamilyHints: ["planning-and-operations"],
+            strongestClaims: [
+              "Rolling-horizon planning under real delivery constraints",
+            ],
+            preferredFraming:
+              "Use this as operations-linked planning and optimisation work in a real delivery context.",
+            supportSignals: ["planning", "routing"],
+            score: 12,
+          },
+        ],
+        selectedNarrative: [
+          "Lead module: Mover x DTU Master's Thesis — Use this as operations-linked planning and optimisation work in a real delivery context.",
+        ],
         biggestGaps: ["Avoid overstating seniority"],
         recommendedAngle: "Lead with planning-oriented problem solving.",
         forbiddenClaims: ["Do not claim senior ownership."],
@@ -198,6 +226,7 @@ describe("ghostwriter service", () => {
       evidencePackSnapshot:
         "Target role summary: Planning-heavy role\nTop fit reasons:\n- Planning fit",
     });
+    mocks.saveCandidateKnowledgeBase.mockImplementation(async (value) => value);
     mocks.getProfile.mockResolvedValue({
       basics: {
         name: "Candidate Name",
@@ -399,6 +428,72 @@ describe("ghostwriter service", () => {
           message.role !== "system" && message.role !== "user",
       ),
     ).toEqual([{ role: "assistant", content: "Draft response" }]);
+  });
+
+  it("stores durable memory updates without calling the LLM", async () => {
+    const assistantPartial: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-memory-update",
+      content: "",
+      status: "partial",
+    };
+    const assistantComplete: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-memory-update",
+      status: "complete",
+      content: "",
+    };
+
+    mocks.repo.createMessage
+      .mockResolvedValueOnce(baseUserMessage)
+      .mockResolvedValueOnce(assistantPartial);
+    mocks.repo.updateMessage.mockImplementation(async (_id, update) => ({
+      ...assistantComplete,
+      content: update.content ?? "",
+      tokensIn: update.tokensIn ?? null,
+      tokensOut: update.tokensOut ?? null,
+    }));
+    mocks.repo.getMessageById.mockImplementation(async () => {
+      const [, update] = mocks.repo.updateMessage.mock.calls.at(-1) ?? [];
+      return {
+        ...assistantComplete,
+        content: update?.content ?? "",
+      };
+    });
+
+    const result = await sendMessageForJob({
+      jobId: "job-1",
+      content: "这个就是和 Mover 一起做的，你记住了",
+    });
+
+    expect(mocks.llmCallJson).not.toHaveBeenCalled();
+    expect(mocks.saveCandidateKnowledgeBase).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projects: expect.arrayContaining([
+          expect.objectContaining({
+            id: "project-mover-dtu-thesis",
+            name: "Mover x DTU Master's Thesis",
+          }),
+        ]),
+        personalFacts: expect.arrayContaining([
+          expect.objectContaining({
+            id: "fact-mover-dtu-thesis-collab",
+          }),
+        ]),
+        writingPreferences: expect.arrayContaining([
+          expect.objectContaining({
+            id: "pref-mover-dtu-thesis-framing",
+          }),
+        ]),
+      }),
+    );
+
+    const parsed = parseGhostwriterAssistantContent(
+      result.assistantMessage?.content ?? "",
+    );
+    expect(parsed.response).toContain("Mover");
+    expect(parsed.coverLetterDraft).toBeNull();
+    expect(parsed.resumePatch).toBeNull();
   });
 
   it("applies resumePatch updates to the job and stores structured content", async () => {

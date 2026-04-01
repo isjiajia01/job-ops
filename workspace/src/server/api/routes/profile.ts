@@ -9,12 +9,12 @@ import {
   deleteCandidateKnowledgeProject,
   getCandidateKnowledgeBase,
 } from "@server/services/candidate-knowledge";
-import { ingestProfileCapture } from "@server/services/profile-ingestion";
 import {
   getInternalProfile,
   saveInternalProfile,
 } from "@server/services/internal-profile";
 import { clearProfileCache, getProfile } from "@server/services/profile";
+import { ingestProfileCapture } from "@server/services/profile-ingestion";
 import { extractProjectsFromProfile } from "@server/services/resumeProjects";
 import {
   clearRxResumeResumeCache,
@@ -40,6 +40,7 @@ const createKnowledgeProjectSchema = z.object({
   keywords: z.array(z.string().trim().min(1).max(80)).max(12).optional(),
   role: z.string().trim().max(200).nullable().optional(),
   impact: z.string().trim().max(1200).nullable().optional(),
+  roleRelevance: z.string().trim().max(1200).nullable().optional(),
   cvBullets: z.array(z.string().trim().min(1).max(240)).max(8).optional(),
 });
 
