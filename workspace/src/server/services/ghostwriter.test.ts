@@ -918,6 +918,131 @@ describe("ghostwriter service", () => {
     );
   });
 
+  it("falls back to evidence-backed bullets when direct bullet requests return no usable bullets", async () => {
+    const assistantPartial: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-bullet-fallback",
+      content: "",
+      status: "partial",
+    };
+    const assistantComplete: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-bullet-fallback",
+      status: "complete",
+      content: "",
+    };
+
+    mocks.buildJobChatPromptContext.mockResolvedValueOnce({
+      job: { id: "job-1" },
+      profile: {
+        basics: {
+          name: "Candidate Name",
+          headline:
+            "Planning Analytics Candidate | Python, Excel, Operations Research, Decision Support",
+          summary:
+            "Strongest fit is in planning-oriented and analytics-heavy roles with Python and Excel analysis.",
+        },
+      },
+      knowledgeBase: {
+        personalFacts: [],
+        projects: [],
+      },
+      style: {
+        tone: "professional",
+        formality: "medium",
+        constraints: "",
+        doNotUse: "",
+      },
+      systemPrompt: "system prompt",
+      jobSnapshot: '{"job":"snapshot"}',
+      profileSnapshot: "profile snapshot",
+      companyResearchSnapshot: "",
+      evidencePack: {
+        targetRoleSummary: "Analytics-heavy role",
+        targetRoleFamily: "analytics-and-decision-support",
+        voiceProfile: ["Use direct, restrained, employer-need-driven wording."],
+        topFitReasons: ["Analytics fit"],
+        topEvidence: ["Business Analysis Internship"],
+        experienceFrames: [
+          "Business Analysis Internship: Use this as practical decision-support and reporting automation evidence.",
+        ],
+        evidenceStory: [
+          "Lead with reporting automation and operational analysis, then support it with practical business follow-up.",
+        ],
+        experienceBank: [
+          {
+            id: "knowledge:internship",
+            label: "Business Analysis Internship",
+            sourceType: "knowledge_project",
+            roleFamilyHints: ["analytics-and-decision-support"],
+            strongestClaims: [
+              "Automated recurring reporting workflows using Python and Excel, improving the efficiency and consistency of business and financial reporting",
+              "Analyzed operational and financial data and translated findings into structured, decision-ready presentation materials for stakeholders",
+            ],
+            preferredFraming:
+              "Use this as practical decision-support and reporting automation evidence.",
+            supportSignals: [
+              "reporting automation and practical business follow-up",
+            ],
+            score: 12,
+          },
+        ],
+        selectedNarrative: [
+          "Lead module: Business Analysis Internship — Use this as practical decision-support and reporting automation evidence.",
+        ],
+        biggestGaps: ["Avoid overstating seniority"],
+        recommendedAngle: "Lead with practical analytics execution.",
+        forbiddenClaims: ["Do not claim ML ownership."],
+        toneRecommendation: "Direct and practical.",
+      },
+      evidencePackSnapshot:
+        "Target role summary: Analytics-heavy role\nTop fit reasons:\n- Analytics fit",
+    });
+
+    mocks.repo.createMessage
+      .mockResolvedValueOnce(baseUserMessage)
+      .mockResolvedValueOnce(assistantPartial);
+    mocks.repo.updateMessage.mockImplementation(async (_id, update) => ({
+      ...assistantComplete,
+      content: update.content ?? "",
+    }));
+    mocks.repo.getMessageById.mockImplementation(async () => {
+      const [, update] = mocks.repo.updateMessage.mock.calls.at(-1) ?? [];
+      return {
+        ...assistantComplete,
+        content: update?.content ?? "",
+      };
+    });
+    mocks.llmCallJson.mockResolvedValue({
+      success: true,
+      data: {
+        response: "Here are 3 bullets for your strongest matching experience:",
+      },
+    });
+
+    const result = await sendMessageForJob({
+      jobId: "job-1",
+      content:
+        "Give me 3 resume bullets for my strongest matching experience for this job. Just give the wording.",
+    });
+
+    const parsed = parseGhostwriterAssistantContent(
+      result.assistantMessage?.content ?? "",
+    );
+    expect(parsed.response).toContain(
+      "Automated recurring reporting workflows using Python and Excel",
+    );
+    expect(parsed.response).toContain(
+      "Analyzed operational and financial data and translated findings",
+    );
+    expect(
+      parsed.response.match(/^\s*•/gm)?.length ?? 0,
+    ).toBeGreaterThanOrEqual(3);
+    expect(parsed.response).not.toContain(
+      "Here are 3 bullets for your strongest matching experience",
+    );
+  });
+
   it("keeps short cover letter drafts intact instead of over-cleaning them", async () => {
     const assistantPartial: JobChatMessage = {
       ...baseAssistantMessage,

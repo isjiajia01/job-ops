@@ -526,6 +526,79 @@ function stripLeadingSalutationBlock(text: string): string {
   return trimmed.replace(/^Dear[^\n]*\n\n/i, "").trim();
 }
 
+function isDirectBulletRequest(prompt: string): boolean {
+  const normalized = prompt.toLowerCase();
+  return (
+    /\bbullets?\b/.test(normalized) &&
+    /just give the wording|just the wording|resume/.test(normalized)
+  );
+}
+
+function countBulletLines(text: string): number {
+  return text
+    .split("\n")
+    .filter((line) => /^\s*(?:[-•*]|\d+[.)])\s+/.test(line)).length;
+}
+
+function normalizeBulletSentence(text: string): string {
+  return text
+    .replace(/^\s*(?:[-•*]|\d+[.)])\s+/, "")
+    .trim()
+    .replace(/[.;:,\s]+$/, "");
+}
+
+function buildFallbackBulletResponse(
+  evidencePack: GhostwriterEvidencePack,
+): string | null {
+  const lead = evidencePack.experienceBank[0];
+  const support = evidencePack.experienceBank[1];
+  if (!lead) return null;
+
+  const candidateLines = [
+    ...lead.strongestClaims,
+    ...lead.supportSignals,
+    ...(support?.strongestClaims ?? []),
+    ...(support?.supportSignals ?? []),
+  ]
+    .map(normalizeBulletSentence)
+    .filter(
+      (line) =>
+        line.length >= 28 &&
+        !/^lead module:|^support module:|^optional third signal:/i.test(line) &&
+        !/@/.test(line),
+    );
+
+  const uniqueLines: string[] = [];
+  for (const line of candidateLines) {
+    if (
+      uniqueLines.some(
+        (existing) => existing.toLowerCase() === line.toLowerCase(),
+      )
+    ) {
+      continue;
+    }
+    uniqueLines.push(line);
+    if (uniqueLines.length === 3) break;
+  }
+
+  if (uniqueLines.length < 2) return null;
+
+  if (uniqueLines.length < 3) {
+    uniqueLines.push(
+      evidencePack.targetRoleFamily === "analytics-and-decision-support"
+        ? "Turned recurring analysis into stakeholder-ready materials, reporting structure, and practical follow-up for day-to-day business decisions"
+        : evidencePack.targetRoleFamily === "planning-and-operations"
+          ? "Translated planning analysis into practical decision support that could help day-to-day operational coordination under changing constraints"
+          : "Turned structured modelling work into decision-useful outputs that stayed practical, grounded, and relevant to real operational needs",
+    );
+  }
+
+  return uniqueLines
+    .slice(0, 3)
+    .map((line) => `• ${line}.`)
+    .join("\n");
+}
+
 function sharpenBulletListResponse(text: string): string {
   const lines = text.split("\n");
   const bulletIndexes = lines
@@ -566,6 +639,7 @@ function finalizePayloadCandidate(args: {
   knowledgeBase: Awaited<
     ReturnType<typeof buildJobChatPromptContext>
   >["knowledgeBase"];
+  evidencePack?: GhostwriterEvidencePack;
 }): GhostwriterAssistantPayload {
   const payload = normalizeGhostwriterAssistantPayload(args.raw);
   if (!payload) {
@@ -582,6 +656,13 @@ function finalizePayloadCandidate(args: {
         knowledgeBase: args.knowledgeBase,
       }).sanitized
     : null;
+  const fallbackBulletResponse =
+    args.prompt &&
+    isDirectBulletRequest(args.prompt) &&
+    countBulletLines(payload.response) < 3 &&
+    args.evidencePack
+      ? buildFallbackBulletResponse(args.evidencePack)
+      : null;
 
   if (
     sanitizedCoverLetterDraft &&
@@ -597,9 +678,10 @@ function finalizePayloadCandidate(args: {
     };
   }
 
+  const baseResponse = fallbackBulletResponse ?? payload.response;
   const sharpenedResponse = payload.coverLetterDraft
-    ? payload.response
-    : sharpenBulletListResponse(payload.response);
+    ? baseResponse
+    : sharpenBulletListResponse(baseResponse);
 
   return {
     ...payload,
@@ -958,6 +1040,7 @@ async function runAssistantReply(
         prompt: options.prompt,
         profile: context.profile,
         knowledgeBase: context.knowledgeBase,
+        evidencePack: context.evidencePack,
       });
     } else {
       const strategyPrompt = [
@@ -1106,6 +1189,7 @@ async function runAssistantReply(
             prompt: options.prompt,
             profile: context.profile,
             knowledgeBase: context.knowledgeBase,
+            evidencePack: context.evidencePack,
           });
 
           candidatePayloads.push({
