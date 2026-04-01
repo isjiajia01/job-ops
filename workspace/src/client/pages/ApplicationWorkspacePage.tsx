@@ -288,7 +288,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
         return;
       }
 
-      toast.success("Started CV + cover letter download", {
+      toast.success("Downloaded CV + cover letter zip", {
         description: result.fileNames.join(" · "),
       });
     });

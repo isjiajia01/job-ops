@@ -1,3 +1,4 @@
+import { zipSync } from "fflate";
 import { getCoverLetterPdfDocumentForJob } from "@/client/lib/cover-letter-pdf";
 import { getCvPdfDocumentForJob } from "@/client/lib/cv-pdf";
 import {
@@ -39,13 +40,40 @@ async function writeDocumentToDirectory(
   await writable.close();
 }
 
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
+function buildBundleFileName(documents: DownloadableDocument[]): string {
+  const sharedPrefix = documents[0]?.fileName
+    ?.replace(/_(CV|Cover_Letter)_.+$/i, "")
+    .trim();
+  const safePrefix = sharedPrefix || "Application";
+  return `${safePrefix}_CV_And_Cover_Letter.zip`;
+}
+
+async function createZipBundle(
+  documents: DownloadableDocument[],
+): Promise<DownloadableDocument> {
+  const entries = await Promise.all(
+    documents.map(async (document) => [
+      document.fileName,
+      new Uint8Array(await document.blob.arrayBuffer()),
+    ] as const),
+  );
+
+  const archive = zipSync(Object.fromEntries(entries), {
+    level: 0,
+  });
+
+  const archiveBytes = new Uint8Array(archive.byteLength);
+  archiveBytes.set(archive);
+
+  return {
+    blob: new Blob([archiveBytes], { type: "application/zip" }),
+    fileName: buildBundleFileName(documents),
+  };
 }
 
 export async function saveApplicationDocumentsWithPrompt(jobId: string): Promise<{
   fileNames: string[];
-  method: "browser-download" | "directory-picker";
+  method: "zip-download" | "directory-picker";
 }> {
   const showDirectoryPicker = (window as WindowWithDirectoryPicker)
     .showDirectoryPicker;
@@ -75,16 +103,11 @@ export async function saveApplicationDocumentsWithPrompt(jobId: string): Promise
     getCvPdfDocumentForJob(jobId),
     getCoverLetterPdfDocumentForJob(jobId),
   ]);
-
-  for (const [index, document] of documents.entries()) {
-    triggerDownload(document.blob, document.fileName);
-    if (index < documents.length - 1) {
-      await wait(180);
-    }
-  }
+  const zipBundle = await createZipBundle(documents);
+  triggerDownload(zipBundle.blob, zipBundle.fileName);
 
   return {
-    fileNames: documents.map((document) => document.fileName),
-    method: "browser-download",
+    fileNames: [zipBundle.fileName],
+    method: "zip-download",
   };
 }
