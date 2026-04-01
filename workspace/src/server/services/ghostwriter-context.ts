@@ -666,9 +666,9 @@ function buildExperienceBank(args: {
       .join(" ");
     const roleFamilyHints = detectRoleFamilyHints(raw);
     const strongestClaims = [
+      ...((item.cvBullets ?? []).slice(0, 3) ?? []),
       item.summary,
       item.impact,
-      ...((item.cvBullets ?? []).slice(0, 2) ?? []),
     ].filter(Boolean) as string[];
     const preferredFraming =
       /mover|collaboration|delivery|rolling-horizon|routing/i.test(raw)

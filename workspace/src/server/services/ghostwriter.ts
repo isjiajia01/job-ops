@@ -565,7 +565,7 @@ function buildFallbackBulletResponse(
       (line) =>
         line.length >= 28 &&
         !/^lead module:|^support module:|^optional third signal:/i.test(line) &&
-        !/^strong evidence\b|^use this as\b|^lead with\b|^support for\b/i.test(
+        !/^strong evidence\b|^use this as\b|^lead with\b|^support for\b|^best evidence\b|^primary evidence\b|^important execution evidence\b|^useful bridge\b/i.test(
           line,
         ) &&
         !/especially useful when a role values|rather than a generic school project/i.test(
