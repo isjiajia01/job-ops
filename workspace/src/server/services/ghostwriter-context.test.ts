@@ -386,6 +386,84 @@ describe("buildJobChatPromptContext", () => {
     );
   });
 
+  it("prefers thesis-led narrative for optimisation-heavy roles and dedupes thesis variants", async () => {
+    const job = createJob({
+      id: "job-ctx-or-narrative",
+      title: "Optimization Specialist",
+      employer: "LEGO",
+      jobDescription:
+        "Operations research role focused on optimization, modelling, simulation, planning constraints, and decision support.",
+    });
+    vi.mocked(getJobById).mockResolvedValue(job);
+    vi.mocked(getProfile).mockResolvedValue({
+      basics: { name: "Test User" },
+      sections: {
+        experience: {
+          items: [
+            {
+              id: "exp-1",
+              visible: true,
+              company: "DaJiao",
+              position: "Business Analysis Intern",
+              location: "",
+              date: "2022 - 2023",
+              summary:
+                "Automated reporting workflows using Python and Excel and translated operational data into decision-ready materials.",
+            },
+          ],
+        },
+      },
+    });
+    vi.mocked(getCandidateKnowledgeBase).mockResolvedValue({
+      personalFacts: [],
+      projects: [
+        {
+          id: "project-thesis-legacy",
+          name: "DTU Master's Thesis — Rolling-Horizon Last-Mile Planning",
+          summary:
+            "Optimization research on rolling-horizon planning under operational constraints.",
+          keywords: ["planning", "optimization", "delivery"],
+          role: "Master's thesis",
+          impact:
+            "Strong evidence for planning-heavy and optimization-oriented roles.",
+          roleRelevance: "Lead module for planning and optimisation roles.",
+          cvBullets: [
+            "Models rolling-horizon planning decisions under real constraints.",
+          ],
+        },
+        {
+          id: "project-thesis-current",
+          name: "Mover x DTU Master's Thesis",
+          summary:
+            "Optimization research in collaboration with Mover on rolling-horizon last-mile planning under operational constraints.",
+          keywords: ["planning", "routing", "optimization", "delivery"],
+          role: "Master's Thesis / Optimization Research (in collaboration with Mover)",
+          impact:
+            "Strong evidence for planning, logistics, optimisation, and decision-support roles.",
+          roleRelevance:
+            "Lead module for planning, optimisation, logistics, and decision-support roles.",
+          cvBullets: [
+            "Working on a multi-day rolling-horizon planning problem in last-mile delivery.",
+          ],
+        },
+      ],
+      companyResearchNotes: [],
+      writingPreferences: [],
+    });
+
+    const context = await buildJobChatPromptContext(job.id);
+
+    expect(context.evidencePack.targetRoleFamily).toBe(
+      "optimization-and-research",
+    );
+    expect(context.evidencePack.experienceBank[0]?.label).toContain("Mover");
+    expect(
+      context.evidencePack.experienceBank.filter((item) =>
+        /thesis/i.test(item.label),
+      ).length,
+    ).toBe(1);
+  });
+
   it("includes company research snapshot when available", async () => {
     const job = createJob({
       id: "job-ctx-research",

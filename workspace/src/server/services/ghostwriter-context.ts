@@ -516,6 +516,134 @@ function detectRoleFamilyHints(text: string): string[] {
   ).map((item) => item.family);
 }
 
+function inferCanonicalExperienceKey(text: string): string {
+  const lower = text.toLowerCase();
+  if (/mover|rolling-horizon|last-mile|dtu.*thesis|thesis.*mover/.test(lower)) {
+    return "mover-thesis";
+  }
+  if (
+    /business analysis intern|business analysis internship|reporting automation/.test(
+      lower,
+    )
+  ) {
+    return "business-analysis-internship";
+  }
+  if (/denmark flex planner|grid-aware ev|renewable siting/.test(lower)) {
+    return "denmark-flex-planner";
+  }
+  if (/\bnu\b|swiftui|ios transit app/.test(lower)) {
+    return "nu";
+  }
+  return lower.replace(/[^a-z0-9]+/g, "-").slice(0, 80);
+}
+
+function scoreRoleSpecificModule(args: {
+  text: string;
+  targetRoleFamily: string;
+}): number {
+  const lower = args.text.toLowerCase();
+  let score = 0;
+
+  if (args.targetRoleFamily === "planning-and-operations") {
+    if (
+      /mover|rolling-horizon|last-mile|routing|delivery|operational constraints|transport planner|logistics/.test(
+        lower,
+      )
+    )
+      score += 8;
+    if (
+      /denmark flex planner|scenario|decision-support tooling|municipality selection/.test(
+        lower,
+      )
+    )
+      score += 3;
+    if (/business analysis internship|reporting automation/.test(lower))
+      score -= 1;
+    if (
+      /support module rather than lead for planning|usually support module rather than lead for planning/.test(
+        lower,
+      )
+    )
+      score -= 3;
+  }
+
+  if (args.targetRoleFamily === "optimization-and-research") {
+    if (
+      /mover|thesis|optimization research|operations research|rolling-horizon|heuristic|re-optimization/.test(
+        lower,
+      )
+    )
+      score += 9;
+    if (
+      /mover|collaboration with mover|operations-linked collaboration/.test(
+        lower,
+      )
+    )
+      score += 4;
+    if (
+      /denmark flex planner|optimisation decision-support system|selection logic|explainable/.test(
+        lower,
+      )
+    )
+      score += 4;
+    if (/business analysis internship|reporting automation/.test(lower))
+      score -= 2;
+  }
+
+  if (args.targetRoleFamily === "analytics-and-decision-support") {
+    if (
+      /business analysis internship|reporting automation|reporting|excel|python|decision-ready|stakeholder/.test(
+        lower,
+      )
+    )
+      score += 9;
+    if (
+      /denmark flex planner|product-style frontend|end-to-end|decision-support artifact/.test(
+        lower,
+      )
+    )
+      score += 3;
+    if (/mover|thesis|rolling-horizon|routing|delivery/.test(lower)) score -= 1;
+    if (
+      /support module for planning\/optimisation roles|lead module for planning|lead module for planning, optimisation, logistics/.test(
+        lower,
+      )
+    )
+      score -= 2;
+  }
+
+  if (
+    /lead module for analytics|lead module for planning|lead module for logistics|lead module for optimisation/.test(
+      lower,
+    )
+  ) {
+    score += 3;
+  }
+  if (/support module/.test(lower) && !/lead module/.test(lower)) {
+    score -= 1;
+  }
+
+  return score;
+}
+
+function dedupeExperienceBank(
+  modules: GhostwriterExperienceModule[],
+): GhostwriterExperienceModule[] {
+  const seen = new Set<string>();
+  const result: GhostwriterExperienceModule[] = [];
+  for (const module of modules) {
+    const key = inferCanonicalExperienceKey(
+      [module.label, module.preferredFraming, ...module.strongestClaims].join(
+        " ",
+      ),
+    );
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(module);
+  }
+  return result;
+}
+
 function buildExperienceBank(args: {
   profile: ResumeProfile;
   knowledgeBase: CandidateKnowledgeBase;
@@ -551,6 +679,10 @@ function buildExperienceBank(args: {
     const score =
       scoreEvidenceCandidate(raw, args.jobTokens) +
       (roleFamilyHints.includes(args.targetRoleFamily) ? 4 : 0) +
+      scoreRoleSpecificModule({
+        text: [item.name, raw].join(" "),
+        targetRoleFamily: args.targetRoleFamily,
+      }) +
       (/mover|thesis|delivery|planning|optimization/i.test(raw) ? 1 : 0);
 
     modules.push({
@@ -588,7 +720,11 @@ function buildExperienceBank(args: {
         : "Frame around the clearest concrete problem solved.";
     const score =
       scoreEvidenceCandidate(raw, args.jobTokens) +
-      (roleFamilyHints.includes(args.targetRoleFamily) ? 3 : 0);
+      (roleFamilyHints.includes(args.targetRoleFamily) ? 3 : 0) +
+      scoreRoleSpecificModule({
+        text: [item.name, raw].join(" "),
+        targetRoleFamily: args.targetRoleFamily,
+      });
 
     modules.push({
       id: `project:${item.id}`,
@@ -618,7 +754,11 @@ function buildExperienceBank(args: {
         : "Use this to show grounded execution and collaboration support.";
     const score =
       scoreEvidenceCandidate(raw, args.jobTokens) +
-      (roleFamilyHints.includes(args.targetRoleFamily) ? 2 : 0);
+      (roleFamilyHints.includes(args.targetRoleFamily) ? 2 : 0) +
+      scoreRoleSpecificModule({
+        text: [`${item.position} @ ${item.company}`, raw].join(" "),
+        targetRoleFamily: args.targetRoleFamily,
+      });
 
     modules.push({
       id: `experience:${item.id}`,
@@ -632,9 +772,10 @@ function buildExperienceBank(args: {
     });
   }
 
-  return modules
-    .sort((a, b) => b.score - a.score)
-    .slice(0, MAX_EXPERIENCE_BANK);
+  return dedupeExperienceBank(modules.sort((a, b) => b.score - a.score)).slice(
+    0,
+    MAX_EXPERIENCE_BANK,
+  );
 }
 
 function buildVoiceProfile(knowledgeBase: CandidateKnowledgeBase): string[] {
