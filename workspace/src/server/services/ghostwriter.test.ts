@@ -812,6 +812,58 @@ describe("ghostwriter service", () => {
     );
   });
 
+  it("returns partial cover-letter wording directly in response for opening-style requests", async () => {
+    const assistantPartial: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-cover-opening",
+      content: "",
+      status: "partial",
+    };
+    const assistantComplete: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-cover-opening",
+      status: "complete",
+      content: "",
+    };
+
+    mocks.repo.createMessage
+      .mockResolvedValueOnce(baseUserMessage)
+      .mockResolvedValueOnce(assistantPartial);
+    mocks.repo.updateMessage.mockImplementation(async (_id, update) => ({
+      ...assistantComplete,
+      content: update.content ?? "",
+    }));
+    mocks.repo.getMessageById.mockImplementation(async () => {
+      const [, update] = mocks.repo.updateMessage.mock.calls.at(-1) ?? [];
+      return {
+        ...assistantComplete,
+        content: update?.content ?? "",
+      };
+    });
+    mocks.llmCallJson.mockResolvedValue({
+      success: true,
+      data: {
+        response: "Here is a 2-sentence opening.",
+        coverLetterDraft:
+          "Coordinating day-to-day logistics work requires structure, follow-through, and clear communication across moving parts. In my current DTU master's thesis with Mover, I work on planning under real operational constraints, which is why this role feels like a practical fit.",
+        coverLetterKind: "letter",
+      },
+    });
+
+    const result = await sendMessageForJob({
+      jobId: "job-1",
+      content:
+        "Write a 2-sentence cover-letter opening for this job. Just give the wording.",
+    });
+
+    const parsed = parseGhostwriterAssistantContent(
+      result.assistantMessage?.content ?? "",
+    );
+    expect(parsed.response).toContain("Coordinating day-to-day logistics work");
+    expect(parsed.coverLetterDraft).toBeNull();
+    expect(parsed.coverLetterKind).toBeNull();
+  });
+
   it("keeps short cover letter drafts intact instead of over-cleaning them", async () => {
     const assistantPartial: JobChatMessage = {
       ...baseAssistantMessage,

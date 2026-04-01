@@ -135,7 +135,7 @@ type WritingStrategy = {
 function classifyGhostwriterTask(prompt: string): GhostwriterTaskKind {
   const normalized = prompt.toLowerCase();
   const asksCoverLetter =
-    /cover letter|motivation letter|application letter/.test(normalized);
+    /cover[ -]?letter|motivation letter|application letter/.test(normalized);
   const asksEmail =
     /application email|apply email|email application|email draft/.test(
       normalized,
@@ -510,8 +510,20 @@ function buildBaseLlmMessages(args: {
   ];
 }
 
+function isPartialCoverLetterRequest(prompt: string): boolean {
+  const normalized = prompt.toLowerCase();
+  const asksCoverLetter =
+    /cover[ -]?letter|motivation letter|application letter/.test(normalized);
+  const asksPartial =
+    /opening|intro|introduction|hook|paragraph|2-sentence|two-sentence|sentence|closing line|closing paragraph/.test(
+      normalized,
+    );
+  return asksCoverLetter && asksPartial;
+}
+
 function finalizePayloadCandidate(args: {
   raw: unknown;
+  prompt?: string;
   profile: Awaited<ReturnType<typeof buildJobChatPromptContext>>["profile"];
   knowledgeBase: Awaited<
     ReturnType<typeof buildJobChatPromptContext>
@@ -532,6 +544,20 @@ function finalizePayloadCandidate(args: {
         knowledgeBase: args.knowledgeBase,
       }).sanitized
     : null;
+
+  if (
+    sanitizedCoverLetterDraft &&
+    args.prompt &&
+    isPartialCoverLetterRequest(args.prompt)
+  ) {
+    return {
+      ...payload,
+      response: sanitizedCoverLetterDraft,
+      coverLetterDraft: null,
+      coverLetterKind: null,
+      resumePatch: sanitizedResumePatch,
+    };
+  }
 
   return {
     ...payload,
@@ -886,6 +912,7 @@ async function runAssistantReply(
 
       structuredPayload = finalizePayloadCandidate({
         raw: llmResult.data,
+        prompt: options.prompt,
         profile: context.profile,
         knowledgeBase: context.knowledgeBase,
       });
@@ -1033,14 +1060,16 @@ async function runAssistantReply(
 
           const candidate = finalizePayloadCandidate({
             raw: variantResult.data,
+            prompt: options.prompt,
             profile: context.profile,
             knowledgeBase: context.knowledgeBase,
           });
 
           candidatePayloads.push({
             ...candidate,
-            coverLetterKind:
-              candidate.coverLetterKind ?? variant.coverLetterKind,
+            coverLetterKind: candidate.coverLetterDraft
+              ? (candidate.coverLetterKind ?? variant.coverLetterKind)
+              : candidate.coverLetterKind,
           });
         }
 
