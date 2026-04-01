@@ -1,7 +1,7 @@
 import {
+  type Application,
   type ApplicationStage,
   type ApplicationTask,
-  type Application,
   type JobOutcome,
   STAGE_LABELS,
   type StageEvent,
@@ -39,8 +39,6 @@ import {
   useUpdateApplicationMutation,
 } from "@/client/hooks/queries/useApplicationMutations";
 import { useQueryErrorToast } from "@/client/hooks/useQueryErrorToast";
-import { downloadCoverLetterPdfForJob } from "@/client/lib/cover-letter-pdf";
-import { downloadCvPdfForJob } from "@/client/lib/cv-pdf";
 import { queryKeys } from "@/client/lib/queryKeys";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -58,11 +56,11 @@ import {
   formatTimestamp,
 } from "@/lib/utils";
 import * as api from "../api";
+import { ApplicationDetailsEditDrawer } from "../components/ApplicationDetailsEditDrawer";
+import { ApplicationHeader } from "../components/ApplicationHeader";
 import { ConfirmDelete } from "../components/ConfirmDelete";
 import { GhostwriterDrawer } from "../components/ghostwriter/GhostwriterDrawer";
 import { GhostwriterPanel } from "../components/ghostwriter/GhostwriterPanel";
-import { ApplicationDetailsEditDrawer } from "../components/ApplicationDetailsEditDrawer";
-import { ApplicationHeader } from "../components/ApplicationHeader";
 import {
   type LogEventFormValues,
   LogEventModal,
@@ -277,16 +275,13 @@ export const ApplicationWorkspacePage: React.FC = () => {
     });
   };
 
-  const handleDownloadCoverLetter = React.useCallback(() => {
+  const handleExportDocuments = React.useCallback(() => {
     if (!job) return;
-    void downloadCoverLetterPdfForJob(job.id).catch((error) => {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Failed to download cover letter PDF";
-      toast.error(message);
+    void runAction("export-documents", async () => {
+      const result = await api.exportApplicationDocuments(job.id);
+      toast.success(`Saved CV + cover letter to ${result.directoryPath}`);
     });
-  }, [job]);
+  }, [job, runAction]);
 
   const handleMoveToInProgress = async () => {
     await runAction("move-in-progress", async () => {
@@ -417,7 +412,8 @@ export const ApplicationWorkspacePage: React.FC = () => {
                 Tailor the story for this application
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                Use Ghostwriter, CV preview, and cover letter tools around this single role instead of hopping between pipeline screens.
+                Use Ghostwriter, CV preview, and cover letter tools around this
+                single role instead of hopping between pipeline screens.
               </p>
             </div>
             <div className="rounded-xl border border-border/60 bg-background/40 p-4">
@@ -426,7 +422,8 @@ export const ApplicationWorkspacePage: React.FC = () => {
               </div>
               <div className="mt-2 text-base font-semibold">
                 {currentStage
-                  ? STAGE_LABELS[currentStage as ApplicationStage] || currentStage
+                  ? STAGE_LABELS[currentStage as ApplicationStage] ||
+                    currentStage
                   : job.status}
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -582,26 +579,6 @@ export const ApplicationWorkspacePage: React.FC = () => {
                     </Button>
                   )}
 
-                  {job && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-9 border-border/60 bg-background/30"
-                      onClick={() => {
-                        void downloadCvPdfForJob(job.id).catch((error) => {
-                          const message =
-                            error instanceof Error
-                              ? error.message
-                              : "Failed to download CV PDF";
-                          toast.error(message);
-                        });
-                      }}
-                    >
-                      <Download className="mr-1.5 h-3.5 w-3.5" />
-                      Download CV PDF
-                    </Button>
-                  )}
-
                   <Button
                     asChild
                     size="sm"
@@ -618,15 +595,18 @@ export const ApplicationWorkspacePage: React.FC = () => {
                     </a>
                   </Button>
 
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-9 border-border/60 bg-background/30"
-                    onClick={handleDownloadCoverLetter}
-                  >
-                    <Download className="mr-1.5 h-3.5 w-3.5" />
-                    Download Cover Letter PDF
-                  </Button>
+                  {job && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 border-border/60 bg-background/30"
+                      onClick={handleExportDocuments}
+                      disabled={isBusy}
+                    >
+                      <Download className="mr-1.5 h-3.5 w-3.5" />
+                      Save CV + Cover Letter
+                    </Button>
+                  )}
 
                   {isReady && (
                     <Button
@@ -693,7 +673,9 @@ export const ApplicationWorkspacePage: React.FC = () => {
                     Ghostwriter workspace
                   </CardTitle>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    This is now the center of the application workflow: iterate on role fit, tailored bullets, and cover-letter language here.
+                    This is now the center of the application workflow: iterate
+                    on role fit, tailored bullets, and cover-letter language
+                    here.
                   </p>
                 </div>
                 <GhostwriterDrawer job={job} />
@@ -738,7 +720,8 @@ export const ApplicationWorkspacePage: React.FC = () => {
             <CardContent>
               {!canTrackStages && (
                 <div className="mb-4 rounded-md border border-dashed border-border/60 p-3 text-sm text-muted-foreground">
-                  Move this application to In Progress to track interviews, follow-ups, and other stages.
+                  Move this application to In Progress to track interviews,
+                  follow-ups, and other stages.
                 </div>
               )}
               {canTrackStages && isClosedStage && (

@@ -423,6 +423,20 @@ export async function getApplication(id: string): Promise<Job> {
   return fetchApi<Job>(`/applications/${id}?t=${Date.now()}`);
 }
 
+export async function exportApplicationDocuments(id: string): Promise<{
+  cvPath: string;
+  coverLetterPath: string;
+  directoryPath: string;
+}> {
+  return fetchApi<{
+    cvPath: string;
+    coverLetterPath: string;
+    directoryPath: string;
+  }>(`/applications/${id}/export-documents`, {
+    method: "POST",
+  });
+}
+
 export async function updateJob(
   id: string,
   update: Partial<Job>,
@@ -1612,14 +1626,17 @@ export async function saveCandidateKnowledgeBase(
 export async function ingestProfileKnowledgeCapture(input: {
   rawText: string;
   sourceLabel?: string | null;
-}): Promise<{ items: CandidateKnowledgeInboxItem[]; mode: "llm" | "fallback" }> {
-  return fetchApi<{ items: CandidateKnowledgeInboxItem[]; mode: "llm" | "fallback" }>(
-    "/profile/knowledge/ingest",
-    {
-      method: "POST",
-      body: JSON.stringify(input),
-    },
-  );
+}): Promise<{
+  items: CandidateKnowledgeInboxItem[];
+  mode: "llm" | "fallback";
+}> {
+  return fetchApi<{
+    items: CandidateKnowledgeInboxItem[];
+    mode: "llm" | "fallback";
+  }>("/profile/knowledge/ingest", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 export async function getProfileStatus(): Promise<ProfileStatusResponse> {

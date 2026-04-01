@@ -17,6 +17,7 @@ import {
 } from "@server/pipeline/index";
 import * as jobsRepo from "@server/repositories/jobs";
 import * as settingsRepo from "@server/repositories/settings";
+import { exportApplicationDocuments } from "@server/services/application-documents";
 import {
   deleteStageEvent,
   getStageEvents,
@@ -1265,6 +1266,29 @@ jobsRouter.post("/:id/generate-pdf", async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: message });
   }
 });
+
+/**
+ * POST /api/jobs/:id/export-documents - Save CV + cover letter PDFs into the local application archive
+ */
+jobsRouter.post(
+  "/:id/export-documents",
+  async (req: Request, res: Response) => {
+    try {
+      if (isDemoMode()) {
+        return sendDemoBlocked(
+          res,
+          "Document export is disabled in demo mode because it writes local files.",
+        );
+      }
+
+      const result = await exportApplicationDocuments(req.params.id);
+      return ok(res, result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ success: false, error: message });
+    }
+  },
+);
 
 /**
  * POST /api/jobs/:id/apply - Mark a job as applied
