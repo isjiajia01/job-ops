@@ -39,15 +39,14 @@ async function writeDocumentToDirectory(
   await writable.close();
 }
 
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 export async function saveApplicationDocumentsWithPrompt(jobId: string): Promise<{
   fileNames: string[];
   method: "browser-download" | "directory-picker";
 }> {
-  const documents = await Promise.all([
-    getCvPdfDocumentForJob(jobId),
-    getCoverLetterPdfDocumentForJob(jobId),
-  ]);
-
   const showDirectoryPicker = (window as WindowWithDirectoryPicker)
     .showDirectoryPicker;
 
@@ -56,6 +55,11 @@ export async function saveApplicationDocumentsWithPrompt(jobId: string): Promise
       id: "jobops-application-documents",
       mode: "readwrite",
     });
+
+    const documents = await Promise.all([
+      getCvPdfDocumentForJob(jobId),
+      getCoverLetterPdfDocumentForJob(jobId),
+    ]);
 
     for (const document of documents) {
       await writeDocumentToDirectory(directoryHandle, document);
@@ -67,8 +71,16 @@ export async function saveApplicationDocumentsWithPrompt(jobId: string): Promise
     };
   }
 
-  for (const document of documents) {
+  const documents = await Promise.all([
+    getCvPdfDocumentForJob(jobId),
+    getCoverLetterPdfDocumentForJob(jobId),
+  ]);
+
+  for (const [index, document] of documents.entries()) {
     triggerDownload(document.blob, document.fileName);
+    if (index < documents.length - 1) {
+      await wait(180);
+    }
   }
 
   return {
