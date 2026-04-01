@@ -158,6 +158,7 @@ const renderJobDetailPanel = async (
 
 describe("LegacyJobDetailPanel", () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     vi.clearAllMocks();
     mockSettings.renderMarkdownInJobDescriptions = true;
   });
@@ -345,6 +346,7 @@ describe("LegacyJobDetailPanel", () => {
   it("skips a job from the menu", async () => {
     const onJobUpdated = vi.fn().mockResolvedValue(undefined);
     vi.mocked(api.skipJob).mockResolvedValue(undefined as any);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
 
     await renderJobDetailPanel({
       activeTab: "all",
