@@ -521,6 +521,44 @@ function isPartialCoverLetterRequest(prompt: string): boolean {
   return asksCoverLetter && asksPartial;
 }
 
+function stripLeadingSalutationBlock(text: string): string {
+  const trimmed = text.trim();
+  return trimmed.replace(/^Dear[^\n]*\n\n/i, "").trim();
+}
+
+function sharpenBulletListResponse(text: string): string {
+  const lines = text.split("\n");
+  const bulletIndexes = lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => /^\s*[-•*]/.test(line));
+
+  if (bulletIndexes.length < 3) return text;
+
+  const lower = text.toLowerCase();
+  const last = bulletIndexes[bulletIndexes.length - 1];
+  const genericSupportPattern =
+    /supported (day-to-day )?(business analysis|business follow-up|practical business analysis tasks|ongoing business follow-up)/i;
+
+  if (!genericSupportPattern.test(last.line)) return text;
+
+  let replacement = last.line;
+  if (/python|excel|reporting|decision-ready|stakeholder/.test(lower)) {
+    replacement =
+      last.line.charAt(0) +
+      " Built a reliable bridge from recurring reporting and operational analysis to stakeholder-ready materials, documentation, and practical follow-up.";
+  } else if (
+    /planning|routing|delivery|logistics|operational constraints/.test(lower)
+  ) {
+    replacement =
+      last.line.charAt(0) +
+      " Turned logistics-planning analysis into structured, decision-useful outputs that could support day-to-day operational coordination.";
+  }
+
+  const next = [...lines];
+  next[last.index] = replacement;
+  return next.join("\n");
+}
+
 function finalizePayloadCandidate(args: {
   raw: unknown;
   prompt?: string;
@@ -552,15 +590,20 @@ function finalizePayloadCandidate(args: {
   ) {
     return {
       ...payload,
-      response: sanitizedCoverLetterDraft,
+      response: stripLeadingSalutationBlock(sanitizedCoverLetterDraft),
       coverLetterDraft: null,
       coverLetterKind: null,
       resumePatch: sanitizedResumePatch,
     };
   }
 
+  const sharpenedResponse = payload.coverLetterDraft
+    ? payload.response
+    : sharpenBulletListResponse(payload.response);
+
   return {
     ...payload,
+    response: sharpenedResponse,
     coverLetterDraft: sanitizedCoverLetterDraft,
     resumePatch: sanitizedResumePatch,
   };

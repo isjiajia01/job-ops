@@ -860,8 +860,62 @@ describe("ghostwriter service", () => {
       result.assistantMessage?.content ?? "",
     );
     expect(parsed.response).toContain("Coordinating day-to-day logistics work");
+    expect(parsed.response).not.toContain("Dear Hiring Team");
     expect(parsed.coverLetterDraft).toBeNull();
     expect(parsed.coverLetterKind).toBeNull();
+  });
+
+  it("sharpens overly generic third bullet lines in direct bullet responses", async () => {
+    const assistantPartial: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-bullet-sharpener",
+      content: "",
+      status: "partial",
+    };
+    const assistantComplete: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-bullet-sharpener",
+      status: "complete",
+      content: "",
+    };
+
+    mocks.repo.createMessage
+      .mockResolvedValueOnce(baseUserMessage)
+      .mockResolvedValueOnce(assistantPartial);
+    mocks.repo.updateMessage.mockImplementation(async (_id, update) => ({
+      ...assistantComplete,
+      content: update.content ?? "",
+    }));
+    mocks.repo.getMessageById.mockImplementation(async () => {
+      const [, update] = mocks.repo.updateMessage.mock.calls.at(-1) ?? [];
+      return {
+        ...assistantComplete,
+        content: update?.content ?? "",
+      };
+    });
+    mocks.llmCallJson.mockResolvedValue({
+      success: true,
+      data: {
+        response:
+          "• Automated recurring reporting workflows using Python and Excel, improving the efficiency of business and financial reporting tasks.\n• Analyzed operational and financial data and translated findings into clear, decision-ready presentation materials for stakeholders.\n• Supported day-to-day business analysis work with a structured approach to reporting, documentation, and practical follow-up across recurring tasks.",
+      },
+    });
+
+    const result = await sendMessageForJob({
+      jobId: "job-1",
+      content:
+        "Give me 3 resume bullets for my strongest matching experience for this job. Just give the wording.",
+    });
+
+    const parsed = parseGhostwriterAssistantContent(
+      result.assistantMessage?.content ?? "",
+    );
+    expect(parsed.response).toContain(
+      "stakeholder-ready materials, documentation, and practical follow-up",
+    );
+    expect(parsed.response).not.toContain(
+      "Supported day-to-day business analysis work",
+    );
   });
 
   it("keeps short cover letter drafts intact instead of over-cleaning them", async () => {
