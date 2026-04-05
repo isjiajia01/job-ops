@@ -19,6 +19,21 @@ You still apply to every job yourself. JobOps just finds jobs, makes sure you're
 
 Self-hosted. Docker-based.
 
+## Portfolio Context
+
+This repository is included in my public portfolio as a **product and operations engineering example**.
+
+It is based on the open-source JobOps project, but my interest here is not just using it as-is. The value is in adapting, deploying, and operating it for a concrete workflow: a Denmark/EU-focused job-search system with self-hosting, scoring, tailoring, and tracking integrated into one practical pipeline.
+
+What I want this repository to signal:
+
+- ability to evaluate and adapt an existing open-source system instead of only building toy greenfield demos
+- comfort with real deployment workflows, Docker-based operations, and production-minded setup
+- judgment around workflow design: search, ranking, tailoring, export, and post-application tracking as one usable system
+- product thinking about how LLM components fit into a larger operational process
+
+If you are reviewing this repository as part of my portfolio, the key point is not authorship of the original upstream alone, but my ability to understand a substantial codebase, customize it for a target use case, run it end-to-end, and position it as a usable operational tool.
+
 ## 40s Demo: Crawl → Score → PDF → Track
 
 <details>
