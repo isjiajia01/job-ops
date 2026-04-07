@@ -657,6 +657,29 @@ const migrations = [
        ORDER BY se.occurred_at DESC, se.id DESC
        LIMIT 1
      ), 'applied') = 'closed'`,
+
+  `CREATE TABLE IF NOT EXISTS job_chat_run_events (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    thread_id TEXT NOT NULL,
+    job_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    phase TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    detail TEXT,
+    payload TEXT,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (run_id) REFERENCES job_chat_runs(id) ON DELETE CASCADE,
+    FOREIGN KEY (thread_id) REFERENCES job_chat_threads(id) ON DELETE CASCADE,
+    FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_job_chat_run_events_run_sequence
+   ON job_chat_run_events(run_id, sequence)`,
+  `CREATE INDEX IF NOT EXISTS idx_job_chat_run_events_run_created_at
+   ON job_chat_run_events(run_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_job_chat_run_events_job_created_at
+   ON job_chat_run_events(job_id, created_at)`,
 ];
 
 console.log("🔧 Running database migrations...");

@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
     getActiveRunForThread: vi.fn(),
     createMessage: vi.fn(),
     createRun: vi.fn(),
+    createRunEvent: vi.fn(),
+    listRunsForJob: vi.fn(),
+    listRunEvents: vi.fn(),
     updateMessage: vi.fn(),
     completeRun: vi.fn(),
     completeRunIfRunning: vi.fn(),
@@ -77,6 +80,9 @@ vi.mock("../repositories/ghostwriter", () => ({
   getActiveRunForThread: mocks.repo.getActiveRunForThread,
   createMessage: mocks.repo.createMessage,
   createRun: mocks.repo.createRun,
+  createRunEvent: mocks.repo.createRunEvent,
+  listRunsForJob: mocks.repo.listRunsForJob,
+  listRunEvents: mocks.repo.listRunEvents,
   updateMessage: mocks.repo.updateMessage,
   completeRun: mocks.repo.completeRun,
   completeRunIfRunning: mocks.repo.completeRunIfRunning,
@@ -100,6 +106,8 @@ vi.mock("./llm/service", () => ({
 import {
   cancelRun,
   cancelRunForJob,
+  listRunEventsForJob,
+  listRunsForJob,
   regenerateMessage,
   sendMessage,
   sendMessageForJob,
@@ -309,6 +317,19 @@ describe("ghostwriter service", () => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
+    mocks.repo.createRunEvent.mockImplementation(async (input) => ({
+      id: `event-${input.eventType}`,
+      runId: input.runId,
+      threadId: input.threadId,
+      jobId: input.jobId,
+      sequence: 1,
+      phase: input.phase,
+      eventType: input.eventType,
+      title: input.title,
+      detail: input.detail ?? null,
+      payload: input.payload ?? null,
+      createdAt: Date.now(),
+    }));
     mocks.repo.completeRun.mockResolvedValue(null);
     mocks.repo.completeRunIfRunning.mockResolvedValue({
       id: "run-1",
@@ -1219,6 +1240,106 @@ describe("ghostwriter service", () => {
       "user-1",
       "assistant-regen",
     );
+  });
+
+  it("emits persisted timeline events while streaming a reply", async () => {
+    mocks.repo.createMessage
+      .mockResolvedValueOnce(baseUserMessage)
+      .mockResolvedValueOnce({
+        ...baseAssistantMessage,
+        id: "assistant-stream",
+        content: "",
+        status: "partial",
+      });
+    mocks.repo.updateMessage.mockResolvedValue({
+      ...baseAssistantMessage,
+      id: "assistant-stream",
+      content: '{"response":"Hello there"}',
+      status: "complete",
+    });
+    mocks.repo.getMessageById.mockResolvedValue({
+      ...baseAssistantMessage,
+      id: "assistant-stream",
+      content: '{"response":"Hello there"}',
+      status: "complete",
+    });
+    const onTimeline = vi.fn();
+
+    await sendMessageForJob({
+      jobId: "job-1",
+      content: "hello",
+      stream: {
+        onReady: vi.fn(),
+        onTimeline,
+        onDelta: vi.fn(),
+        onCompleted: vi.fn(),
+        onCancelled: vi.fn(),
+        onError: vi.fn(),
+      },
+    });
+
+    expect(mocks.repo.createRunEvent).toHaveBeenCalled();
+    expect(onTimeline).toHaveBeenCalled();
+    const emittedTypes = onTimeline.mock.calls.map((call) => call[0].event.eventType);
+    expect(emittedTypes).toContain("context_built");
+    expect(emittedTypes).toContain("runtime_planned");
+    expect(emittedTypes).toContain("completed");
+  });
+
+  it("lists runs and timeline events for a job", async () => {
+    mocks.repo.getOrCreateThreadForJob.mockResolvedValue(thread);
+    mocks.repo.listRunsForJob.mockResolvedValue([
+      {
+        id: "run-1",
+        threadId: "thread-1",
+        jobId: "job-1",
+        status: "completed",
+        model: "model-a",
+        provider: "openrouter",
+        errorCode: null,
+        errorMessage: null,
+        startedAt: 1,
+        completedAt: 2,
+        requestId: "req-123",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+    mocks.repo.getRunById.mockResolvedValue({
+      id: "run-1",
+      threadId: "thread-1",
+      jobId: "job-1",
+      status: "completed",
+      model: "model-a",
+      provider: "openrouter",
+      errorCode: null,
+      errorMessage: null,
+      startedAt: 1,
+      completedAt: 2,
+      requestId: "req-123",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    mocks.repo.listRunEvents.mockResolvedValue([
+      {
+        id: "event-1",
+        runId: "run-1",
+        threadId: "thread-1",
+        jobId: "job-1",
+        sequence: 1,
+        phase: "run",
+        eventType: "status",
+        title: "Run started",
+        detail: null,
+        payload: null,
+        createdAt: 1,
+      },
+    ]);
+
+    await expect(listRunsForJob({ jobId: "job-1" })).resolves.toHaveLength(1);
+    await expect(
+      listRunEventsForJob({ jobId: "job-1", runId: "run-1" }),
+    ).resolves.toHaveLength(1);
   });
 
   it("returns alreadyFinished when cancelling non-running run", async () => {

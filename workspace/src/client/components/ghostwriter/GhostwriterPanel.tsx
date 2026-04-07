@@ -1,4 +1,5 @@
 import type { Job } from "@shared/types";
+import { parseGhostwriterAssistantContent } from "@shared/utils/ghostwriter";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -13,6 +14,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
+import { RuntimeInspector } from "./RuntimeInspector";
 import { useConversationActions } from "./useConversationActions";
 
 type GhostwriterPanelProps = {
@@ -24,6 +26,7 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
 
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const {
+    activeRunId,
     branches,
     editMessage,
     isLoading,
@@ -31,6 +34,10 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
     messages,
     regenerate,
     resetConversation,
+    runTimeline,
+    runs,
+    selectRun,
+    selectedRunId,
     sendMessage,
     stopStreaming,
     streamingMessageId,
@@ -47,13 +54,34 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
     }
   });
 
-
   const canReset = useMemo(() => {
     return !isStreaming && messages.length > 0;
   }, [isStreaming, messages]);
 
+  const currentRuntime = useMemo(() => {
+    const latestAssistant = [...messages]
+      .reverse()
+      .find(
+        (message) => message.role === "assistant" && message.status === "complete",
+      );
+    if (!latestAssistant) return null;
+    const parsed = parseGhostwriterAssistantContent(latestAssistant.content);
+    if (!parsed.runtimePlan && !parsed.fitBrief && !parsed.executionTrace) return null;
+    return parsed;
+  }, [messages]);
+
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
+      <RuntimeInspector
+        activeRunId={activeRunId}
+        currentRuntime={currentRuntime}
+        isStreaming={isStreaming}
+        runTimeline={runTimeline}
+        runs={runs}
+        selectedRunId={selectedRunId}
+        onSelectRun={selectRun}
+      />
+
       <div
         ref={messageListRef}
         className="min-h-0 flex-1 overflow-y-auto border-b border-border/50 pb-3 pr-1"

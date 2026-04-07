@@ -253,6 +253,43 @@ export const jobChatRuns = sqliteTable(
   }),
 );
 
+export const jobChatRunEvents = sqliteTable(
+  "job_chat_run_events",
+  {
+    id: text("id").primaryKey(),
+    runId: text("run_id")
+      .notNull()
+      .references(() => jobChatRuns.id, { onDelete: "cascade" }),
+    threadId: text("thread_id")
+      .notNull()
+      .references(() => jobChatThreads.id, { onDelete: "cascade" }),
+    jobId: text("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    sequence: integer("sequence").notNull(),
+    phase: text("phase").notNull(),
+    eventType: text("event_type").notNull(),
+    title: text("title").notNull(),
+    detail: text("detail"),
+    payload: text("payload", { mode: "json" }),
+    createdAt: integer("created_at", { mode: "number" }).notNull(),
+  },
+  (table) => ({
+    runSequenceIndex: uniqueIndex("idx_job_chat_run_events_run_sequence").on(
+      table.runId,
+      table.sequence,
+    ),
+    runCreatedAtIndex: index("idx_job_chat_run_events_run_created_at").on(
+      table.runId,
+      table.createdAt,
+    ),
+    jobCreatedAtIndex: index("idx_job_chat_run_events_job_created_at").on(
+      table.jobId,
+      table.createdAt,
+    ),
+  }),
+);
+
 export const settings = sqliteTable("settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
@@ -458,6 +495,8 @@ export type JobChatMessageRow = typeof jobChatMessages.$inferSelect;
 export type NewJobChatMessageRow = typeof jobChatMessages.$inferInsert;
 export type JobChatRunRow = typeof jobChatRuns.$inferSelect;
 export type NewJobChatRunRow = typeof jobChatRuns.$inferInsert;
+export type JobChatRunEventRow = typeof jobChatRunEvents.$inferSelect;
+export type NewJobChatRunEventRow = typeof jobChatRunEvents.$inferInsert;
 export type SettingsRow = typeof settings.$inferSelect;
 export type NewSettingsRow = typeof settings.$inferInsert;
 export type PostApplicationIntegrationRow =

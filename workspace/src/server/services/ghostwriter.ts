@@ -14,9 +14,14 @@ import type {
   CandidateKnowledgeProject,
   GhostwriterAssistantPayload,
   GhostwriterCoverLetterKind,
+  GhostwriterFitBrief,
   GhostwriterWritingPreference,
   JobChatMessage,
   JobChatRun,
+  JobChatRunEvent,
+  JobChatRunEventPayloadByType,
+  JobChatRunEventType,
+  JobChatRunPhase,
 } from "@shared/types";
 import {
   getGhostwriterDisplayText,
@@ -33,6 +38,7 @@ import {
   buildJobChatPromptContext,
   type GhostwriterEvidencePack,
 } from "./ghostwriter-context";
+import { buildGhostwriterRuntimeState } from "./ghostwriter-runtime";
 import {
   lintCoverLetterDraft,
   sanitizeResumePatch,
@@ -68,6 +74,9 @@ const CHAT_RESPONSE_SCHEMA: JsonSchemaDefinition = {
         enum: ["letter", "email", null],
       },
       resumePatch: {
+        type: ["object", "null"],
+      },
+      fitBrief: {
         type: ["object", "null"],
       },
     },
@@ -638,6 +647,28 @@ function sharpenBulletListResponse(text: string): string {
   return next.join("\n");
 }
 
+function buildFitBrief(
+  evidencePack?: GhostwriterEvidencePack,
+): GhostwriterFitBrief | null {
+  if (!evidencePack) return null;
+  const strongestPoints = [
+    ...evidencePack.topFitReasons,
+    ...evidencePack.topEvidence,
+  ].slice(0, 4);
+  const risks = [
+    ...evidencePack.biggestGaps,
+    ...evidencePack.forbiddenClaims,
+  ].slice(0, 4);
+  if (!strongestPoints.length && !risks.length && !evidencePack.recommendedAngle) {
+    return null;
+  }
+  return {
+    strongestPoints,
+    risks,
+    recommendedAngle: evidencePack.recommendedAngle || null,
+  };
+}
+
 function finalizePayloadCandidate(args: {
   raw: unknown;
   prompt?: string;
@@ -646,6 +677,7 @@ function finalizePayloadCandidate(args: {
     ReturnType<typeof buildJobChatPromptContext>
   >["knowledgeBase"];
   evidencePack?: GhostwriterEvidencePack;
+  runtimeState?: ReturnType<typeof buildGhostwriterRuntimeState>;
 }): GhostwriterAssistantPayload {
   const payload = normalizeGhostwriterAssistantPayload(args.raw);
   if (!payload) {
@@ -681,6 +713,11 @@ function finalizePayloadCandidate(args: {
       coverLetterDraft: null,
       coverLetterKind: null,
       resumePatch: sanitizedResumePatch,
+      fitBrief: payload.fitBrief ?? buildFitBrief(args.evidencePack),
+      runtimePlan: args.runtimeState?.plan ?? payload.runtimePlan ?? null,
+      toolTrace: args.runtimeState?.toolResults ?? payload.toolTrace ?? null,
+      executionTrace:
+        args.runtimeState?.executionTrace ?? payload.executionTrace ?? null,
     };
   }
 
@@ -694,17 +731,29 @@ function finalizePayloadCandidate(args: {
     response: sharpenedResponse,
     coverLetterDraft: sanitizedCoverLetterDraft,
     resumePatch: sanitizedResumePatch,
+    fitBrief: payload.fitBrief ?? buildFitBrief(args.evidencePack),
+    runtimePlan: args.runtimeState?.plan ?? payload.runtimePlan ?? null,
+    toolTrace: args.runtimeState?.toolResults ?? payload.toolTrace ?? null,
+    executionTrace:
+      args.runtimeState?.executionTrace ?? payload.executionTrace ?? null,
   };
 }
 
 function rankPayloadCandidates(args: {
-  candidates: GhostwriterAssistantPayload[];
+  candidates: Array<GhostwriterAssistantPayload & { __variantName?: string }>;
   evidencePackSnapshot: string;
   profile: Awaited<ReturnType<typeof buildJobChatPromptContext>>["profile"];
   knowledgeBase: Awaited<
     ReturnType<typeof buildJobChatPromptContext>
   >["knowledgeBase"];
-}): GhostwriterAssistantPayload {
+}): {
+  ranked: Array<{
+    index: number;
+    candidate: GhostwriterAssistantPayload & { __variantName?: string };
+    evaluation: ReturnType<typeof scoreGhostwriterCandidate>;
+  }>;
+  winner: GhostwriterAssistantPayload & { __variantName?: string };
+} {
   const ranked = args.candidates
     .map((candidate, index) => ({
       index,
@@ -718,7 +767,10 @@ function rankPayloadCandidates(args: {
     }))
     .sort((a, b) => b.evaluation.score - a.evaluation.score);
 
-  return ranked[0]?.candidate ?? args.candidates[0];
+  return {
+    ranked,
+    winner: ranked[0]?.candidate ?? args.candidates[0],
+  };
 }
 
 function estimateTokenCount(value: string): number {
@@ -829,6 +881,7 @@ type GenerateReplyOptions = {
       messageId: string;
       requestId: string;
     }) => void;
+    onTimeline?: (payload: { runId: string; event: JobChatRunEvent }) => void;
     onDelta: (payload: {
       runId: string;
       messageId: string;
@@ -916,6 +969,50 @@ export async function listMessagesForJob(input: {
   return { messages, branches };
 }
 
+export async function listRunsForJob(input: {
+  jobId: string;
+  limit?: number;
+}): Promise<JobChatRun[]> {
+  await ensureJobThread(input.jobId);
+  return jobChatRepo.listRunsForJob(input.jobId, { limit: input.limit });
+}
+
+export async function listRunEventsForJob(input: {
+  jobId: string;
+  runId: string;
+}): Promise<JobChatRunEvent[]> {
+  const run = await jobChatRepo.getRunById(input.runId);
+  if (!run || run.jobId !== input.jobId) {
+    throw notFound("Run not found for this job");
+  }
+  return jobChatRepo.listRunEvents(input.runId);
+}
+
+async function emitRunTimelineEvent<TType extends JobChatRunEventType>(
+  run: JobChatRun,
+  options: GenerateReplyOptions,
+  input: {
+    phase: JobChatRunPhase;
+    eventType: TType;
+    title: string;
+    detail?: string | null;
+    payload: JobChatRunEventPayloadByType[TType];
+  },
+): Promise<JobChatRunEvent> {
+  const event = await jobChatRepo.createRunEvent({
+    runId: run.id,
+    threadId: run.threadId,
+    jobId: run.jobId,
+    phase: input.phase,
+    eventType: input.eventType,
+    title: input.title,
+    detail: input.detail ?? null,
+    payload: input.payload ?? null,
+  });
+  options.stream?.onTimeline?.({ runId: run.id, event });
+  return event;
+}
+
 async function runAssistantReply(
   options: GenerateReplyOptions,
 ): Promise<{ runId: string; messageId: string; message: string }> {
@@ -985,6 +1082,18 @@ async function runAssistantReply(
     messageId: assistantMessage.id,
     requestId,
   });
+  await emitRunTimelineEvent(run, options, {
+    phase: "run",
+    eventType: "status",
+    title: "Run started",
+    detail: "Ghostwriter created a persisted run record and opened a reply stream.",
+    payload: {
+      requestId,
+      assistantMessageId: assistantMessage.id,
+      model: llmConfig.model,
+      provider: llmConfig.provider,
+    },
+  });
 
   let accumulated = "";
 
@@ -996,6 +1105,35 @@ async function runAssistantReply(
     });
 
     const taskKind = classifyGhostwriterTask(options.prompt);
+    await emitRunTimelineEvent(run, options, {
+      phase: "context",
+      eventType: "context_built",
+      title: "Context assembled",
+      detail: "Loaded the job brief, active thread history, profile context, and evidence pack for this request.",
+      payload: {
+        historyMessages: history.length,
+        employer: context.job.employer,
+        title: context.job.title,
+        topFitReasons: context.evidencePack.topFitReasons.slice(0, 3),
+        topEvidence: context.evidencePack.topEvidence.slice(0, 3),
+      },
+    });
+    const runtimeState = buildGhostwriterRuntimeState({
+      context,
+      prompt: options.prompt,
+      taskKind,
+    });
+    await emitRunTimelineEvent(run, options, {
+      phase: "runtime",
+      eventType: "runtime_planned",
+      title: "Runtime planned",
+      detail: runtimeState.plan.deliverable,
+      payload: {
+        taskKind: runtimeState.plan.taskKind,
+        responseMode: runtimeState.plan.responseMode,
+        selectedTools: runtimeState.plan.selectedTools,
+      },
+    });
     const baseMessages = buildBaseLlmMessages({
       systemPrompt: context.systemPrompt,
       jobSnapshot: context.jobSnapshot,
@@ -1004,10 +1142,26 @@ async function runAssistantReply(
       evidencePackSnapshot: context.evidencePackSnapshot,
       history,
     });
+    const runtimeMessages = runtimeState.systemMessages;
 
     let structuredPayload: GhostwriterAssistantPayload;
+    let selectionMeta: {
+      candidateCount?: number;
+      winnerReason: string;
+      winningVariant?: string;
+      strongestEvidence?: string[];
+    } | null = null;
 
     if (taskKind === "memory_update") {
+      await emitRunTimelineEvent(run, options, {
+        phase: "memory",
+        eventType: "memory_update",
+        title: "Updating candidate memory",
+        detail: "The request was classified as a memory/profile update instead of a drafting run.",
+        payload: {
+          prompt: options.prompt,
+        },
+      });
       const memoryUpdate = await applyMemoryUpdateForPrompt({
         prompt: options.prompt,
         knowledgeBase: context.knowledgeBase,
@@ -1016,10 +1170,21 @@ async function runAssistantReply(
       context.knowledgeBase =
         memoryUpdate.nextKnowledgeBase ?? context.knowledgeBase;
     } else if (taskKind === "direct_chat") {
+      await emitRunTimelineEvent(run, options, {
+        phase: "generation",
+        eventType: "direct_reply",
+        title: "Generating direct reply",
+        detail: "Using the runtime brief to produce a concise answer or wording help response.",
+        payload: {
+          prompt: options.prompt,
+          responseMode: runtimeState.plan.responseMode,
+        },
+      });
       const llmResult = await llm.callJson<{ response: string }>({
         model: llmConfig.model,
         messages: [
           ...baseMessages,
+          ...runtimeMessages,
           {
             role: "user",
             content: options.prompt,
@@ -1047,6 +1212,7 @@ async function runAssistantReply(
         profile: context.profile,
         knowledgeBase: context.knowledgeBase,
         evidencePack: context.evidencePack,
+        runtimeState,
       });
     } else {
       const strategyPrompt = [
@@ -1056,10 +1222,21 @@ async function runAssistantReply(
         "Set requiresClarification to true only if a good draft would clearly suffer without extra user input.",
       ].join("\n\n");
 
+      await emitRunTimelineEvent(run, options, {
+        phase: "strategy",
+        eventType: "strategy_requested",
+        title: "Planning writing strategy",
+        detail: "Ghostwriter is first building an explicit strategy before drafting the artifact.",
+        payload: {
+          prompt: options.prompt,
+          taskKind,
+        },
+      });
       const strategyResult = await llm.callJson<WritingStrategy>({
         model: llmConfig.model,
         messages: [
           ...baseMessages,
+          ...runtimeMessages,
           {
             role: "system",
             content:
@@ -1093,6 +1270,17 @@ async function runAssistantReply(
         }),
         ...strategyResult.data,
       } satisfies WritingStrategy;
+      await emitRunTimelineEvent(run, options, {
+        phase: "strategy",
+        eventType: "strategy_built",
+        title: "Strategy locked",
+        detail: strategy.angle,
+        payload: {
+          strongestEvidence: strategy.strongestEvidence.slice(0, 4),
+          weakPoints: strategy.weakPoints.slice(0, 3),
+          paragraphPlan: strategy.paragraphPlan.slice(0, 5),
+        },
+      });
 
       if (
         strategy.requiresClarification &&
@@ -1149,14 +1337,25 @@ async function runAssistantReply(
           },
         ];
 
-        const candidatePayloads: GhostwriterAssistantPayload[] = [];
+        const candidatePayloads: Array<GhostwriterAssistantPayload & { __variantName?: string }> = [];
 
         for (const variant of variantDirectives) {
+          await emitRunTimelineEvent(run, options, {
+            phase: "generation",
+            eventType: "variant_requested",
+            title: `Drafting ${variant.name} variant`,
+            detail: variant.instruction,
+            payload: {
+              variant: variant.name,
+              coverLetterKind: variant.coverLetterKind,
+            },
+          });
           const variantResult = await llm.callJson<GhostwriterAssistantPayload>(
             {
               model: llmConfig.model,
               messages: [
                 ...baseMessages,
+                ...runtimeMessages,
                 {
                   role: "system",
                   content: `Approved Writing Strategy:\n${strategySnapshot}`,
@@ -1196,24 +1395,79 @@ async function runAssistantReply(
             profile: context.profile,
             knowledgeBase: context.knowledgeBase,
             evidencePack: context.evidencePack,
+            runtimeState,
           });
 
           candidatePayloads.push({
             ...candidate,
+            __variantName: variant.name,
             coverLetterKind: candidate.coverLetterDraft
               ? (candidate.coverLetterKind ?? variant.coverLetterKind)
               : candidate.coverLetterKind,
           });
+          await emitRunTimelineEvent(run, options, {
+            phase: "generation",
+            eventType: "variant_completed",
+            title: `Finished ${variant.name} variant`,
+            detail: candidate.coverLetterDraft
+              ? "Variant includes a drafted application artifact."
+              : "Variant completed as a reply / patch candidate.",
+            payload: {
+              variant: variant.name,
+              hasCoverLetterDraft: Boolean(candidate.coverLetterDraft),
+              hasResumePatch: Boolean(candidate.resumePatch),
+              responsePreview: candidate.response.slice(0, 180),
+            },
+          });
         }
 
-        structuredPayload = rankPayloadCandidates({
+        const ranking = rankPayloadCandidates({
           candidates: candidatePayloads,
           evidencePackSnapshot: context.evidencePackSnapshot,
           profile: context.profile,
           knowledgeBase: context.knowledgeBase,
         });
+        structuredPayload = ranking.winner;
+        const topEvaluation = ranking.ranked[0]?.evaluation;
+        selectionMeta = {
+          candidateCount: ranking.ranked.length,
+          winnerReason:
+            topEvaluation?.reasons?.[0] ??
+            "This variant best balanced specificity, evidence density, and output usefulness.",
+          winningVariant: ranking.winner.__variantName,
+          strongestEvidence:
+            structuredPayload.fitBrief?.strongestPoints.slice(0, 3) ??
+            context.evidencePack.topEvidence.slice(0, 3),
+        };
       }
     }
+
+    await emitRunTimelineEvent(run, options, {
+      phase: "finalize",
+      eventType: "selection",
+      title: "Final response selected",
+      detail: "Ranked the generated candidate(s) and prepared the final structured assistant payload.",
+      payload: {
+        hasCoverLetterDraft: Boolean(structuredPayload.coverLetterDraft),
+        coverLetterKind: structuredPayload.coverLetterKind,
+        hasResumePatch: Boolean(structuredPayload.resumePatch),
+        fitBriefStrongPoints:
+          structuredPayload.fitBrief?.strongestPoints.slice(0, 3) ?? [],
+        selectedOutputMode: structuredPayload.coverLetterDraft
+          ? structuredPayload.coverLetterKind === "email"
+            ? "application_email"
+            : "cover_letter"
+          : structuredPayload.resumePatch
+            ? "resume_patch"
+            : "direct_response",
+        winnerReason:
+          selectionMeta?.winnerReason ??
+          "Selected the strongest available final response for this request.",
+        candidateCount: selectionMeta?.candidateCount,
+        winningVariant: selectionMeta?.winningVariant,
+        strongestEvidence: selectionMeta?.strongestEvidence,
+      },
+    });
 
     await applyResumePatchToJob(options.jobId, structuredPayload, {
       profile: context.profile,
@@ -1235,6 +1489,13 @@ async function runAssistantReply(
           status: "cancelled",
           errorCode: "REQUEST_TIMEOUT",
           errorMessage: "Generation cancelled by user",
+        });
+        await emitRunTimelineEvent(run, options, {
+          phase: "terminal",
+          eventType: "cancelled",
+          title: "Run cancelled",
+          detail: "The operator stopped the stream before the response finished.",
+          payload: {},
         });
         options.stream?.onCancelled({ runId: run.id, message: cancelled });
         return {
@@ -1264,6 +1525,15 @@ async function runAssistantReply(
 
     await jobChatRepo.completeRun(run.id, {
       status: "completed",
+    });
+    await emitRunTimelineEvent(run, options, {
+      phase: "terminal",
+      eventType: "completed",
+      title: "Run completed",
+      detail: "The assistant response was persisted and the stream closed cleanly.",
+      payload: {
+        outputChars: accumulated.length,
+      },
     });
 
     options.stream?.onCompleted({
@@ -1298,6 +1568,25 @@ async function runAssistantReply(
       errorCode: code,
       errorMessage: message,
     });
+    if (isCancelled) {
+      await emitRunTimelineEvent(run, options, {
+        phase: "terminal",
+        eventType: "cancelled",
+        title: "Run cancelled",
+        detail: message,
+        payload: {},
+      });
+    } else {
+      await emitRunTimelineEvent(run, options, {
+        phase: "terminal",
+        eventType: "failed",
+        title: "Run failed",
+        detail: message,
+        payload: {
+          code,
+        },
+      });
+    }
 
     if (isCancelled) {
       options.stream?.onCancelled({ runId: run.id, message: failedMessage });

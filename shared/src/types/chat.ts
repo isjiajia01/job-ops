@@ -62,11 +62,41 @@ export interface GhostwriterResumePatch {
 
 export type GhostwriterCoverLetterKind = "letter" | "email";
 
+export interface GhostwriterRuntimePlanSummary {
+  role: string;
+  taskKind: string;
+  deliverable: string;
+  responseMode: "draft" | "brief" | "mixed" | "memory_update";
+  executionNotes: string[];
+  selectedTools: string[];
+}
+
+export interface GhostwriterToolTraceEntry {
+  name: string;
+  purpose: string;
+  output: string;
+}
+
+export interface GhostwriterExecutionStage {
+  stage: string;
+  summary: string;
+}
+
+export interface GhostwriterFitBrief {
+  strongestPoints: string[];
+  risks: string[];
+  recommendedAngle: string | null;
+}
+
 export interface GhostwriterAssistantPayload {
   response: string;
   coverLetterDraft: string | null;
   coverLetterKind: GhostwriterCoverLetterKind | null;
   resumePatch: GhostwriterResumePatch | null;
+  fitBrief?: GhostwriterFitBrief | null;
+  runtimePlan?: GhostwriterRuntimePlanSummary | null;
+  toolTrace?: GhostwriterToolTraceEntry[] | null;
+  executionTrace?: GhostwriterExecutionStage[] | null;
 }
 
 export interface BranchInfo {
@@ -94,9 +124,102 @@ export interface JobChatRun {
   updatedAt: string;
 }
 
+export type JobChatRunPhase =
+  | "run"
+  | "context"
+  | "runtime"
+  | "memory"
+  | "strategy"
+  | "generation"
+  | "finalize"
+  | "terminal";
+
+export type JobChatRunEventPayloadByType = {
+  cancelled: {};
+  completed: { outputChars?: number };
+  context_built: {
+    historyMessages: number;
+    employer?: string;
+    title?: string;
+    topFitReasons?: string[];
+    topEvidence?: string[];
+  };
+  direct_reply: {
+    prompt: string;
+    responseMode: GhostwriterRuntimePlanSummary["responseMode"];
+  };
+  memory_update: {
+    prompt: string;
+  };
+  runtime_planned: {
+    taskKind: string;
+    responseMode: GhostwriterRuntimePlanSummary["responseMode"];
+    selectedTools: string[];
+  };
+  selection: {
+    hasCoverLetterDraft: boolean;
+    coverLetterKind: GhostwriterCoverLetterKind | null;
+    hasResumePatch: boolean;
+    fitBriefStrongPoints: string[];
+    selectedOutputMode: "cover_letter" | "application_email" | "resume_patch" | "direct_response";
+    winnerReason: string;
+    candidateCount?: number;
+    winningVariant?: string;
+    strongestEvidence?: string[];
+  };
+  status: {
+    requestId: string;
+    assistantMessageId: string;
+    model: string | null;
+    provider: string | null;
+  };
+  strategy_built: {
+    strongestEvidence: string[];
+    weakPoints: string[];
+    paragraphPlan: string[];
+  };
+  strategy_requested: {
+    prompt: string;
+    taskKind: string;
+  };
+  variant_completed: {
+    variant: string;
+    hasCoverLetterDraft: boolean;
+    hasResumePatch: boolean;
+    responsePreview: string;
+  };
+  variant_requested: {
+    variant: string;
+    coverLetterKind: GhostwriterCoverLetterKind | null;
+  };
+  failed: { code?: string };
+};
+
+export type JobChatRunEventType = keyof JobChatRunEventPayloadByType;
+
+export interface JobChatRunEventBase {
+  id: string;
+  runId: string;
+  threadId: string;
+  jobId: string;
+  sequence: number;
+  phase: JobChatRunPhase;
+  title: string;
+  detail: string | null;
+  createdAt: number;
+}
+
+export type JobChatRunEvent = {
+  [K in JobChatRunEventType]: JobChatRunEventBase & {
+    eventType: K;
+    payload: JobChatRunEventPayloadByType[K];
+  };
+}[JobChatRunEventType];
+
 export type ApplicationChatThread = JobChatThread;
 export type ApplicationChatMessage = JobChatMessage;
 export type ApplicationChatRun = JobChatRun;
+export type ApplicationChatRunEvent = JobChatRunEvent;
 
 export type JobChatStreamEvent =
   | {
@@ -111,6 +234,11 @@ export type JobChatStreamEvent =
       runId: string;
       messageId: string;
       delta: string;
+    }
+  | {
+      type: "timeline";
+      runId: string;
+      event: JobChatRunEvent;
     }
   | {
       type: "completed";
