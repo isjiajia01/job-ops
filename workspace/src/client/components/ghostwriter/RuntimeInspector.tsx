@@ -38,6 +38,7 @@ export const RuntimeInspector: React.FC<RuntimeInspectorProps> = ({
     currentRuntime?.fitBrief?.strongestPoints.length ||
       currentRuntime?.fitBrief?.risks.length,
   );
+  const hasClaims = Boolean(currentRuntime?.claimPlan?.claims.length);
   const hasTrace = Boolean(currentRuntime?.executionTrace?.length);
   const defaultTab = hasOverview
     ? "overview"
@@ -142,6 +143,7 @@ export const RuntimeInspector: React.FC<RuntimeInspectorProps> = ({
         <TabsList className="h-auto flex-wrap justify-start gap-1 bg-background/50 p-1">
           {hasOverview ? <TabsTrigger value="overview">Overview</TabsTrigger> : null}
           {hasFit ? <TabsTrigger value="fit">Fit</TabsTrigger> : null}
+          {hasClaims ? <TabsTrigger value="claims">Claims</TabsTrigger> : null}
           {hasTrace ? <TabsTrigger value="trace">Trace</TabsTrigger> : null}
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
         </TabsList>
@@ -205,6 +207,55 @@ export const RuntimeInspector: React.FC<RuntimeInspectorProps> = ({
             </div>
           ) : (
             <div className="text-[11px] text-muted-foreground">No fit brief yet.</div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="claims" className="mt-3">
+          {currentRuntime?.claimPlan ? (
+            <div className="space-y-3">
+              <div className="rounded border border-border/50 bg-background/60 p-3">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  target role angle
+                </div>
+                <div className="mt-1 text-muted-foreground">{currentRuntime.claimPlan.targetRoleAngle}</div>
+                <div className="mt-3 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  opening strategy
+                </div>
+                <div className="mt-1 text-muted-foreground">{currentRuntime.claimPlan.openingStrategy}</div>
+              </div>
+              <div className="grid gap-2 md:grid-cols-2">
+                {currentRuntime.claimPlan.claims.map((claim) => (
+                  <div key={claim.id} className="rounded border border-border/50 bg-background/60 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        {claim.priority} claim
+                      </div>
+                      <div className="rounded-full border border-border/60 px-2 py-0.5 text-[10px] text-muted-foreground">
+                        {claim.riskLevel} risk
+                      </div>
+                    </div>
+                    <div className="mt-2 text-foreground/90">{claim.claim}</div>
+                    {claim.evidenceSnippets.length ? (
+                      <div className="mt-2 text-[11px] text-muted-foreground">
+                        evidence: {claim.evidenceSnippets.slice(0, 2).join(" · ")}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+              {currentRuntime.claimPlan.excludedClaims.length ? (
+                <div className="rounded border border-amber-200/60 bg-amber-50/50 p-3">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    excluded claims
+                  </div>
+                  <div className="mt-2 text-muted-foreground">
+                    {currentRuntime.claimPlan.excludedClaims.join(" · ")}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="text-[11px] text-muted-foreground">No claim plan yet.</div>
           )}
         </TabsContent>
 

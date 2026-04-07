@@ -47,6 +47,45 @@ describe("RunTimeline", () => {
         threadId: "thread-1",
         jobId: "job-1",
         sequence: 2,
+        phase: "strategy",
+        eventType: "claim_plan_built",
+        title: "Claim plan built",
+        detail: "Planning-heavy early-career operator",
+        payload: {
+          targetRoleAngle: "Planning-heavy early-career operator",
+          openingStrategy: "Open from the operating need.",
+          claimCount: 4,
+          mustClaimCount: 2,
+          excludedClaims: ["Do not overstate direct ownership"],
+        },
+        createdAt: 2,
+      },
+      {
+        id: "event-3",
+        runId: "run-1",
+        threadId: "thread-1",
+        jobId: "job-1",
+        sequence: 3,
+        phase: "finalize",
+        eventType: "variant_scored",
+        title: "Scored evidence-heavy",
+        detail: "Scored against evidence coverage.",
+        payload: {
+          variant: "evidence-heavy",
+          finalScore: 18,
+          coveredClaimIds: ["claim-role-fit"],
+          mustClaimCoverage: 1,
+          evidenceCoverage: 1,
+          penalties: [],
+        },
+        createdAt: 3,
+      },
+      {
+        id: "event-4",
+        runId: "run-1",
+        threadId: "thread-1",
+        jobId: "job-1",
+        sequence: 4,
         phase: "finalize",
         eventType: "selection",
         title: "Final response selected",
@@ -61,8 +100,9 @@ describe("RunTimeline", () => {
           candidateCount: 3,
           winningVariant: "evidence-heavy",
           strongestEvidence: ["Operational optimisation evidence"],
+          coveredClaimIds: ["claim-role-fit"],
         },
-        createdAt: 2,
+        createdAt: 4,
       },
     ];
 
@@ -82,8 +122,10 @@ describe("RunTimeline", () => {
     expect(screen.getByText("Finalize")).toBeInTheDocument();
     expect(screen.getByText("Runtime planned")).toBeInTheDocument();
     expect(screen.getByText(/selectedTools:/i)).toBeInTheDocument();
+    expect(screen.getByText(/openingStrategy:/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/coveredClaimIds:/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/winnerReason:/i)).toBeInTheDocument();
-    expect(screen.getByText(/evidence-heavy/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/evidence-heavy/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText("mixed").length).toBeGreaterThan(0);
   });
 

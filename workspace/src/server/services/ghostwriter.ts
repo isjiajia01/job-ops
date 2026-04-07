@@ -13,6 +13,7 @@ import type {
   CandidateKnowledgeFact,
   CandidateKnowledgeProject,
   GhostwriterAssistantPayload,
+  GhostwriterClaimPlan,
   GhostwriterCoverLetterKind,
   GhostwriterFitBrief,
   GhostwriterWritingPreference,
@@ -39,6 +40,7 @@ import {
   type GhostwriterEvidencePack,
 } from "./ghostwriter-context";
 import { buildGhostwriterRuntimeState } from "./ghostwriter-runtime";
+import { buildGhostwriterClaimPlan } from "./ghostwriter-claim-plan";
 import {
   lintCoverLetterDraft,
   sanitizeResumePatch,
@@ -77,6 +79,9 @@ const CHAT_RESPONSE_SCHEMA: JsonSchemaDefinition = {
         type: ["object", "null"],
       },
       fitBrief: {
+        type: ["object", "null"],
+      },
+      claimPlan: {
         type: ["object", "null"],
       },
     },
@@ -678,6 +683,7 @@ function finalizePayloadCandidate(args: {
   >["knowledgeBase"];
   evidencePack?: GhostwriterEvidencePack;
   runtimeState?: ReturnType<typeof buildGhostwriterRuntimeState>;
+  claimPlan?: GhostwriterClaimPlan | null;
 }): GhostwriterAssistantPayload {
   const payload = normalizeGhostwriterAssistantPayload(args.raw);
   if (!payload) {
@@ -714,6 +720,7 @@ function finalizePayloadCandidate(args: {
       coverLetterKind: null,
       resumePatch: sanitizedResumePatch,
       fitBrief: payload.fitBrief ?? buildFitBrief(args.evidencePack),
+      claimPlan: args.claimPlan ?? payload.claimPlan ?? null,
       runtimePlan: args.runtimeState?.plan ?? payload.runtimePlan ?? null,
       toolTrace: args.runtimeState?.toolResults ?? payload.toolTrace ?? null,
       executionTrace:
@@ -732,6 +739,7 @@ function finalizePayloadCandidate(args: {
     coverLetterDraft: sanitizedCoverLetterDraft,
     resumePatch: sanitizedResumePatch,
     fitBrief: payload.fitBrief ?? buildFitBrief(args.evidencePack),
+    claimPlan: args.claimPlan ?? payload.claimPlan ?? null,
     runtimePlan: args.runtimeState?.plan ?? payload.runtimePlan ?? null,
     toolTrace: args.runtimeState?.toolResults ?? payload.toolTrace ?? null,
     executionTrace:
@@ -1150,6 +1158,7 @@ async function runAssistantReply(
       winnerReason: string;
       winningVariant?: string;
       strongestEvidence?: string[];
+      coveredClaimIds?: string[];
     } | null = null;
 
     if (taskKind === "memory_update") {
@@ -1282,6 +1291,26 @@ async function runAssistantReply(
         },
       });
 
+      const claimPlan = buildGhostwriterClaimPlan({
+        context,
+        prompt: options.prompt,
+        taskKind,
+        strategy,
+      });
+      await emitRunTimelineEvent(run, options, {
+        phase: "strategy",
+        eventType: "claim_plan_built",
+        title: "Claim plan built",
+        detail: claimPlan.targetRoleAngle,
+        payload: {
+          targetRoleAngle: claimPlan.targetRoleAngle,
+          openingStrategy: claimPlan.openingStrategy,
+          claimCount: claimPlan.claims.length,
+          mustClaimCount: claimPlan.claims.filter((claim) => claim.priority === "must").length,
+          excludedClaims: claimPlan.excludedClaims.slice(0, 3),
+        },
+      });
+
       if (
         strategy.requiresClarification &&
         strategy.clarifyingQuestions.length
@@ -1294,6 +1323,7 @@ async function runAssistantReply(
           coverLetterDraft: null,
           coverLetterKind: null,
           resumePatch: null,
+          claimPlan,
         };
       } else {
         const strategySnapshot = buildStrategySnapshot(strategy);
@@ -1303,7 +1333,7 @@ async function runAssistantReply(
           instruction: string;
         }> = [
           {
-            name: "conservative",
+            name: "angle-led",
             coverLetterKind:
               taskKind === "application_email"
                 ? "email"
@@ -1311,7 +1341,7 @@ async function runAssistantReply(
                   ? "letter"
                   : null,
             instruction:
-              "Variant profile: safest and most disciplined. Keep every claim tightly evidence-backed and understate weak areas rather than stretching them.",
+              `Variant profile: angle-led. Open from this role angle: ${claimPlan.targetRoleAngle}. Use this opening strategy: ${claimPlan.openingStrategy}`,
           },
           {
             name: "balanced",
@@ -1322,7 +1352,7 @@ async function runAssistantReply(
                   ? "letter"
                   : null,
             instruction:
-              "Variant profile: balanced and practical. Prioritize the recommended angle and make the draft feel specific, useful, and employer-need driven.",
+              `Variant profile: balanced and practical. Cover these prioritized claims in order: ${claimPlan.claims.map((claim) => `${claim.priority}:${claim.claim}`).join(" | ")}`,
           },
           {
             name: "evidence-heavy",
@@ -1333,7 +1363,7 @@ async function runAssistantReply(
                   ? "letter"
                   : null,
             instruction:
-              "Variant profile: maximize concrete evidence density. Prefer stronger examples over broader motivation language and keep fluff close to zero.",
+              `Variant profile: maximize evidence density. Reuse these evidence snippets before adding softer framing: ${claimPlan.claims.flatMap((claim) => claim.evidenceSnippets).slice(0, 6).join(" | ")}`,
           },
         ];
 
@@ -1359,6 +1389,10 @@ async function runAssistantReply(
                 {
                   role: "system",
                   content: `Approved Writing Strategy:\n${strategySnapshot}`,
+                },
+                {
+                  role: "system",
+                  content: `Approved Claim Plan:\n${JSON.stringify(claimPlan, null, 2)}`,
                 },
                 {
                   role: "system",
@@ -1396,6 +1430,7 @@ async function runAssistantReply(
             knowledgeBase: context.knowledgeBase,
             evidencePack: context.evidencePack,
             runtimeState,
+            claimPlan,
           });
 
           candidatePayloads.push({
@@ -1427,6 +1462,22 @@ async function runAssistantReply(
           profile: context.profile,
           knowledgeBase: context.knowledgeBase,
         });
+        for (const rankedCandidate of ranking.ranked) {
+          await emitRunTimelineEvent(run, options, {
+            phase: "finalize",
+            eventType: "variant_scored",
+            title: `Scored ${rankedCandidate.candidate.__variantName ?? `variant-${rankedCandidate.index + 1}`}`,
+            detail: rankedCandidate.evaluation.reasons.slice(0, 2).join(" · ") || "Scored against evidence coverage and output quality.",
+            payload: {
+              variant: rankedCandidate.candidate.__variantName ?? `variant-${rankedCandidate.index + 1}`,
+              finalScore: rankedCandidate.evaluation.score,
+              coveredClaimIds: rankedCandidate.evaluation.coveredClaimIds,
+              mustClaimCoverage: rankedCandidate.evaluation.mustClaimCoverage,
+              evidenceCoverage: rankedCandidate.evaluation.evidenceCoverage,
+              penalties: rankedCandidate.evaluation.penalties,
+            },
+          });
+        }
         structuredPayload = ranking.winner;
         const topEvaluation = ranking.ranked[0]?.evaluation;
         selectionMeta = {
@@ -1438,6 +1489,7 @@ async function runAssistantReply(
           strongestEvidence:
             structuredPayload.fitBrief?.strongestPoints.slice(0, 3) ??
             context.evidencePack.topEvidence.slice(0, 3),
+          coveredClaimIds: topEvaluation?.coveredClaimIds ?? [],
         };
       }
     }
@@ -1466,6 +1518,7 @@ async function runAssistantReply(
         candidateCount: selectionMeta?.candidateCount,
         winningVariant: selectionMeta?.winningVariant,
         strongestEvidence: selectionMeta?.strongestEvidence,
+        coveredClaimIds: selectionMeta?.coveredClaimIds,
       },
     });
 

@@ -318,6 +318,10 @@ export function scoreGhostwriterCandidate(args: {
 }): {
   score: number;
   reasons: string[];
+  coveredClaimIds: string[];
+  mustClaimCoverage: number;
+  evidenceCoverage: number;
+  penalties: string[];
 } {
   const reasons: string[] = [];
   const profileEvidenceTokens = buildProfileEvidenceTokenSet(
@@ -331,6 +335,18 @@ export function scoreGhostwriterCandidate(args: {
   }
 
   let score = 0;
+  const coveredClaimIds: string[] = [];
+  const penalties: string[] = [];
+  const renderedText = [
+    args.payload.response,
+    args.payload.coverLetterDraft,
+    args.payload.resumePatch?.tailoredSummary,
+    args.payload.resumePatch?.tailoredHeadline,
+    args.payload.resumePatch?.tailoredSkills?.map((skill) => [skill.name, ...(skill.keywords ?? [])].join(" ")).join(" "),
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .toLowerCase();
 
   if (args.payload.coverLetterDraft) {
     const draft = args.payload.coverLetterDraft;
@@ -357,11 +373,13 @@ export function scoreGhostwriterCandidate(args: {
     if (containsHighRiskPatchLanguage(draft)) {
       score -= 6;
       reasons.push("high-risk-language");
+      penalties.push("high-risk-language");
     }
 
     if (genericMatches > 0) {
       score -= genericMatches * 2;
       reasons.push(`generic-phrases:${genericMatches}`);
+      penalties.push(`generic-phrases:${genericMatches}`);
     }
   }
 
@@ -398,7 +416,38 @@ export function scoreGhostwriterCandidate(args: {
     }
   }
 
+  if (args.payload.claimPlan?.claims?.length) {
+    for (const claim of args.payload.claimPlan.claims) {
+      const evidenceMatched = claim.evidenceSnippets.some((snippet) => {
+        const normalized = snippet.toLowerCase().trim();
+        return normalized.length >= 10 && renderedText.includes(normalized.slice(0, Math.min(normalized.length, 48)));
+      });
+      const claimMatched = renderedText.includes(claim.claim.toLowerCase().slice(0, Math.min(claim.claim.length, 48)));
+      if (evidenceMatched || claimMatched) {
+        coveredClaimIds.push(claim.id);
+        score += claim.priority === "must" ? 5 : claim.priority === "high" ? 3 : 2;
+      } else if (claim.priority === "must") {
+        score -= 4;
+        penalties.push(`missed-must-claim:${claim.id}`);
+      }
+    }
+
+    for (const excluded of args.payload.claimPlan.excludedClaims ?? []) {
+      const normalized = excluded.toLowerCase().trim();
+      if (normalized.length >= 8 && renderedText.includes(normalized.slice(0, Math.min(normalized.length, 48)))) {
+        score -= 5;
+        penalties.push(`excluded-claim:${normalized.slice(0, 24)}`);
+      }
+    }
+  }
+
   score += Math.max(args.payload.response.trim().length > 0 ? 1 : 0, 0);
 
-  return { score, reasons };
+  const mustClaimCoverage = args.payload.claimPlan?.claims.filter((claim) => claim.priority === "must" && coveredClaimIds.includes(claim.id)).length ?? 0;
+  const evidenceCoverage = coveredClaimIds.length;
+
+  if (mustClaimCoverage > 0) reasons.push(`must-claims:${mustClaimCoverage}`);
+  if (evidenceCoverage > 0) reasons.push(`claim-coverage:${evidenceCoverage}`);
+
+  return { score, reasons, coveredClaimIds, mustClaimCoverage, evidenceCoverage, penalties };
 }

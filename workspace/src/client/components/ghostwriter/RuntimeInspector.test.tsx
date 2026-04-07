@@ -23,6 +23,24 @@ describe("RuntimeInspector", () => {
         executionNotes: ["Lead with evidence"],
         selectedTools: ["job_brief", "proof_point_bank"],
       },
+      claimPlan: {
+        targetRoleAngle: "Planning-heavy early-career operator",
+        openingStrategy: "Open from the operating need and anchor it in the lead proof point.",
+        claims: [
+          {
+            id: "claim-role-fit",
+            claim: "Position the candidate around planning-heavy early-career fit.",
+            jdRequirement: "Planning and optimisation support",
+            evidenceIds: ["module-1"],
+            evidenceSnippets: ["Operational optimisation evidence"],
+            priority: "must",
+            riskLevel: "low",
+            guidance: "Lead with strongest proof point",
+          },
+        ],
+        excludedClaims: ["Do not overstate direct ownership"],
+        reviewerFocus: ["Prefer evidence-backed wording"],
+      },
       executionTrace: [{ stage: "plan", summary: "Built runtime plan." }],
       toolTrace: null,
     };
@@ -103,6 +121,7 @@ describe("RuntimeInspector", () => {
     expect(screen.getByText("Runtime inspector")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Overview" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Fit" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Claims" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Trace" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Timeline" })).toBeInTheDocument();
 

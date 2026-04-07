@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type {
   GhostwriterAssistantPayload,
+  GhostwriterClaimPlan,
   GhostwriterExecutionStage,
   GhostwriterFitBrief,
   GhostwriterResumePatch,
@@ -129,6 +130,25 @@ const ghostwriterRuntimePlanSummarySchema = z.object({
   selectedTools: z.array(z.string().trim().min(1).max(120)).max(12),
 });
 
+const ghostwriterClaimPlanItemSchema = z.object({
+  id: z.string().trim().min(1).max(120),
+  claim: z.string().trim().min(1).max(600),
+  jdRequirement: z.string().trim().max(600).nullable().optional(),
+  evidenceIds: z.array(z.string().trim().min(1).max(120)).max(8),
+  evidenceSnippets: z.array(z.string().trim().min(1).max(600)).max(8),
+  priority: z.enum(["must", "high", "medium"]),
+  riskLevel: z.enum(["low", "medium", "high"]),
+  guidance: z.string().trim().max(600).nullable().optional(),
+});
+
+const ghostwriterClaimPlanSchema = z.object({
+  targetRoleAngle: z.string().trim().min(1).max(600),
+  openingStrategy: z.string().trim().min(1).max(600),
+  claims: z.array(ghostwriterClaimPlanItemSchema).max(8),
+  excludedClaims: z.array(z.string().trim().min(1).max(600)).max(8),
+  reviewerFocus: z.array(z.string().trim().min(1).max(600)).max(8),
+});
+
 const ghostwriterToolTraceEntrySchema = z.object({
   name: z.string().trim().min(1).max(120),
   purpose: z.string().trim().min(1).max(240),
@@ -146,6 +166,7 @@ export const ghostwriterAssistantPayloadSchema = z.object({
   coverLetterKind: z.enum(["letter", "email"]).nullable().optional(),
   resumePatch: ghostwriterResumePatchSchema.nullable().optional(),
   fitBrief: ghostwriterFitBriefSchema.nullable().optional(),
+  claimPlan: ghostwriterClaimPlanSchema.nullable().optional(),
   runtimePlan: ghostwriterRuntimePlanSummarySchema.nullable().optional(),
   toolTrace: z.array(ghostwriterToolTraceEntrySchema).max(12).nullable().optional(),
   executionTrace: z.array(ghostwriterExecutionStageSchema).max(12).nullable().optional(),
@@ -272,6 +293,52 @@ function normalizeFitBrief(value: unknown): GhostwriterFitBrief | null {
   return { strongestPoints, risks, recommendedAngle };
 }
 
+function normalizeClaimPlan(value: unknown): GhostwriterClaimPlan | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const targetRoleAngle = toNonEmptyString(record.targetRoleAngle);
+  const openingStrategy = toNonEmptyString(record.openingStrategy);
+  const claims = Array.isArray(record.claims)
+    ? record.claims
+        .map((item) => {
+          if (!item || typeof item !== "object") return null;
+          const claimRecord = item as Record<string, unknown>;
+          const id = toNonEmptyString(claimRecord.id);
+          const claim = toNonEmptyString(claimRecord.claim);
+          const priority = toNonEmptyString(claimRecord.priority);
+          const riskLevel = toNonEmptyString(claimRecord.riskLevel);
+          if (!id || !claim) return null;
+          if (priority !== "must" && priority !== "high" && priority !== "medium") return null;
+          if (riskLevel !== "low" && riskLevel !== "medium" && riskLevel !== "high") return null;
+          const evidenceIds = Array.isArray(claimRecord.evidenceIds)
+            ? claimRecord.evidenceIds.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => Boolean(entry))
+            : [];
+          const evidenceSnippets = Array.isArray(claimRecord.evidenceSnippets)
+            ? claimRecord.evidenceSnippets.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => Boolean(entry))
+            : [];
+          return {
+            id,
+            claim,
+            jdRequirement: toNonEmptyString(claimRecord.jdRequirement),
+            evidenceIds,
+            evidenceSnippets,
+            priority,
+            riskLevel,
+            guidance: toNonEmptyString(claimRecord.guidance),
+          };
+        })
+        .filter((item): item is GhostwriterClaimPlan["claims"][number] => Boolean(item))
+    : [];
+  const excludedClaims = Array.isArray(record.excludedClaims)
+    ? record.excludedClaims.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => Boolean(entry))
+    : [];
+  const reviewerFocus = Array.isArray(record.reviewerFocus)
+    ? record.reviewerFocus.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => Boolean(entry))
+    : [];
+  if (!targetRoleAngle || !openingStrategy || claims.length === 0) return null;
+  return { targetRoleAngle, openingStrategy, claims, excludedClaims, reviewerFocus };
+}
+
 function normalizeRuntimePlan(value: unknown): GhostwriterRuntimePlanSummary | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
@@ -338,6 +405,7 @@ export function normalizeGhostwriterAssistantPayload(
       coverLetterKind: parsed.data.coverLetterKind ?? null,
       resumePatch: normalizeResumePatch(parsed.data.resumePatch),
       fitBrief: normalizeFitBrief(parsed.data.fitBrief),
+      claimPlan: normalizeClaimPlan(parsed.data.claimPlan),
       runtimePlan: normalizeRuntimePlan(parsed.data.runtimePlan),
       toolTrace: normalizeToolTrace(parsed.data.toolTrace),
       executionTrace: normalizeExecutionTrace(parsed.data.executionTrace),
@@ -353,6 +421,7 @@ export function normalizeGhostwriterAssistantPayload(
           coverLetterKind: null,
           resumePatch: null,
           fitBrief: null,
+          claimPlan: null,
           runtimePlan: null,
           toolTrace: null,
           executionTrace: null,
@@ -391,6 +460,7 @@ export function normalizeGhostwriterAssistantPayload(
       normalizeLooseResumePatch(record.resumePatch) ??
       normalizeLooseResumePatch(record),
     fitBrief: normalizeFitBrief(record.fitBrief),
+    claimPlan: normalizeClaimPlan(record.claimPlan),
     runtimePlan: normalizeRuntimePlan(record.runtimePlan),
     toolTrace: normalizeToolTrace(record.toolTrace),
     executionTrace: normalizeExecutionTrace(record.executionTrace),
@@ -406,6 +476,7 @@ export function serializeGhostwriterAssistantPayload(
     coverLetterKind: payload.coverLetterKind,
     resumePatch: payload.resumePatch,
     fitBrief: payload.fitBrief ?? null,
+    claimPlan: payload.claimPlan ?? null,
     runtimePlan: payload.runtimePlan ?? null,
     toolTrace: payload.toolTrace ?? null,
     executionTrace: payload.executionTrace ?? null,
@@ -423,6 +494,7 @@ export function parseGhostwriterAssistantContent(
       coverLetterKind: null,
       resumePatch: null,
       fitBrief: null,
+      claimPlan: null,
       runtimePlan: null,
       toolTrace: null,
       executionTrace: null,
@@ -448,6 +520,7 @@ export function parseGhostwriterAssistantContent(
     coverLetterKind: null,
     resumePatch: null,
     fitBrief: null,
+    claimPlan: null,
     runtimePlan: null,
     toolTrace: null,
     executionTrace: null,

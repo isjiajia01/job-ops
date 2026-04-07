@@ -88,12 +88,32 @@ export interface GhostwriterFitBrief {
   recommendedAngle: string | null;
 }
 
+export interface GhostwriterClaimPlanItem {
+  id: string;
+  claim: string;
+  jdRequirement: string | null;
+  evidenceIds: string[];
+  evidenceSnippets: string[];
+  priority: "must" | "high" | "medium";
+  riskLevel: "low" | "medium" | "high";
+  guidance: string | null;
+}
+
+export interface GhostwriterClaimPlan {
+  targetRoleAngle: string;
+  openingStrategy: string;
+  claims: GhostwriterClaimPlanItem[];
+  excludedClaims: string[];
+  reviewerFocus: string[];
+}
+
 export interface GhostwriterAssistantPayload {
   response: string;
   coverLetterDraft: string | null;
   coverLetterKind: GhostwriterCoverLetterKind | null;
   resumePatch: GhostwriterResumePatch | null;
   fitBrief?: GhostwriterFitBrief | null;
+  claimPlan?: GhostwriterClaimPlan | null;
   runtimePlan?: GhostwriterRuntimePlanSummary | null;
   toolTrace?: GhostwriterToolTraceEntry[] | null;
   executionTrace?: GhostwriterExecutionStage[] | null;
@@ -137,6 +157,13 @@ export type JobChatRunPhase =
 export type JobChatRunEventPayloadByType = {
   cancelled: {};
   completed: { outputChars?: number };
+  claim_plan_built: {
+    targetRoleAngle: string;
+    openingStrategy: string;
+    claimCount: number;
+    mustClaimCount: number;
+    excludedClaims?: string[];
+  };
   context_built: {
     historyMessages: number;
     employer?: string;
@@ -166,6 +193,7 @@ export type JobChatRunEventPayloadByType = {
     candidateCount?: number;
     winningVariant?: string;
     strongestEvidence?: string[];
+    coveredClaimIds?: string[];
   };
   status: {
     requestId: string;
@@ -187,6 +215,14 @@ export type JobChatRunEventPayloadByType = {
     hasCoverLetterDraft: boolean;
     hasResumePatch: boolean;
     responsePreview: string;
+  };
+  variant_scored: {
+    variant: string;
+    finalScore: number;
+    coveredClaimIds: string[];
+    mustClaimCoverage: number;
+    evidenceCoverage: number;
+    penalties: string[];
   };
   variant_requested: {
     variant: string;

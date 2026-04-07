@@ -113,6 +113,19 @@ function renderPayloadPreview(event: JobChatRunEvent) {
         </div>
       );
     }
+    case "claim_plan_built": {
+      const payload = event.payload;
+      return (
+        <div className="mt-2 space-y-2">
+          {renderChipRow([`claims:${payload.claimCount}`, `must:${payload.mustClaimCount}`])}
+          <div className="text-[11px] text-muted-foreground">
+            <span className="font-medium text-foreground/80">openingStrategy:</span>{" "}
+            {payload.openingStrategy}
+          </div>
+          {renderArraySummary("excludedClaims", payload.excludedClaims)}
+        </div>
+      );
+    }
     case "direct_reply": {
       const payload = event.payload;
       return (
@@ -168,6 +181,22 @@ function renderPayloadPreview(event: JobChatRunEvent) {
           ) : null}
           {renderArraySummary("fitBriefStrongPoints", payload.fitBriefStrongPoints)}
           {renderArraySummary("strongestEvidence", payload.strongestEvidence)}
+          {renderArraySummary("coveredClaimIds", payload.coveredClaimIds)}
+        </div>
+      );
+    }
+    case "variant_scored": {
+      const payload = event.payload;
+      return (
+        <div className="mt-2 space-y-2">
+          {renderChipRow([
+            payload.variant,
+            `score:${payload.finalScore}`,
+            `must:${payload.mustClaimCoverage}`,
+            `evidence:${payload.evidenceCoverage}`,
+          ])}
+          {renderArraySummary("coveredClaimIds", payload.coveredClaimIds)}
+          {renderArraySummary("penalties", payload.penalties)}
         </div>
       );
     }
