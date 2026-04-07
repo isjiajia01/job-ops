@@ -53,14 +53,6 @@ function asText(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-function _firstSentence(text: string): string {
-  const sentence = text
-    .split(/(?<=[.!?])\s+/)
-    .map((part) => part.trim())
-    .find(Boolean);
-  return sentence ?? text.trim();
-}
-
 function normalizeBullet(text: string): string | null {
   const trimmed = text.replace(/^[-*•\d.\s]+/, "").trim();
   if (!trimmed) return null;
