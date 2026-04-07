@@ -1,8 +1,12 @@
 import { z } from "zod";
 import type {
   GhostwriterAssistantPayload,
+  GhostwriterExecutionStage,
+  GhostwriterFitBrief,
   GhostwriterResumePatch,
+  GhostwriterRuntimePlanSummary,
   GhostwriterSkillGroup,
+  GhostwriterToolTraceEntry,
 } from "../types";
 
 const ghostwriterSkillGroupSchema = z.object({
@@ -110,11 +114,41 @@ export const candidateKnowledgeBaseSchema = z.object({
   inboxItems: z.array(candidateKnowledgeInboxItemSchema).max(400).default([]),
 });
 
+const ghostwriterFitBriefSchema = z.object({
+  strongestPoints: z.array(z.string().trim().min(1).max(400)).max(8),
+  risks: z.array(z.string().trim().min(1).max(400)).max(8),
+  recommendedAngle: z.string().trim().max(500).nullable().optional(),
+});
+
+const ghostwriterRuntimePlanSummarySchema = z.object({
+  role: z.string().trim().min(1).max(200),
+  taskKind: z.string().trim().min(1).max(80),
+  deliverable: z.string().trim().min(1).max(1000),
+  responseMode: z.enum(["draft", "brief", "mixed", "memory_update"]),
+  executionNotes: z.array(z.string().trim().min(1).max(400)).max(12),
+  selectedTools: z.array(z.string().trim().min(1).max(120)).max(12),
+});
+
+const ghostwriterToolTraceEntrySchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  purpose: z.string().trim().min(1).max(240),
+  output: z.string().trim().min(1).max(2400),
+});
+
+const ghostwriterExecutionStageSchema = z.object({
+  stage: z.string().trim().min(1).max(120),
+  summary: z.string().trim().min(1).max(500),
+});
+
 export const ghostwriterAssistantPayloadSchema = z.object({
   response: z.string(),
   coverLetterDraft: z.string().trim().max(12000).nullable().optional(),
   coverLetterKind: z.enum(["letter", "email"]).nullable().optional(),
   resumePatch: ghostwriterResumePatchSchema.nullable().optional(),
+  fitBrief: ghostwriterFitBriefSchema.nullable().optional(),
+  runtimePlan: ghostwriterRuntimePlanSummarySchema.nullable().optional(),
+  toolTrace: z.array(ghostwriterToolTraceEntrySchema).max(12).nullable().optional(),
+  executionTrace: z.array(ghostwriterExecutionStageSchema).max(12).nullable().optional(),
 });
 
 function toNonEmptyString(value: unknown): string | null {
@@ -224,6 +258,71 @@ function normalizeResumePatch(
   return normalized;
 }
 
+function normalizeFitBrief(value: unknown): GhostwriterFitBrief | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const strongestPoints = Array.isArray(record.strongestPoints)
+    ? record.strongestPoints.map((item) => toNonEmptyString(item)).filter((item): item is string => Boolean(item))
+    : [];
+  const risks = Array.isArray(record.risks)
+    ? record.risks.map((item) => toNonEmptyString(item)).filter((item): item is string => Boolean(item))
+    : [];
+  const recommendedAngle = toNonEmptyString(record.recommendedAngle);
+  if (!strongestPoints.length && !risks.length && !recommendedAngle) return null;
+  return { strongestPoints, risks, recommendedAngle };
+}
+
+function normalizeRuntimePlan(value: unknown): GhostwriterRuntimePlanSummary | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const role = toNonEmptyString(record.role);
+  const taskKind = toNonEmptyString(record.taskKind);
+  const deliverable = toNonEmptyString(record.deliverable);
+  const responseMode = toNonEmptyString(record.responseMode);
+  const executionNotes = Array.isArray(record.executionNotes)
+    ? record.executionNotes.map((item) => toNonEmptyString(item)).filter((item): item is string => Boolean(item))
+    : [];
+  const selectedTools = Array.isArray(record.selectedTools)
+    ? record.selectedTools.map((item) => toNonEmptyString(item)).filter((item): item is string => Boolean(item))
+    : [];
+  if (!role || !taskKind || !deliverable) return null;
+  if (responseMode !== "draft" && responseMode !== "brief" && responseMode !== "mixed" && responseMode !== "memory_update") {
+    return null;
+  }
+  return { role, taskKind, deliverable, responseMode, executionNotes, selectedTools };
+}
+
+function normalizeToolTrace(value: unknown): GhostwriterToolTraceEntry[] | null {
+  if (!Array.isArray(value)) return null;
+  const entries = value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const record = item as Record<string, unknown>;
+      const name = toNonEmptyString(record.name);
+      const purpose = toNonEmptyString(record.purpose);
+      const output = toNonEmptyString(record.output);
+      if (!name || !purpose || !output) return null;
+      return { name, purpose, output };
+    })
+    .filter((item): item is GhostwriterToolTraceEntry => Boolean(item));
+  return entries.length ? entries : null;
+}
+
+function normalizeExecutionTrace(value: unknown): GhostwriterExecutionStage[] | null {
+  if (!Array.isArray(value)) return null;
+  const entries = value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const record = item as Record<string, unknown>;
+      const stage = toNonEmptyString(record.stage);
+      const summary = toNonEmptyString(record.summary);
+      if (!stage || !summary) return null;
+      return { stage, summary };
+    })
+    .filter((item): item is GhostwriterExecutionStage => Boolean(item));
+  return entries.length ? entries : null;
+}
+
 export function normalizeGhostwriterAssistantPayload(
   input: unknown,
 ): GhostwriterAssistantPayload | null {
@@ -238,6 +337,10 @@ export function normalizeGhostwriterAssistantPayload(
           : null,
       coverLetterKind: parsed.data.coverLetterKind ?? null,
       resumePatch: normalizeResumePatch(parsed.data.resumePatch),
+      fitBrief: normalizeFitBrief(parsed.data.fitBrief),
+      runtimePlan: normalizeRuntimePlan(parsed.data.runtimePlan),
+      toolTrace: normalizeToolTrace(parsed.data.toolTrace),
+      executionTrace: normalizeExecutionTrace(parsed.data.executionTrace),
     };
   }
 
@@ -249,6 +352,10 @@ export function normalizeGhostwriterAssistantPayload(
           coverLetterDraft: null,
           coverLetterKind: null,
           resumePatch: null,
+          fitBrief: null,
+          runtimePlan: null,
+          toolTrace: null,
+          executionTrace: null,
         }
       : null;
   }
@@ -283,6 +390,10 @@ export function normalizeGhostwriterAssistantPayload(
     resumePatch:
       normalizeLooseResumePatch(record.resumePatch) ??
       normalizeLooseResumePatch(record),
+    fitBrief: normalizeFitBrief(record.fitBrief),
+    runtimePlan: normalizeRuntimePlan(record.runtimePlan),
+    toolTrace: normalizeToolTrace(record.toolTrace),
+    executionTrace: normalizeExecutionTrace(record.executionTrace),
   };
 }
 
@@ -294,6 +405,10 @@ export function serializeGhostwriterAssistantPayload(
     coverLetterDraft: payload.coverLetterDraft,
     coverLetterKind: payload.coverLetterKind,
     resumePatch: payload.resumePatch,
+    fitBrief: payload.fitBrief ?? null,
+    runtimePlan: payload.runtimePlan ?? null,
+    toolTrace: payload.toolTrace ?? null,
+    executionTrace: payload.executionTrace ?? null,
   });
 }
 
@@ -307,6 +422,10 @@ export function parseGhostwriterAssistantContent(
       coverLetterDraft: null,
       coverLetterKind: null,
       resumePatch: null,
+      fitBrief: null,
+      runtimePlan: null,
+      toolTrace: null,
+      executionTrace: null,
       isStructured: false,
     };
   }
@@ -328,6 +447,10 @@ export function parseGhostwriterAssistantContent(
     coverLetterDraft: null,
     coverLetterKind: null,
     resumePatch: null,
+    fitBrief: null,
+    runtimePlan: null,
+    toolTrace: null,
+    executionTrace: null,
     isStructured: false,
   };
 }
