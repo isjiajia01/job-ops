@@ -41,6 +41,7 @@ import {
 } from "./ghostwriter-context";
 import { buildGhostwriterRuntimeState } from "./ghostwriter-runtime";
 import { buildGhostwriterClaimPlan } from "./ghostwriter-claim-plan";
+import { buildLocalEvidenceSelectionPlan } from "./ghostwriter-evidence-selector";
 import {
   buildEditorialRewritePrompt,
   shouldRunEditorialRewrite,
@@ -1305,17 +1306,23 @@ async function runAssistantReply(
         },
       });
 
+      const evidenceSelection = buildLocalEvidenceSelectionPlan({
+        context,
+        taskKind,
+        prompt: options.prompt,
+      });
       const claimPlan = buildGhostwriterClaimPlan({
         context,
         prompt: options.prompt,
         taskKind,
         strategy,
+        evidenceSelection,
       });
       await emitRunTimelineEvent(run, options, {
         phase: "strategy",
         eventType: "claim_plan_built",
         title: "Claim plan built",
-        detail: claimPlan.targetRoleAngle,
+        detail: `${claimPlan.targetRoleAngle} | selected proof points: ${evidenceSelection.selectedModules.map((module) => module.label).join(", ") || "none"}`,
         payload: {
           targetRoleAngle: claimPlan.targetRoleAngle,
           openingStrategy: claimPlan.openingStrategy,
@@ -1341,6 +1348,23 @@ async function runAssistantReply(
         };
       } else {
         const strategySnapshot = buildStrategySnapshot(strategy);
+        const evidenceSelectionSnapshot = [
+          `Selected evidence ids: ${evidenceSelection.selectedModuleIds.join(", ") || "none"}`,
+          evidenceSelection.selectedModules.length
+            ? `Selected proof points:\n- ${evidenceSelection.selectedModules.map((module) => `${module.label}: ${module.preferredFraming}`).join("\n- ")}`
+            : "Selected proof points: none",
+          evidenceSelection.requiredEvidenceSnippets.length
+            ? `Required evidence snippets:\n- ${evidenceSelection.requiredEvidenceSnippets.join("\n- ")}`
+            : null,
+          evidenceSelection.blockedClaims.length
+            ? `Blocked claims:\n- ${evidenceSelection.blockedClaims.join("\n- ")}`
+            : null,
+          evidenceSelection.writerInstructions.length
+            ? `Writer instructions:\n- ${evidenceSelection.writerInstructions.join("\n- ")}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join("\n\n");
         const variantDirectives: Array<{
           name: string;
           coverLetterKind: GhostwriterCoverLetterKind | null;
@@ -1410,7 +1434,20 @@ async function runAssistantReply(
                 },
                 {
                   role: "system",
-                  content: variant.instruction,
+                  content: `Approved Evidence Selection:\n${evidenceSelectionSnapshot}`,
+                },
+                {
+                  role: "system",
+                  content: [
+                    variant.instruction,
+                    "Hard gate: stay inside the approved evidence selection unless the user explicitly asks to use a different project.",
+                    `Prefer evidence ids: ${evidenceSelection.selectedModuleIds.join(", ") || "none"}.`,
+                    evidenceSelection.blockedClaims.length
+                      ? `Never do these: ${evidenceSelection.blockedClaims.join(" | ")}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join("\n"),
                 },
                 {
                   role: "user",

@@ -1,4 +1,5 @@
 import type { GhostwriterClaimPlan, GhostwriterClaimPlanItem } from "@shared/types";
+import type { GhostwriterEvidenceSelectionPlan } from "./ghostwriter-evidence-selector";
 import type { GhostwriterEvidencePack, JobChatPromptContext } from "./ghostwriter-context";
 
 type GhostwriterTaskKind =
@@ -89,11 +90,14 @@ export function buildGhostwriterClaimPlan(args: {
   prompt: string;
   taskKind: GhostwriterTaskKind;
   strategy: WritingStrategy;
+  evidenceSelection?: GhostwriterEvidenceSelectionPlan | null;
 }): GhostwriterClaimPlan {
   const { context, strategy, taskKind } = args;
   const { evidencePack } = context;
   const evidenceHints = buildEvidenceHints(evidencePack);
-  const topModules = evidencePack.experienceBank.slice(0, 3);
+  const topModules = args.evidenceSelection?.selectedModules?.length
+    ? args.evidenceSelection.selectedModules.slice(0, 3)
+    : evidencePack.experienceBank.slice(0, 3);
   const claims: GhostwriterClaimPlanItem[] = [];
 
   claims.push(
@@ -170,17 +174,19 @@ export function buildGhostwriterClaimPlan(args: {
   }
 
   const excludedClaims = dedupe([
+    ...(args.evidenceSelection?.blockedClaims ?? []),
     ...evidencePack.forbiddenClaims,
     ...evidencePack.biggestGaps.map((gap) => `Do not overstate ${gap}`),
-  ]).slice(0, 5);
+  ]).slice(0, 6);
 
   const reviewerFocus = dedupe([
     "Check that every major paragraph maps to at least one prioritized claim.",
     "Penalize generic openings that do not carry job-specific evidence.",
     "Prefer variants that cover must-claims with stronger evidence density.",
+    ...(args.evidenceSelection?.writerInstructions ?? []).slice(0, 2),
     ...strategy.paragraphPlan.slice(0, 2),
     ...excludedClaims.slice(0, 2).map((item) => `Avoid: ${item}`),
-  ]).slice(0, 6);
+  ]).slice(0, 7);
 
   return {
     targetRoleAngle: strategy.angle || evidencePack.recommendedAngle || evidenceHints[0] || "Evidence-backed fit angle",
