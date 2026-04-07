@@ -423,12 +423,11 @@ export const ApplicationWorkspacePage: React.FC = () => {
   }
 
   return (
-    <main className="mx-auto max-w-[1440px] space-y-6 px-4 py-6 pb-12 lg:px-6 xl:px-8">
-      <div className="flex items-center justify-between gap-4 rounded-full border border-slate-200 bg-white/80 px-3 py-2 shadow-sm backdrop-blur">
+    <main className="container mx-auto max-w-6xl space-y-6 px-4 py-6 pb-12">
+      <div className="flex items-center justify-between gap-4">
         <Button
           variant="ghost"
           size="sm"
-          className="rounded-full px-4 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
           onClick={() => navigate("/applications")}
         >
           <ArrowLeft className="h-4 w-4" />
@@ -439,7 +438,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
       {job ? (
         <ApplicationHeader
           job={job}
-          className="rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#f8fbfa_0%,#f3f7f6_100%)] p-5 shadow-[0_24px_80px_rgba(15,23,42,0.08)]"
+          className="rounded-lg border border-border/40 bg-muted/5 p-4"
           onCheckSponsor={handleCheckSponsor}
         />
       ) : (
@@ -449,7 +448,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
       )}
 
       {job && (
-        <div className="rounded-[32px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,251,250,0.96)_0%,rgba(242,247,245,0.98)_100%)] p-6 shadow-[0_28px_90px_rgba(15,23,42,0.08)] backdrop-blur">
+        <div className="rounded-2xl border border-border/60 bg-card/85 p-5 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/70">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="flex-1 space-y-4">
               <div className="flex flex-wrap items-center gap-2">
@@ -704,17 +703,17 @@ export const ApplicationWorkspacePage: React.FC = () => {
         </div>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.95fr)]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.95fr)]">
         <div className="space-y-6">
-          <Card className="overflow-hidden rounded-[28px] border-slate-200 bg-[linear-gradient(180deg,#f8fbfa_0%,#f3f7f6_100%)] shadow-[0_22px_70px_rgba(15,23,42,0.07)]">
-            <CardHeader className="border-b border-slate-200 bg-transparent px-6 py-5">
+          <Card className="border-border/50 overflow-hidden">
+            <CardHeader className="border-b border-border/50 bg-muted/20">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                  <CardTitle className="flex items-center gap-2 font-serif text-2xl text-slate-900">
+                  <CardTitle className="flex items-center gap-2 text-base">
                     <MessageSquareText className="h-4 w-4" />
                     Ghostwriter workspace
                   </CardTitle>
-                  <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-500">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     This is now the center of the application workflow: iterate
                     on role fit, tailored bullets, and cover-letter language
                     here.
@@ -724,13 +723,13 @@ export const ApplicationWorkspacePage: React.FC = () => {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="h-[720px] min-h-[560px] p-5 pt-0">
+              <div className="h-[620px] min-h-[520px] p-4">
                 {job ? <GhostwriterPanel job={job} /> : null}
               </div>
             </CardContent>
           </Card>
 
-          <Card className="rounded-[28px] border-slate-200 bg-white shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
+          <Card className="border-border/50">
             <CardHeader>
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <CardTitle className="flex items-center gap-2 text-base">
@@ -781,7 +780,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
         </div>
 
         <div className="space-y-4">
-          <Card className="rounded-[28px] border-slate-200 bg-white shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
+          <Card className="border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <CalendarClock className="h-4 w-4" />
@@ -872,7 +871,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
           </Card>
 
           {tasks.length > 0 && (
-            <Card className="rounded-[28px] border-slate-200 bg-white shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
+            <Card className="border-border/50">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <CalendarClock className="h-4 w-4" />

@@ -498,7 +498,7 @@ export const ProfileHubPage: React.FC = () => {
       <PageHeader
         icon={ContactRound}
         title="Profile Hub"
-        subtitle="Capture material, shape evidence, and keep Ghostwriter aligned with a cleaner editorial workspace"
+        subtitle="Capture material, triage inbox items, and keep Ghostwriter aligned"
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" asChild>
@@ -538,23 +538,7 @@ export const ProfileHubPage: React.FC = () => {
         {...pendingImportCounts}
       />
 
-      <PageMain className="space-y-5">
-        <section className="rounded-[32px] border border-slate-200 bg-[linear-gradient(180deg,#f8fbfa_0%,#f3f7f6_100%)] p-6 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
-            <div>
-              <div className="w-fit rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-emerald-700">Candidate memory studio</div>
-              <h2 className="mt-4 font-serif text-4xl text-slate-900">Build the profile Ghostwriter should actually write from.</h2>
-              <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-500">Capture raw material, promote only the strongest facts and proof points, and keep your default writing rules visible enough that the system keeps learning the same editorial taste.</p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[24px] border border-slate-200 bg-white/80 p-4 shadow-sm"><div className="text-xs uppercase tracking-wide text-slate-400">Pending inbox</div><div className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{pendingInbox.length}</div></div>
-              <div className="rounded-[24px] border border-slate-200 bg-white/80 p-4 shadow-sm"><div className="text-xs uppercase tracking-wide text-slate-400">Projects</div><div className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{projects.length}</div></div>
-              <div className="rounded-[24px] border border-slate-200 bg-white/80 p-4 shadow-sm"><div className="text-xs uppercase tracking-wide text-slate-400">Facts</div><div className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{facts.length}</div></div>
-              <div className="rounded-[24px] border border-slate-200 bg-white/80 p-4 shadow-sm"><div className="text-xs uppercase tracking-wide text-slate-400">Rules</div><div className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{preferences.length}</div></div>
-            </div>
-          </div>
-        </section>
-
+      <PageMain>
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-xl border border-border/60 bg-card/40 p-4">
             <div className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -590,10 +574,10 @@ export const ProfileHubPage: React.FC = () => {
           </div>
         </section>
 
-        <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)] md:p-6">
+        <section className="mt-4 rounded-xl border border-border/60 bg-card/40 p-4 md:p-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="font-serif text-2xl tracking-tight text-slate-900">
+              <h2 className="text-lg font-semibold tracking-tight">
                 New material
               </h2>
               <p className="text-sm text-muted-foreground">
@@ -614,7 +598,7 @@ export const ProfileHubPage: React.FC = () => {
               value={captureText}
               onChange={(event) => setCaptureText(event.target.value)}
               placeholder="Paste a project update, writing preference, or personal fact…"
-              className="min-h-[140px] rounded-[24px] border-slate-200 bg-slate-50/60 xl:flex-1"
+              className="min-h-[120px] xl:flex-1"
             />
             <Button
               onClick={handleDigest}
@@ -631,11 +615,11 @@ export const ProfileHubPage: React.FC = () => {
           </div>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(380px,0.8fr)]">
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)] md:p-6">
+        <section className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
+          <div className="rounded-xl border border-border/60 bg-card/40 p-4 md:p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="font-serif text-2xl tracking-tight text-slate-900">
+                <h2 className="text-lg font-semibold tracking-tight">
                   Inbox tracker
                 </h2>
                 <p className="text-sm text-muted-foreground">
@@ -703,10 +687,10 @@ export const ProfileHubPage: React.FC = () => {
           </div>
 
           <div className="space-y-4">
-            <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)] md:p-6">
+            <section className="rounded-xl border border-border/60 bg-card/40 p-4 md:p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="font-serif text-2xl tracking-tight text-slate-900">
+                  <h2 className="text-lg font-semibold tracking-tight">
                     Selected item
                   </h2>
                   <p className="text-sm text-muted-foreground">
@@ -827,10 +811,10 @@ export const ProfileHubPage: React.FC = () => {
               )}
             </section>
 
-            <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)] md:p-6">
+            <section className="rounded-xl border border-border/60 bg-card/40 p-4 md:p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="font-serif text-2xl tracking-tight text-slate-900">
+                  <h2 className="text-lg font-semibold tracking-tight">
                     Workspace snapshot
                   </h2>
                   <p className="text-sm text-muted-foreground">
