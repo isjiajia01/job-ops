@@ -3,6 +3,7 @@ import type {
   GhostwriterClaimPlan,
   GhostwriterDiagnostic,
 } from "@shared/types";
+import { buildDiagnostic, diagnosticFromIssueCode } from "./ghostwriter-diagnostics";
 
 export type GhostwriterReviewScores = {
   specificity: number;
@@ -48,12 +49,12 @@ export function reviewGhostwriterPayload(args: {
       },
       issues: ["empty-output"],
       diagnostics: [
-        {
+        buildDiagnostic({
           code: "empty-output",
           category: "quality",
           severity: "high",
           detail: "The model returned no substantive draft text.",
-        },
+        }),
       ],
       shouldRewrite: false,
     };
@@ -135,76 +136,44 @@ export function reviewGhostwriterPayload(args: {
   );
 
   if (genericHits > 0) {
-    issues.push(`generic-language:${genericHits}`);
-    diagnostics.push({
-      code: `generic-language:${genericHits}`,
-      category: "generic-language",
-      severity: genericHits >= 3 ? "high" : "medium",
-      detail: "The draft still contains template-style application language.",
-    });
+    const code = `generic-language:${genericHits}`;
+    issues.push(code);
+    diagnostics.push(diagnosticFromIssueCode(code));
   }
   if (overclaimHits > 0) {
-    issues.push(`overclaim-risk:${overclaimHits}`);
-    diagnostics.push({
-      code: `overclaim-risk:${overclaimHits}`,
-      category: "overclaim",
-      severity: overclaimHits >= 2 ? "high" : "medium",
-      detail: "Some wording implies unsupported scope, seniority, or ownership.",
-    });
+    const code = `overclaim-risk:${overclaimHits}`;
+    issues.push(code);
+    diagnostics.push(diagnosticFromIssueCode(code));
   }
   if (longSentenceCount > 0) {
-    issues.push(`long-sentences:${longSentenceCount}`);
-    diagnostics.push({
-      code: `long-sentences:${longSentenceCount}`,
-      category: "structure",
-      severity: longSentenceCount >= 2 ? "high" : "medium",
-      detail: "One or more sentences are too long and reduce clarity.",
-    });
+    const code = `long-sentences:${longSentenceCount}`;
+    issues.push(code);
+    diagnostics.push(diagnosticFromIssueCode(code));
   }
   if (averageSentenceLength > 165) {
-    issues.push("dense-sentence-flow");
-    diagnostics.push({
-      code: "dense-sentence-flow",
-      category: "style",
-      severity: "medium",
-      detail: "Sentence flow is too dense and over-smoothed.",
-    });
+    const code = "dense-sentence-flow";
+    issues.push(code);
+    diagnostics.push(diagnosticFromIssueCode(code));
   }
   if (repeatedOpeners > 2) {
-    issues.push(`repetitive-openers:${repeatedOpeners}`);
-    diagnostics.push({
-      code: `repetitive-openers:${repeatedOpeners}`,
-      category: "style",
-      severity: "medium",
-      detail: "Too many sentences start with the same opener pattern.",
-    });
+    const code = `repetitive-openers:${repeatedOpeners}`;
+    issues.push(code);
+    diagnostics.push(diagnosticFromIssueCode(code));
   }
   if (coveredClaimCount === 0 && args.claimPlan?.claims.length) {
-    issues.push("weak-claim-coverage");
-    diagnostics.push({
-      code: "weak-claim-coverage",
-      category: "claim-coverage",
-      severity: "high",
-      detail: "The final draft does not clearly cover the planned must-claims.",
-    });
+    const code = "weak-claim-coverage";
+    issues.push(code);
+    diagnostics.push(diagnosticFromIssueCode(code));
   }
   if (concreteEvidenceHits < 2) {
-    issues.push("thin-evidence-signal");
-    diagnostics.push({
-      code: "thin-evidence-signal",
-      category: "claim-coverage",
-      severity: "medium",
-      detail: "The draft does not surface enough concrete evidence.",
-    });
+    const code = "thin-evidence-signal";
+    issues.push(code);
+    diagnostics.push(diagnosticFromIssueCode(code));
   }
   if (args.roleFamily && roleSpecificBoost < 0.2) {
-    issues.push(`weak-role-rubric:${args.roleFamily}`);
-    diagnostics.push({
-      code: `weak-role-rubric:${args.roleFamily}`,
-      category: "role-fit",
-      severity: "medium",
-      detail: "Role-specific wording is weaker than expected for the selected role family.",
-    });
+    const code = `weak-role-rubric:${args.roleFamily}`;
+    issues.push(code);
+    diagnostics.push(diagnosticFromIssueCode(code));
   }
 
   const shouldRewrite =

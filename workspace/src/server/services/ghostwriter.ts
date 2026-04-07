@@ -50,6 +50,7 @@ import {
   buildEditorialRewritePrompt,
   shouldRunEditorialRewrite,
 } from "./ghostwriter-editor";
+import { diagnosticsFromIssueCodes } from "./ghostwriter-diagnostics";
 import {
   buildReviewerRewritePrompt,
   reviewGhostwriterPayload,
@@ -1582,12 +1583,7 @@ async function finalizeStructuredPayload(args: {
       detail: "Running a final anti-generic rewrite pass on the winning draft.",
       payload: {
         triggerReasons: rewriteDecision.reasons,
-        diagnostics: rewriteDecision.reasons.map((reason) => ({
-          code: reason,
-          category: reason.includes("generic") ? "generic-language" : reason.includes("sentence") ? "structure" : "style",
-          severity: reason.includes("long-sentences") || reason.includes("generic-opening") ? "high" : "medium",
-          detail: `Editorial pass triggered by ${reason}.`,
-        })),
+        diagnostics: diagnosticsFromIssueCodes(rewriteDecision.reasons),
       },
     });
 

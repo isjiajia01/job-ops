@@ -6,6 +6,7 @@ import type {
   GhostwriterSkillGroup,
   ResumeProfile,
 } from "@shared/types";
+import { diagnosticFromIssueCode } from "./ghostwriter-diagnostics";
 
 const HIGH_RISK_PATCH_PATTERNS = [
   /\b(?:10\+|[1-9]\d+\+)\s+years?\b/i,
@@ -378,24 +379,14 @@ export function scoreGhostwriterCandidate(args: {
       score -= 6;
       reasons.push("high-risk-language");
       penalties.push("high-risk-language");
-      diagnostics.push({
-        code: "high-risk-language",
-        category: "overclaim",
-        severity: "high",
-        detail: "The draft uses language that implies unsupported scope or certainty.",
-      });
+      diagnostics.push(diagnosticFromIssueCode("high-risk-language"));
     }
 
     if (genericMatches > 0) {
       score -= genericMatches * 2;
       reasons.push(`generic-phrases:${genericMatches}`);
       penalties.push(`generic-phrases:${genericMatches}`);
-      diagnostics.push({
-        code: `generic-phrases:${genericMatches}`,
-        category: "generic-language",
-        severity: genericMatches >= 3 ? "high" : "medium",
-        detail: "The draft contains stock cover-letter phrases that weaken specificity.",
-      });
+      diagnostics.push(diagnosticFromIssueCode(`generic-phrases:${genericMatches}`));
     }
   }
 
@@ -445,12 +436,7 @@ export function scoreGhostwriterCandidate(args: {
       } else if (claim.priority === "must") {
         score -= 4;
         penalties.push(`missed-must-claim:${claim.id}`);
-        diagnostics.push({
-          code: `missed-must-claim:${claim.id}`,
-          category: "claim-coverage",
-          severity: "high",
-          detail: `A must-claim from the plan is not reflected in the final draft: ${claim.claim}`,
-        });
+        diagnostics.push(diagnosticFromIssueCode(`missed-must-claim:${claim.id}`));
       }
     }
 
@@ -459,12 +445,7 @@ export function scoreGhostwriterCandidate(args: {
       if (normalized.length >= 8 && renderedText.includes(normalized.slice(0, Math.min(normalized.length, 48)))) {
         score -= 5;
         penalties.push(`excluded-claim:${normalized.slice(0, 24)}`);
-        diagnostics.push({
-          code: `excluded-claim:${normalized.slice(0, 24)}`,
-          category: "evidence-boundary",
-          severity: "high",
-          detail: "The draft appears to reuse a claim that was explicitly excluded.",
-        });
+        diagnostics.push(diagnosticFromIssueCode(`excluded-claim:${normalized.slice(0, 24)}`));
       }
     }
   }
@@ -480,12 +461,7 @@ export function scoreGhostwriterCandidate(args: {
     if (unapprovedClaimHits.length > 0) {
       score -= unapprovedClaimHits.length * 4;
       penalties.push(`unapproved-evidence-ids:${unapprovedClaimHits.length}`);
-      diagnostics.push({
-        code: `unapproved-evidence-ids:${unapprovedClaimHits.length}`,
-        category: "evidence-boundary",
-        severity: "high",
-        detail: "Some claims reference evidence modules outside the approved selection.",
-      });
+      diagnostics.push(diagnosticFromIssueCode(`unapproved-evidence-ids:${unapprovedClaimHits.length}`));
     }
 
     const suspiciousLabels = (args.knowledgeBase.projects ?? [])
@@ -501,12 +477,7 @@ export function scoreGhostwriterCandidate(args: {
     if (suspiciousLabels.length > 0) {
       score -= Math.min(6, suspiciousLabels.length * 2);
       penalties.push(`possible-unapproved-projects:${suspiciousLabels.length}`);
-      diagnostics.push({
-        code: `possible-unapproved-projects:${suspiciousLabels.length}`,
-        category: "evidence-boundary",
-        severity: "medium",
-        detail: "The draft mentions project labels that were not part of the approved evidence set.",
-      });
+      diagnostics.push(diagnosticFromIssueCode(`possible-unapproved-projects:${suspiciousLabels.length}`));
     }
   }
 
