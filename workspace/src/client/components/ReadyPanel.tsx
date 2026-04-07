@@ -56,7 +56,7 @@ import { useRescoreApplication } from "../hooks/useRescoreApplication";
 import { ApplicationHeader, FitAssessment, TailoredSummary } from ".";
 import { TailorMode } from "./discovered-panel/TailorMode";
 import { ApplicationDetailsEditDrawer } from "./ApplicationDetailsEditDrawer";
-import { GhostwriterDrawer } from "./ghostwriter/GhostwriterDrawer";
+import { GhostwriterDrawer } from "./ghostwriter";
 import { KbdHint } from "./KbdHint";
 import { ReadySummaryAccordion } from "./ReadySummaryAccordion";
 import { buildReadyPanelGoogleDorks } from "./ready-panel-google-dorks";

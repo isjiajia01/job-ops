@@ -61,8 +61,7 @@ import * as api from "../api";
 import { ApplicationDetailsEditDrawer } from "../components/ApplicationDetailsEditDrawer";
 import { ApplicationHeader } from "../components/ApplicationHeader";
 import { ConfirmDelete } from "../components/ConfirmDelete";
-import { GhostwriterDrawer } from "../components/ghostwriter/GhostwriterDrawer";
-import { GhostwriterPanel } from "../components/ghostwriter/GhostwriterPanel";
+import { GhostwriterDrawer, GhostwriterPanel } from "../components/ghostwriter";
 import {
   type LogEventFormValues,
   LogEventModal,
