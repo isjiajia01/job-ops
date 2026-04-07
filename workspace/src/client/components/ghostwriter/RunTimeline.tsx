@@ -158,6 +158,19 @@ function renderPayloadPreview(event: JobChatRunEvent) {
         </div>
       );
     }
+    case "editorial_rewrite_requested": {
+      const payload = event.payload;
+      return <div className="mt-2">{renderArraySummary("triggerReasons", payload.triggerReasons)}</div>;
+    }
+    case "editorial_rewrite_completed": {
+      const payload = event.payload;
+      return (
+        <div className="mt-2 space-y-2">
+          {renderArraySummary("triggerReasons", payload.triggerReasons)}
+          {renderArraySummary("improvedFields", payload.improvedFields)}
+        </div>
+      );
+    }
     case "selection": {
       const payload = event.payload;
       return (

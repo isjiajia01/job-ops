@@ -42,6 +42,10 @@ import {
 import { buildGhostwriterRuntimeState } from "./ghostwriter-runtime";
 import { buildGhostwriterClaimPlan } from "./ghostwriter-claim-plan";
 import {
+  buildEditorialRewritePrompt,
+  shouldRunEditorialRewrite,
+} from "./ghostwriter-editor";
+import {
   lintCoverLetterDraft,
   sanitizeResumePatch,
   scoreGhostwriterCandidate,
@@ -1479,6 +1483,77 @@ async function runAssistantReply(
           });
         }
         structuredPayload = ranking.winner;
+        const rewriteDecision = shouldRunEditorialRewrite(structuredPayload);
+        if (rewriteDecision.shouldRewrite) {
+          await emitRunTimelineEvent(run, options, {
+            phase: "finalize",
+            eventType: "editorial_rewrite_requested",
+            title: "Editorial sharpener requested",
+            detail: "Running a final anti-generic rewrite pass on the winning draft.",
+            payload: {
+              triggerReasons: rewriteDecision.reasons,
+            },
+          });
+
+          const rewriteResult = await llm.callJson<GhostwriterAssistantPayload>({
+            model: llmConfig.model,
+            messages: [
+              ...baseMessages,
+              ...runtimeMessages,
+              {
+                role: "system",
+                content: buildEditorialRewritePrompt({
+                  original: structuredPayload,
+                  claimPlan: structuredPayload.claimPlan,
+                  triggerReasons: rewriteDecision.reasons,
+                }),
+              },
+            ],
+            jsonSchema: CHAT_RESPONSE_SCHEMA,
+            maxRetries: 1,
+            retryDelayMs: 300,
+            jobId: options.jobId,
+            signal: controller.signal,
+          });
+
+          if (!rewriteResult.success) {
+            if (controller.signal.aborted) {
+              throw requestTimeout("Chat generation was cancelled");
+            }
+            throw upstreamError("Ghostwriter editorial rewrite failed", {
+              reason: rewriteResult.error,
+            });
+          }
+
+          const rewrittenPayload = finalizePayloadCandidate({
+            raw: rewriteResult.data,
+            prompt: options.prompt,
+            profile: context.profile,
+            knowledgeBase: context.knowledgeBase,
+            evidencePack: context.evidencePack,
+            runtimeState,
+            claimPlan: structuredPayload.claimPlan,
+          });
+
+          structuredPayload = {
+            ...rewrittenPayload,
+            claimPlan: rewrittenPayload.claimPlan ?? structuredPayload.claimPlan,
+          };
+
+          await emitRunTimelineEvent(run, options, {
+            phase: "finalize",
+            eventType: "editorial_rewrite_completed",
+            title: "Editorial sharpener completed",
+            detail: "Applied a final tightening pass to reduce generic phrasing and improve specificity.",
+            payload: {
+              triggerReasons: rewriteDecision.reasons,
+              improvedFields: [
+                structuredPayload.coverLetterDraft ? "coverLetterDraft" : null,
+                structuredPayload.response ? "response" : null,
+              ].filter((value): value is string => Boolean(value)),
+            },
+          });
+        }
         const topEvaluation = ranking.ranked[0]?.evaluation;
         selectionMeta = {
           candidateCount: ranking.ranked.length,

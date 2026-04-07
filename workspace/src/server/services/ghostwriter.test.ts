@@ -588,6 +588,107 @@ describe("ghostwriter service", () => {
     });
   });
 
+  it("runs an editorial sharpener pass when the winning draft is too generic", async () => {
+    const assistantPartial: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-editorial",
+      content: "",
+      status: "partial",
+    };
+    const assistantComplete: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-editorial",
+      status: "complete",
+      content: "",
+    };
+
+    mocks.repo.createMessage
+      .mockResolvedValueOnce(baseUserMessage)
+      .mockResolvedValueOnce(assistantPartial);
+    mocks.repo.updateMessage.mockImplementation(async (_id, update) => ({
+      ...assistantComplete,
+      content: update.content ?? "",
+      tokensIn: update.tokensIn ?? null,
+      tokensOut: update.tokensOut ?? null,
+    }));
+    mocks.repo.getMessageById.mockImplementation(async () => {
+      const [, update] = mocks.repo.updateMessage.mock.calls.at(-1) ?? [];
+      return {
+        ...assistantComplete,
+        content: update?.content ?? "",
+      };
+    });
+
+    mocks.llmCallJson
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          angle: "Lead with planning-oriented problem solving.",
+          strongestEvidence: ["DTU planning thesis"],
+          weakPoints: ["Avoid overstating seniority"],
+          paragraphPlan: ["Open from the work"],
+          tonePlan: "Direct and practical.",
+          requiresClarification: false,
+          clarifyingQuestions: [],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          response: "Short note.",
+          coverLetterDraft:
+            "I am writing to express my interest in this role. I am highly motivated and excited to apply. My background would make me a perfect fit for your dynamic team.",
+          coverLetterKind: "letter",
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          response: "Short note.",
+          coverLetterDraft:
+            "I am excited to apply for this role because I am highly motivated by planning work and believe I would be a strong fit for your dynamic team.",
+          coverLetterKind: "letter",
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          response: "Short note.",
+          coverLetterDraft:
+            "I am highly motivated to join your team and would welcome the opportunity to contribute my background in planning and analysis in a fast-paced environment.",
+          coverLetterKind: "letter",
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          response: "I tightened the draft.",
+          coverLetterDraft:
+            "Your role stands out to me because it is close to the planning-focused work I have been doing in my DTU thesis with Mover, where I work on rolling-horizon decisions under real delivery constraints and translate them into practical decision support.",
+          coverLetterKind: "letter",
+        },
+      });
+
+    const result = await sendMessageForJob({
+      jobId: "job-1",
+      content: "Write a cover letter for this role",
+    });
+
+    const parsed = parseGhostwriterAssistantContent(
+      result.assistantMessage?.content ?? "",
+    );
+    expect(parsed.coverLetterDraft).toContain("DTU thesis with Mover");
+    expect(parsed.coverLetterDraft).not.toContain(
+      "I am writing to express my interest",
+    );
+    expect(mocks.llmCallJson).toHaveBeenCalledTimes(5);
+    expect(mocks.repo.createRunEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "editorial_rewrite_completed",
+      }),
+    );
+  });
+
   it("drops obviously overclaiming resumePatch fields before updating the job", async () => {
     const assistantPartial: JobChatMessage = {
       ...baseAssistantMessage,

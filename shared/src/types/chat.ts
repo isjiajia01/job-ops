@@ -183,6 +183,13 @@ export type JobChatRunEventPayloadByType = {
     responseMode: GhostwriterRuntimePlanSummary["responseMode"];
     selectedTools: string[];
   };
+  editorial_rewrite_completed: {
+    triggerReasons: string[];
+    improvedFields: string[];
+  };
+  editorial_rewrite_requested: {
+    triggerReasons: string[];
+  };
   selection: {
     hasCoverLetterDraft: boolean;
     coverLetterKind: GhostwriterCoverLetterKind | null;
