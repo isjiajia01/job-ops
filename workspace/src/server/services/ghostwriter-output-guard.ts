@@ -1,6 +1,7 @@
 import type {
   CandidateKnowledgeBase,
   GhostwriterAssistantPayload,
+  GhostwriterEvidenceSelectionSummary,
   GhostwriterResumePatch,
   GhostwriterSkillGroup,
   ResumeProfile,
@@ -315,6 +316,7 @@ export function scoreGhostwriterCandidate(args: {
   evidencePackText?: string | null;
   profile: ResumeProfile;
   knowledgeBase: CandidateKnowledgeBase;
+  evidenceSelection?: GhostwriterEvidenceSelectionSummary | null;
 }): {
   score: number;
   reasons: string[];
@@ -438,6 +440,35 @@ export function scoreGhostwriterCandidate(args: {
         score -= 5;
         penalties.push(`excluded-claim:${normalized.slice(0, 24)}`);
       }
+    }
+  }
+
+  if (args.evidenceSelection) {
+    const approvedIds = new Set(args.evidenceSelection.allowedModuleIds);
+    const approvedLabelText = args.evidenceSelection.allowedModuleLabels
+      .join(" ")
+      .toLowerCase();
+    const unapprovedClaimHits = (args.payload.claimPlan?.claims ?? []).filter(
+      (claim) => claim.evidenceIds.some((id) => !approvedIds.has(id)),
+    );
+    if (unapprovedClaimHits.length > 0) {
+      score -= unapprovedClaimHits.length * 4;
+      penalties.push(`unapproved-evidence-ids:${unapprovedClaimHits.length}`);
+    }
+
+    const suspiciousLabels = (args.knowledgeBase.projects ?? [])
+      .map((project) => project.name)
+      .filter((label) => {
+        const normalized = label.toLowerCase();
+        return (
+          normalized.length >= 8 &&
+          renderedText.includes(normalized) &&
+          !approvedLabelText.includes(normalized)
+        );
+      });
+    if (suspiciousLabels.length > 0) {
+      score -= Math.min(6, suspiciousLabels.length * 2);
+      penalties.push(`possible-unapproved-projects:${suspiciousLabels.length}`);
     }
   }
 

@@ -20,6 +20,19 @@ export type GhostwriterEvidenceSelectionPlan = {
   writerInstructions: string[];
 };
 
+export function summarizeEvidenceSelectionPlan(plan: GhostwriterEvidenceSelectionPlan) {
+  const leadModule = plan.selectedModules.find((module) => module.id === plan.leadModuleId) ?? plan.selectedModules[0] ?? null;
+  return {
+    leadModuleId: plan.leadModuleId,
+    leadModuleLabel: leadModule?.label ?? null,
+    allowedModuleIds: plan.selectedModuleIds,
+    allowedModuleLabels: plan.selectedModules.map((module) => module.label),
+    blockedClaims: plan.blockedClaims,
+    requiredEvidenceSnippets: plan.requiredEvidenceSnippets,
+    selectionRationale: plan.selectionRationale,
+  };
+}
+
 function dedupe(items: string[]): string[] {
   return Array.from(new Set(items.map((item) => item.trim()).filter(Boolean)));
 }

@@ -41,7 +41,11 @@ import {
 } from "./ghostwriter-context";
 import { buildGhostwriterRuntimeState } from "./ghostwriter-runtime";
 import { buildGhostwriterClaimPlan } from "./ghostwriter-claim-plan";
-import { buildLocalEvidenceSelectionPlan } from "./ghostwriter-evidence-selector";
+import {
+  buildLocalEvidenceSelectionPlan,
+  summarizeEvidenceSelectionPlan,
+  type GhostwriterEvidenceSelectionPlan,
+} from "./ghostwriter-evidence-selector";
 import {
   buildEditorialRewritePrompt,
   shouldRunEditorialRewrite,
@@ -137,6 +141,21 @@ const WRITING_STRATEGY_SCHEMA: JsonSchemaDefinition = {
       "requiresClarification",
       "clarifyingQuestions",
     ],
+    additionalProperties: false,
+  },
+};
+
+const EVIDENCE_SELECTION_SCHEMA: JsonSchemaDefinition = {
+  name: "job_chat_evidence_selection",
+  schema: {
+    type: "object",
+    properties: {
+      selectedModuleIds: { type: "array", items: { type: "string" } },
+      blockedClaims: { type: "array", items: { type: "string" } },
+      selectionRationale: { type: "array", items: { type: "string" } },
+      naturalnessNotes: { type: "array", items: { type: "string" } },
+    },
+    required: ["selectedModuleIds", "blockedClaims", "selectionRationale", "naturalnessNotes"],
     additionalProperties: false,
   },
 };
@@ -697,6 +716,7 @@ function finalizePayloadCandidate(args: {
   evidencePack?: GhostwriterEvidencePack;
   runtimeState?: ReturnType<typeof buildGhostwriterRuntimeState>;
   claimPlan?: GhostwriterClaimPlan | null;
+  evidenceSelection?: GhostwriterEvidenceSelectionPlan | null;
 }): GhostwriterAssistantPayload {
   const payload = normalizeGhostwriterAssistantPayload(args.raw);
   if (!payload) {
@@ -720,6 +740,9 @@ function finalizePayloadCandidate(args: {
     args.evidencePack
       ? buildFallbackBulletResponse(args.evidencePack)
       : null;
+  const summarizedEvidenceSelection = args.evidenceSelection
+    ? summarizeEvidenceSelectionPlan(args.evidenceSelection)
+    : (payload.evidenceSelection ?? null);
 
   if (
     sanitizedCoverLetterDraft &&
@@ -734,6 +757,7 @@ function finalizePayloadCandidate(args: {
       resumePatch: sanitizedResumePatch,
       fitBrief: payload.fitBrief ?? buildFitBrief(args.evidencePack),
       claimPlan: args.claimPlan ?? payload.claimPlan ?? null,
+      evidenceSelection: summarizedEvidenceSelection,
       review: payload.review ?? null,
       runtimePlan: args.runtimeState?.plan ?? payload.runtimePlan ?? null,
       toolTrace: args.runtimeState?.toolResults ?? payload.toolTrace ?? null,
@@ -754,6 +778,7 @@ function finalizePayloadCandidate(args: {
     resumePatch: sanitizedResumePatch,
     fitBrief: payload.fitBrief ?? buildFitBrief(args.evidencePack),
     claimPlan: args.claimPlan ?? payload.claimPlan ?? null,
+    evidenceSelection: summarizedEvidenceSelection,
     review: payload.review ?? null,
     runtimePlan: args.runtimeState?.plan ?? payload.runtimePlan ?? null,
     toolTrace: args.runtimeState?.toolResults ?? payload.toolTrace ?? null,
@@ -769,6 +794,7 @@ function rankPayloadCandidates(args: {
   knowledgeBase: Awaited<
     ReturnType<typeof buildJobChatPromptContext>
   >["knowledgeBase"];
+  evidenceSelection?: GhostwriterAssistantPayload["evidenceSelection"] | null;
 }): {
   ranked: Array<{
     index: number;
@@ -786,6 +812,7 @@ function rankPayloadCandidates(args: {
         evidencePackText: args.evidencePackSnapshot,
         profile: args.profile,
         knowledgeBase: args.knowledgeBase,
+        evidenceSelection: args.evidenceSelection,
       }),
     }))
     .sort((a, b) => b.evaluation.score - a.evaluation.score);
@@ -818,6 +845,118 @@ function isRunningRunUniqueConstraintError(error: unknown): boolean {
     message.includes("idx_job_chat_runs_thread_running_unique") ||
     message.includes("UNIQUE constraint failed: job_chat_runs.thread_id")
   );
+}
+
+async function buildHybridEvidenceSelection(args: {
+  llm: LlmService;
+  llmConfig: LlmRuntimeSettings;
+  context: Awaited<ReturnType<typeof buildJobChatPromptContext>>;
+  prompt: string;
+  taskKind: GhostwriterTaskKind;
+  jobId: string;
+  signal: AbortSignal;
+}): Promise<GhostwriterEvidenceSelectionPlan> {
+  const localPlan = buildLocalEvidenceSelectionPlan({
+    context: args.context,
+    taskKind: args.taskKind,
+    prompt: args.prompt,
+  });
+
+  if (localPlan.selectedModules.length === 0) return localPlan;
+
+  const moduleOptions = localPlan.selectedModules
+    .concat(
+      args.context.evidencePack.experienceBank.filter(
+        (module) => !localPlan.selectedModuleIds.includes(module.id),
+      ).slice(0, 2),
+    )
+    .slice(0, 5)
+    .map((module) => ({
+      id: module.id,
+      label: module.label,
+      framing: module.preferredFraming,
+      strongestClaims: module.strongestClaims.slice(0, 2),
+    }));
+
+  const result = await args.llm.callJson<{
+    selectedModuleIds: string[];
+    blockedClaims: string[];
+    selectionRationale: string[];
+    naturalnessNotes: string[];
+  }>({
+    model: args.llmConfig.model,
+    messages: [
+      {
+        role: "system",
+        content:
+          "Approve a compact evidence set for an application-writing agent. Prefer 1 lead proof point and at most 1-2 support modules. Optimize for specificity, truthfulness, and natural writing. Return JSON only.",
+      },
+      {
+        role: "user",
+        content: [
+          `Task kind: ${args.taskKind}`,
+          `User request: ${args.prompt}`,
+          `Role summary: ${args.context.evidencePack.targetRoleSummary}`,
+          `Recommended angle: ${args.context.evidencePack.recommendedAngle}`,
+          `Candidate modules: ${JSON.stringify(moduleOptions, null, 2)}`,
+          `Current forbidden claims: ${args.context.evidencePack.forbiddenClaims.join(" | ")}`,
+          "Select the smallest convincing evidence set. Also add any blocked claims that would make the writing sound inflated or unnatural.",
+        ].join("\n\n"),
+      },
+    ],
+    jsonSchema: EVIDENCE_SELECTION_SCHEMA,
+    maxRetries: 1,
+    retryDelayMs: 300,
+    jobId: args.jobId,
+    signal: args.signal,
+  });
+
+  if (!result.success) return localPlan;
+
+  const selectedModuleIds = Array.isArray(result.data.selectedModuleIds)
+    ? result.data.selectedModuleIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+    : [];
+  const blockedClaims = Array.isArray(result.data.blockedClaims)
+    ? result.data.blockedClaims.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+  const selectionRationale = Array.isArray(result.data.selectionRationale)
+    ? result.data.selectionRationale.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+  const naturalnessNotes = Array.isArray(result.data.naturalnessNotes)
+    ? result.data.naturalnessNotes.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+
+  const approvedIds = new Set(
+    selectedModuleIds.filter((id) =>
+      localPlan.selectedModules.some((module) => module.id === id) ||
+      args.context.evidencePack.experienceBank.some((module) => module.id === id),
+    ),
+  );
+  const selectedModules = args.context.evidencePack.experienceBank.filter((module) =>
+    approvedIds.has(module.id),
+  );
+  const nextSelectedModules = selectedModules.length
+    ? selectedModules.slice(0, args.taskKind === "resume_patch" ? 3 : 2)
+    : localPlan.selectedModules;
+
+  return {
+    ...localPlan,
+    selectedModules: nextSelectedModules,
+    selectedModuleIds: nextSelectedModules.map((module) => module.id),
+    leadModuleId: nextSelectedModules[0]?.id ?? localPlan.leadModuleId,
+    supportModuleIds: nextSelectedModules.slice(1).map((module) => module.id),
+    blockedClaims: Array.from(new Set([...localPlan.blockedClaims, ...blockedClaims])).slice(0, 8),
+    selectionRationale: Array.from(
+      new Set([
+        ...selectionRationale,
+        ...naturalnessNotes,
+        ...localPlan.selectionRationale,
+      ]),
+    ).slice(0, 6),
+    writerInstructions: Array.from(
+      new Set([...localPlan.writerInstructions, ...naturalnessNotes]),
+    ).slice(0, 6),
+  };
 }
 
 async function resolveLlmRuntimeSettings(): Promise<LlmRuntimeSettings> {
@@ -1306,10 +1445,14 @@ async function runAssistantReply(
         },
       });
 
-      const evidenceSelection = buildLocalEvidenceSelectionPlan({
+      const evidenceSelection = await buildHybridEvidenceSelection({
+        llm,
+        llmConfig,
         context,
-        taskKind,
         prompt: options.prompt,
+        taskKind,
+        jobId: options.jobId,
+        signal: controller.signal,
       });
       const claimPlan = buildGhostwriterClaimPlan({
         context,
@@ -1482,6 +1625,7 @@ async function runAssistantReply(
             evidencePack: context.evidencePack,
             runtimeState,
             claimPlan,
+            evidenceSelection,
           });
 
           candidatePayloads.push({
@@ -1512,6 +1656,7 @@ async function runAssistantReply(
           evidencePackSnapshot: context.evidencePackSnapshot,
           profile: context.profile,
           knowledgeBase: context.knowledgeBase,
+          evidenceSelection: summarizeEvidenceSelectionPlan(evidenceSelection),
         });
         for (const rankedCandidate of ranking.ranked) {
           await emitRunTimelineEvent(run, options, {
@@ -1580,6 +1725,7 @@ async function runAssistantReply(
             evidencePack: context.evidencePack,
             runtimeState,
             claimPlan: structuredPayload.claimPlan,
+            evidenceSelection,
           });
 
           structuredPayload = {
@@ -1682,6 +1828,7 @@ async function runAssistantReply(
             evidencePack: context.evidencePack,
             runtimeState,
             claimPlan: structuredPayload.claimPlan,
+            evidenceSelection,
           });
           review = reviewGhostwriterPayload({
             payload: twiceRewrittenPayload,

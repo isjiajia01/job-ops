@@ -39,6 +39,10 @@ export const RuntimeInspector: React.FC<RuntimeInspectorProps> = ({
       currentRuntime?.fitBrief?.risks.length,
   );
   const hasClaims = Boolean(currentRuntime?.claimPlan?.claims.length);
+  const hasEvidenceSelection = Boolean(
+    currentRuntime?.evidenceSelection?.allowedModuleLabels.length ||
+      currentRuntime?.evidenceSelection?.blockedClaims.length,
+  );
   const hasTrace = Boolean(currentRuntime?.executionTrace?.length);
   const defaultTab = hasOverview
     ? "overview"
@@ -150,6 +154,7 @@ export const RuntimeInspector: React.FC<RuntimeInspectorProps> = ({
           {hasOverview ? <TabsTrigger value="overview">Overview</TabsTrigger> : null}
           {hasFit ? <TabsTrigger value="fit">Fit</TabsTrigger> : null}
           {hasClaims ? <TabsTrigger value="claims">Claims</TabsTrigger> : null}
+          {hasEvidenceSelection ? <TabsTrigger value="evidence">Evidence</TabsTrigger> : null}
           {hasTrace ? <TabsTrigger value="trace">Trace</TabsTrigger> : null}
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
         </TabsList>
@@ -262,6 +267,50 @@ export const RuntimeInspector: React.FC<RuntimeInspectorProps> = ({
             </div>
           ) : (
             <div className="text-[11px] text-muted-foreground">No claim plan yet.</div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="evidence" className="mt-3">
+          {currentRuntime?.evidenceSelection ? (
+            <div className="space-y-3">
+              <div className="rounded border border-border/50 bg-background/60 p-3">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  lead proof point
+                </div>
+                <div className="mt-1 text-foreground/90">
+                  {currentRuntime.evidenceSelection.leadModuleLabel ?? "No lead proof point selected."}
+                </div>
+              </div>
+              {currentRuntime.evidenceSelection.allowedModuleLabels.length ? (
+                <div className="rounded border border-border/50 bg-background/60 p-3">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    allowed modules
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {currentRuntime.evidenceSelection.allowedModuleLabels.map((label) => (
+                      <span
+                        key={label}
+                        className="rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] text-foreground/80"
+                      >
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {currentRuntime.evidenceSelection.blockedClaims.length ? (
+                <div className="rounded border border-amber-200/60 bg-amber-50/50 p-3">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    blocked claims
+                  </div>
+                  <div className="mt-2 text-muted-foreground">
+                    {currentRuntime.evidenceSelection.blockedClaims.join(" · ")}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="text-[11px] text-muted-foreground">No evidence selection yet.</div>
           )}
         </TabsContent>
 

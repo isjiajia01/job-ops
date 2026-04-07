@@ -690,7 +690,7 @@ describe("ghostwriter service", () => {
     expect(parsed.coverLetterDraft).not.toContain(
       "I am writing to express my interest",
     );
-    expect(mocks.llmCallJson).toHaveBeenCalledTimes(5);
+    expect(mocks.llmCallJson).toHaveBeenCalledTimes(6);
     expect(mocks.repo.createRunEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: "editorial_rewrite_completed",

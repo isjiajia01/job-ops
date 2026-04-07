@@ -3,6 +3,7 @@ import type {
   GhostwriterAssistantPayload,
   GhostwriterClaimPlan,
   GhostwriterExecutionStage,
+  GhostwriterEvidenceSelectionSummary,
   GhostwriterFitBrief,
   GhostwriterResumePatch,
   GhostwriterReviewSummary,
@@ -131,6 +132,16 @@ const ghostwriterReviewSummarySchema = z.object({
   issues: z.array(z.string().trim().min(1).max(200)).max(12),
 });
 
+const ghostwriterEvidenceSelectionSummarySchema = z.object({
+  leadModuleId: z.string().trim().max(120).nullable().optional(),
+  leadModuleLabel: z.string().trim().max(240).nullable().optional(),
+  allowedModuleIds: z.array(z.string().trim().min(1).max(120)).max(8),
+  allowedModuleLabels: z.array(z.string().trim().min(1).max(240)).max(8),
+  blockedClaims: z.array(z.string().trim().min(1).max(600)).max(10),
+  requiredEvidenceSnippets: z.array(z.string().trim().min(1).max(600)).max(10),
+  selectionRationale: z.array(z.string().trim().min(1).max(600)).max(8),
+});
+
 const ghostwriterRuntimePlanSummarySchema = z.object({
   role: z.string().trim().min(1).max(200),
   taskKind: z.string().trim().min(1).max(80),
@@ -177,6 +188,7 @@ export const ghostwriterAssistantPayloadSchema = z.object({
   resumePatch: ghostwriterResumePatchSchema.nullable().optional(),
   fitBrief: ghostwriterFitBriefSchema.nullable().optional(),
   claimPlan: ghostwriterClaimPlanSchema.nullable().optional(),
+  evidenceSelection: ghostwriterEvidenceSelectionSummarySchema.nullable().optional(),
   review: ghostwriterReviewSummarySchema.nullable().optional(),
   runtimePlan: ghostwriterRuntimePlanSummarySchema.nullable().optional(),
   toolTrace: z.array(ghostwriterToolTraceEntrySchema).max(12).nullable().optional(),
@@ -365,6 +377,30 @@ function normalizeReview(value: unknown): GhostwriterReviewSummary | null {
   return { summary, specificity, evidenceStrength, overclaimRisk, naturalness, issues };
 }
 
+function normalizeEvidenceSelection(value: unknown): GhostwriterEvidenceSelectionSummary | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const leadModuleId = toNonEmptyString(record.leadModuleId);
+  const leadModuleLabel = toNonEmptyString(record.leadModuleLabel);
+  const allowedModuleIds = Array.isArray(record.allowedModuleIds)
+    ? record.allowedModuleIds.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => Boolean(entry))
+    : [];
+  const allowedModuleLabels = Array.isArray(record.allowedModuleLabels)
+    ? record.allowedModuleLabels.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => Boolean(entry))
+    : [];
+  const blockedClaims = Array.isArray(record.blockedClaims)
+    ? record.blockedClaims.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => Boolean(entry))
+    : [];
+  const requiredEvidenceSnippets = Array.isArray(record.requiredEvidenceSnippets)
+    ? record.requiredEvidenceSnippets.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => Boolean(entry))
+    : [];
+  const selectionRationale = Array.isArray(record.selectionRationale)
+    ? record.selectionRationale.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => Boolean(entry))
+    : [];
+  if (!leadModuleId && !allowedModuleIds.length && !blockedClaims.length && !requiredEvidenceSnippets.length) return null;
+  return { leadModuleId, leadModuleLabel, allowedModuleIds, allowedModuleLabels, blockedClaims, requiredEvidenceSnippets, selectionRationale };
+}
+
 function normalizeRuntimePlan(value: unknown): GhostwriterRuntimePlanSummary | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
@@ -432,6 +468,7 @@ export function normalizeGhostwriterAssistantPayload(
       resumePatch: normalizeResumePatch(parsed.data.resumePatch),
       fitBrief: normalizeFitBrief(parsed.data.fitBrief),
       claimPlan: normalizeClaimPlan(parsed.data.claimPlan),
+      evidenceSelection: normalizeEvidenceSelection(parsed.data.evidenceSelection),
       review: normalizeReview(parsed.data.review),
       runtimePlan: normalizeRuntimePlan(parsed.data.runtimePlan),
       toolTrace: normalizeToolTrace(parsed.data.toolTrace),
@@ -449,6 +486,7 @@ export function normalizeGhostwriterAssistantPayload(
           resumePatch: null,
           fitBrief: null,
           claimPlan: null,
+          evidenceSelection: null,
           review: null,
           runtimePlan: null,
           toolTrace: null,
@@ -489,6 +527,7 @@ export function normalizeGhostwriterAssistantPayload(
       normalizeLooseResumePatch(record),
     fitBrief: normalizeFitBrief(record.fitBrief),
     claimPlan: normalizeClaimPlan(record.claimPlan),
+    evidenceSelection: normalizeEvidenceSelection(record.evidenceSelection),
     review: normalizeReview(record.review),
     runtimePlan: normalizeRuntimePlan(record.runtimePlan),
     toolTrace: normalizeToolTrace(record.toolTrace),
@@ -506,6 +545,7 @@ export function serializeGhostwriterAssistantPayload(
     resumePatch: payload.resumePatch,
     fitBrief: payload.fitBrief ?? null,
     claimPlan: payload.claimPlan ?? null,
+    evidenceSelection: payload.evidenceSelection ?? null,
     review: payload.review ?? null,
     runtimePlan: payload.runtimePlan ?? null,
     toolTrace: payload.toolTrace ?? null,
@@ -525,6 +565,7 @@ export function parseGhostwriterAssistantContent(
       resumePatch: null,
       fitBrief: null,
       claimPlan: null,
+      evidenceSelection: null,
       review: null,
       runtimePlan: null,
       toolTrace: null,
@@ -552,6 +593,7 @@ export function parseGhostwriterAssistantContent(
     resumePatch: null,
     fitBrief: null,
     claimPlan: null,
+    evidenceSelection: null,
     review: null,
     runtimePlan: null,
     toolTrace: null,

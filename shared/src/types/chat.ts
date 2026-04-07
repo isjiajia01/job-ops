@@ -116,6 +116,16 @@ export interface GhostwriterReviewSummary {
   issues: string[];
 }
 
+export interface GhostwriterEvidenceSelectionSummary {
+  leadModuleId: string | null;
+  leadModuleLabel: string | null;
+  allowedModuleIds: string[];
+  allowedModuleLabels: string[];
+  blockedClaims: string[];
+  requiredEvidenceSnippets: string[];
+  selectionRationale: string[];
+}
+
 export interface GhostwriterAssistantPayload {
   response: string;
   coverLetterDraft: string | null;
@@ -123,6 +133,7 @@ export interface GhostwriterAssistantPayload {
   resumePatch: GhostwriterResumePatch | null;
   fitBrief?: GhostwriterFitBrief | null;
   claimPlan?: GhostwriterClaimPlan | null;
+  evidenceSelection?: GhostwriterEvidenceSelectionSummary | null;
   review?: GhostwriterReviewSummary | null;
   runtimePlan?: GhostwriterRuntimePlanSummary | null;
   toolTrace?: GhostwriterToolTraceEntry[] | null;
