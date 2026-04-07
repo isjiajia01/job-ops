@@ -53,6 +53,7 @@ import {
 import {
   diagnosticsFromIssueCodes,
   normalizeDiagnostics,
+  summarizeDiagnostics,
 } from "./ghostwriter-diagnostics";
 import {
   buildReviewerRewritePrompt,
@@ -1235,6 +1236,7 @@ function attachReviewToPayload(
       naturalness: review.scores.naturalness,
       issues: review.issues,
       diagnostics: review.diagnostics,
+      diagnosticSummary: summarizeDiagnostics(review.diagnostics),
     },
   };
 }
@@ -1256,6 +1258,7 @@ async function emitReviewCompleted(
       naturalness: review.scores.naturalness,
       issues: review.issues,
       diagnostics: review.diagnostics,
+      diagnosticSummary: summarizeDiagnostics(review.diagnostics),
       shouldRewrite: review.shouldRewrite,
     },
   });
@@ -1555,6 +1558,7 @@ async function generateStructuredCandidates(args: {
         evidenceCoverage: rankedCandidate.evaluation.evidenceCoverage,
         penalties: rankedCandidate.evaluation.penalties,
         diagnostics: rankedCandidate.evaluation.diagnostics,
+        diagnosticSummary: summarizeDiagnostics(rankedCandidate.evaluation.diagnostics),
       },
     });
   }
@@ -1589,6 +1593,7 @@ async function runEditorialRewriteStage(args: {
     payload: {
       triggerReasons: rewriteDecision.reasons,
       diagnostics: diagnosticsFromIssueCodes(rewriteDecision.reasons),
+      diagnosticSummary: summarizeDiagnostics(diagnosticsFromIssueCodes(rewriteDecision.reasons)),
     },
   });
 
@@ -1685,6 +1690,7 @@ async function runReviewerStage(args: {
     payload: {
       issues: review.issues,
       diagnostics: normalizeDiagnostics(review.diagnostics),
+      diagnosticSummary: summarizeDiagnostics(review.diagnostics),
     },
   });
 

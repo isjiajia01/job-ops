@@ -122,6 +122,12 @@ export interface GhostwriterDiagnostic {
   detail: string;
 }
 
+export interface GhostwriterDiagnosticSummaryItem {
+  category: GhostwriterDiagnostic["category"];
+  severity: GhostwriterDiagnostic["severity"];
+  count: number;
+}
+
 export interface GhostwriterReviewSummary {
   summary: string;
   specificity: number;
@@ -130,6 +136,7 @@ export interface GhostwriterReviewSummary {
   naturalness: number;
   issues: string[];
   diagnostics?: GhostwriterDiagnostic[];
+  diagnosticSummary?: GhostwriterDiagnosticSummaryItem[];
 }
 
 export interface GhostwriterEvidenceSelectionSummary {
@@ -232,15 +239,18 @@ export type JobChatRunEventPayloadByType = {
     naturalness: number;
     issues: string[];
     diagnostics?: GhostwriterDiagnostic[];
+    diagnosticSummary?: GhostwriterDiagnosticSummaryItem[];
     shouldRewrite: boolean;
   };
   review_rewrite_requested: {
     issues: string[];
     diagnostics?: GhostwriterDiagnostic[];
+    diagnosticSummary?: GhostwriterDiagnosticSummaryItem[];
   };
   editorial_rewrite_requested: {
     triggerReasons: string[];
     diagnostics?: GhostwriterDiagnostic[];
+    diagnosticSummary?: GhostwriterDiagnosticSummaryItem[];
   };
   selection: {
     hasCoverLetterDraft: boolean;
@@ -283,6 +293,7 @@ export type JobChatRunEventPayloadByType = {
     evidenceCoverage: number;
     penalties: string[];
     diagnostics?: GhostwriterDiagnostic[];
+    diagnosticSummary?: GhostwriterDiagnosticSummaryItem[];
   };
   variant_requested: {
     variant: string;

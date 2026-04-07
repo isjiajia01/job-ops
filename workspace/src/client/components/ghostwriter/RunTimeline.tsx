@@ -53,6 +53,24 @@ function renderArraySummary(label: string, value?: string[]) {
   );
 }
 
+function renderDiagnosticsSummary(
+  summary?: Array<{ category: string; severity: string; count: number }>,
+) {
+  if (!summary || summary.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {summary.slice(0, 4).map((item) => (
+        <span
+          key={`${item.severity}-${item.category}`}
+          className="rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] text-muted-foreground"
+        >
+          {item.severity} · {item.category} · {item.count}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function renderDiagnostics(
   diagnostics?: Array<{ code: string; severity: string; detail: string }>,
 ) {
@@ -175,7 +193,7 @@ function renderPayloadPreview(event: JobChatRunEvent) {
     }
     case "editorial_rewrite_requested": {
       const payload = event.payload;
-      return <div className="mt-2 space-y-2">{renderArraySummary("triggerReasons", payload.triggerReasons)}{renderDiagnostics(payload.diagnostics)}</div>;
+      return <div className="mt-2 space-y-2">{renderArraySummary("triggerReasons", payload.triggerReasons)}{renderDiagnosticsSummary(payload.diagnosticSummary)}{renderDiagnostics(payload.diagnostics)}</div>;
     }
     case "review_completed": {
       const payload = event.payload;
@@ -190,13 +208,14 @@ function renderPayloadPreview(event: JobChatRunEvent) {
           ])}
           <div className="text-[11px] text-muted-foreground">{payload.summary}</div>
           {renderArraySummary("issues", payload.issues)}
+          {renderDiagnosticsSummary(payload.diagnosticSummary)}
           {renderDiagnostics(payload.diagnostics)}
         </div>
       );
     }
     case "review_rewrite_requested": {
       const payload = event.payload;
-      return <div className="mt-2 space-y-2">{renderArraySummary("issues", payload.issues)}{renderDiagnostics(payload.diagnostics)}</div>;
+      return <div className="mt-2 space-y-2">{renderArraySummary("issues", payload.issues)}{renderDiagnosticsSummary(payload.diagnosticSummary)}{renderDiagnostics(payload.diagnostics)}</div>;
     }
     case "editorial_rewrite_completed": {
       const payload = event.payload;
@@ -246,6 +265,7 @@ function renderPayloadPreview(event: JobChatRunEvent) {
           ])}
           {renderArraySummary("coveredClaimIds", payload.coveredClaimIds)}
           {renderArraySummary("penalties", payload.penalties)}
+          {renderDiagnosticsSummary(payload.diagnosticSummary)}
           {renderDiagnostics(payload.diagnostics)}
         </div>
       );

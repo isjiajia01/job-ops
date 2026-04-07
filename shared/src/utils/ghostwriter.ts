@@ -4,6 +4,7 @@ import type {
   GhostwriterClaimPlan,
   GhostwriterExecutionStage,
   GhostwriterDiagnostic,
+  GhostwriterDiagnosticSummaryItem,
   GhostwriterEvidenceSelectionSummary,
   GhostwriterFitBrief,
   GhostwriterResumePatch,
@@ -140,6 +141,21 @@ const ghostwriterDiagnosticSchema = z.object({
   detail: z.string().trim().min(1).max(300),
 });
 
+const ghostwriterDiagnosticSummaryItemSchema = z.object({
+  category: z.enum([
+    "generic-language",
+    "structure",
+    "claim-coverage",
+    "evidence-boundary",
+    "overclaim",
+    "role-fit",
+    "style",
+    "quality",
+  ]),
+  severity: z.enum(["low", "medium", "high"]),
+  count: z.number().int().min(1).max(99),
+});
+
 const ghostwriterReviewSummarySchema = z.object({
   summary: z.string().trim().min(1).max(600),
   specificity: z.number().min(1).max(5),
@@ -148,6 +164,7 @@ const ghostwriterReviewSummarySchema = z.object({
   naturalness: z.number().min(1).max(5),
   issues: z.array(z.string().trim().min(1).max(200)).max(12),
   diagnostics: z.array(ghostwriterDiagnosticSchema).max(16).optional(),
+  diagnosticSummary: z.array(ghostwriterDiagnosticSummaryItemSchema).max(16).optional(),
 });
 
 const ghostwriterEvidenceSelectionSummarySchema = z.object({
@@ -411,6 +428,34 @@ function normalizeDiagnostics(value: unknown): GhostwriterDiagnostic[] {
     .filter((item): item is GhostwriterDiagnostic => Boolean(item));
 }
 
+function normalizeDiagnosticSummary(value: unknown): GhostwriterDiagnosticSummaryItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const record = item as Record<string, unknown>;
+      const category = toNonEmptyString(record.category);
+      const severity = toNonEmptyString(record.severity);
+      const count = typeof record.count === "number" ? record.count : null;
+      if (
+        (category !== "generic-language" &&
+          category !== "structure" &&
+          category !== "claim-coverage" &&
+          category !== "evidence-boundary" &&
+          category !== "overclaim" &&
+          category !== "role-fit" &&
+          category !== "style" &&
+          category !== "quality") ||
+        (severity !== "low" && severity !== "medium" && severity !== "high") ||
+        count == null
+      ) {
+        return null;
+      }
+      return { category, severity, count };
+    })
+    .filter((item): item is GhostwriterDiagnosticSummaryItem => Boolean(item));
+}
+
 function normalizeReview(value: unknown): GhostwriterReviewSummary | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
@@ -424,7 +469,8 @@ function normalizeReview(value: unknown): GhostwriterReviewSummary | null {
     : [];
   if (!summary || specificity == null || evidenceStrength == null || overclaimRisk == null || naturalness == null) return null;
   const diagnostics = normalizeDiagnostics(record.diagnostics);
-  return { summary, specificity, evidenceStrength, overclaimRisk, naturalness, issues, diagnostics };
+  const diagnosticSummary = normalizeDiagnosticSummary(record.diagnosticSummary);
+  return { summary, specificity, evidenceStrength, overclaimRisk, naturalness, issues, diagnostics, diagnosticSummary };
 }
 
 function normalizeEvidenceSelection(value: unknown): GhostwriterEvidenceSelectionSummary | null {
