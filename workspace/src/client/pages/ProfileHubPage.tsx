@@ -539,470 +539,265 @@ export const ProfileHubPage: React.FC = () => {
       />
 
       <PageMain className="space-y-4">
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">
-              Pending inbox
-            </div>
-            <div className="mt-2 text-3xl font-semibold tracking-tight">
-              {pendingInbox.length}
-            </div>
-          </div>
-          <div className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">
-              Projects
-            </div>
-            <div className="mt-2 text-3xl font-semibold tracking-tight">
-              {projects.length}
-            </div>
-          </div>
-          <div className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">
-              Facts
-            </div>
-            <div className="mt-2 text-3xl font-semibold tracking-tight">
-              {facts.length}
-            </div>
-          </div>
-          <div className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">
-              Rules
-            </div>
-            <div className="mt-2 text-3xl font-semibold tracking-tight">
-              {preferences.length}
-            </div>
-          </div>
-        </section>
-
         <section className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm md:p-5">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="text-lg font-semibold tracking-tight">
-                New material
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Paste rough notes. AI will turn them into an inbox item you can
-                review like an application draft.
-              </p>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border/60 bg-background/70">
+                  <Upload className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold tracking-tight">Profile bundle</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Keep Ghostwriter grounded in one JSON-backed profile file.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline">{projects.length} projects</Badge>
+                <Badge variant="outline">{facts.length} facts</Badge>
+                <Badge variant="outline">{preferences.length} rules</Badge>
+                <Badge variant="outline">{pendingInbox.length} inbox</Badge>
+              </div>
             </div>
-            <div className="w-full md:w-72">
-              <Input
-                value={captureSource}
-                onChange={(event) => setCaptureSource(event.target.value)}
-                placeholder="Optional label"
-              />
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" asChild>
+                <label className="cursor-pointer">
+                  <Upload className="mr-2 h-4 w-4" />
+                  Import JSON
+                  <input
+                    type="file"
+                    accept="application/json"
+                    className="sr-only"
+                    onChange={handleImportFile}
+                  />
+                </label>
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleDownloadJson}>
+                <Download className="mr-2 h-4 w-4" />
+                Export JSON
+              </Button>
+              <Button size="sm" onClick={handleSave} disabled={isSaving}>
+                {isSaving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
+                Save
+              </Button>
             </div>
-          </div>
-          <div className="mt-3 flex flex-col gap-3 xl:flex-row">
-            <Textarea
-              value={captureText}
-              onChange={(event) => setCaptureText(event.target.value)}
-              placeholder="Paste a project update, writing preference, or personal fact…"
-              className="min-h-[120px] border-border/60 bg-background/60 xl:flex-1"
-            />
-            <Button
-              onClick={handleDigest}
-              disabled={isDigesting}
-              className="xl:self-start"
-            >
-              {isDigesting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="mr-2 h-4 w-4" />
-              )}
-              Digest with AI
-            </Button>
           </div>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
-          <div className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm md:p-5">
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          <section className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm md:p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold tracking-tight">
-                  Inbox tracker
-                </h2>
+                <h2 className="text-lg font-semibold tracking-tight">Knowledge</h2>
                 <p className="text-sm text-muted-foreground">
-                  Triage pending material in a table, then open one item on the
-                  right to clean it up.
+                  Compact view only — names, labels, and the essentials.
                 </p>
               </div>
-              <Badge variant="outline">{pendingInbox.length} pending</Badge>
+              <Badge variant="outline">
+                {projects.length + facts.length + preferences.length} saved
+              </Badge>
             </div>
 
-            <div className="mt-4">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Item</TableHead>
-                    <TableHead>Kind</TableHead>
-                    <TableHead>Source</TableHead>
-                    <TableHead>Updated</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pendingInbox.map((item) => (
-                    <TableRow
-                      key={item.id}
-                      className={`cursor-pointer transition-colors ${selectedInboxId === item.id ? "bg-muted/40" : "hover:bg-muted/20"}`}
-                      onClick={() => setSelectedInboxId(item.id)}
-                    >
-                      <TableCell>
-                        <div className="min-w-0">
-                          <div className="font-medium">{item.title}</div>
-                          <div className="truncate text-xs text-muted-foreground">
-                            {item.summary}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            selectedInboxId === item.id ? "default" : "outline"
+            <div className="mt-4 space-y-4">
+              <div>
+                <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Headline</div>
+                <Input value={headline} onChange={(event) => setHeadline(event.target.value)} />
+              </div>
+              <div>
+                <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Core summary</div>
+                <Textarea
+                  value={summary}
+                  onChange={(event) => setSummary(event.target.value)}
+                  className="min-h-[96px] border-border/60 bg-background/60"
+                />
+              </div>
+
+              <div>
+                <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Projects</div>
+                <div className="flex flex-wrap gap-2">
+                  {projects.length > 0 ? (
+                    projects.map((project) => (
+                      <Badge key={project.id} variant="secondary" className="gap-1 px-3 py-1">
+                        <span className="max-w-[240px] truncate">{project.name}</span>
+                        <button
+                          type="button"
+                          className="ml-1 inline-flex items-center text-muted-foreground hover:text-foreground"
+                          onClick={() =>
+                            setProjects((current) => current.filter((row) => row.id !== project.id))
                           }
                         >
-                          {item.kind}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{item.sourceLabel ?? "—"}</TableCell>
-                      <TableCell>
-                        {formatRelativeDate(item.updatedAt)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {pendingInbox.length === 0 && (
-                    <TableRow>
-                      <TableCell
-                        colSpan={4}
-                        className="py-10 text-center text-sm text-muted-foreground"
-                      >
-                        No pending inbox items. Paste new material above to
-                        start.
-                      </TableCell>
-                    </TableRow>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </Badge>
+                    ))
+                  ) : (
+                    <div className="text-sm text-muted-foreground">No projects saved yet.</div>
                   )}
-                </TableBody>
-              </Table>
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Facts</div>
+                <div className="flex flex-wrap gap-2">
+                  {facts.length > 0 ? (
+                    facts.map((fact) => (
+                      <Badge key={fact.id} variant="outline" className="gap-1 px-3 py-1">
+                        <span className="max-w-[240px] truncate">{fact.title}</span>
+                        <button
+                          type="button"
+                          className="ml-1 inline-flex items-center text-muted-foreground hover:text-foreground"
+                          onClick={() =>
+                            setFacts((current) => current.filter((row) => row.id !== fact.id))
+                          }
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </Badge>
+                    ))
+                  ) : (
+                    <div className="text-sm text-muted-foreground">No facts saved yet.</div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Rules</div>
+                <div className="flex flex-wrap gap-2">
+                  {preferences.length > 0 ? (
+                    preferences.map((rule) => (
+                      <Badge key={rule.id} variant="outline">
+                        {rule.kind}: {rule.label}
+                      </Badge>
+                    ))
+                  ) : (
+                    <div className="text-sm text-muted-foreground">No rules saved yet.</div>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
+          </section>
 
           <div className="space-y-4">
             <section className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm md:p-5">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <h2 className="text-lg font-semibold tracking-tight">
-                    Selected item
-                  </h2>
+                  <h2 className="text-lg font-semibold tracking-tight">Add material</h2>
                   <p className="text-sm text-muted-foreground">
-                    Edit the draft, then accept it into projects, facts, or
-                    rules.
+                    Paste rough notes and turn them into inbox items.
                   </p>
                 </div>
-                {selectedInboxItem ? (
-                  <Badge variant="outline">{selectedInboxItem.kind}</Badge>
-                ) : null}
+                <div className="w-full md:w-56">
+                  <Input
+                    value={captureSource}
+                    onChange={(event) => setCaptureSource(event.target.value)}
+                    placeholder="Optional label"
+                  />
+                </div>
               </div>
-
-              {!selectedInboxItem ? (
-                <div className="mt-4 text-sm text-muted-foreground">
-                  Select an inbox row to review it.
-                </div>
-              ) : (
-                <div className="mt-4 space-y-3">
-                  <Input
-                    value={selectedInboxItem.title}
-                    onChange={(event) =>
-                      updateSelectedInbox((item) => ({
-                        ...item,
-                        title: event.target.value,
-                      }))
-                    }
-                  />
-                  <Textarea
-                    value={selectedInboxItem.summary}
-                    onChange={(event) =>
-                      updateSelectedInbox((item) => ({
-                        ...item,
-                        summary: event.target.value,
-                      }))
-                    }
-                    className="min-h-[88px] border-border/60 bg-background/60"
-                  />
-                  <Input
-                    value={selectedInboxItem.tags.join(", ")}
-                    onChange={(event) =>
-                      updateSelectedInbox((item) => ({
-                        ...item,
-                        tags: event.target.value
-                          .split(",")
-                          .map((tag) => tag.trim())
-                          .filter(Boolean)
-                          .slice(0, 12),
-                      }))
-                    }
-                    placeholder="Comma-separated tags"
-                  />
-                  <Textarea
-                    value={selectedInboxItem.rawText}
-                    onChange={(event) =>
-                      updateSelectedInbox((item) => ({
-                        ...item,
-                        rawText: event.target.value,
-                      }))
-                    }
-                    className="min-h-[120px] border-border/60 bg-background/60"
-                  />
-
-                  {selectedInboxItem.suggestedProject && (
-                    <div className="rounded-lg border border-border/60 bg-background/40 p-3 shadow-sm">
-                      <div className="text-sm font-medium">
-                        Starter CV bullets
-                      </div>
-                      <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-                        {generateProjectCvBullets({
-                          summary: selectedInboxItem.suggestedProject.summary,
-                          impact: selectedInboxItem.suggestedProject.impact,
-                          role: selectedInboxItem.suggestedProject.role,
-                          keywords: selectedInboxItem.suggestedProject.keywords,
-                        }).map((bullet) => (
-                          <li key={bullet} className="ml-4 list-disc">
-                            {bullet}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+              <div className="mt-3 space-y-3">
+                <Textarea
+                  value={captureText}
+                  onChange={(event) => setCaptureText(event.target.value)}
+                  placeholder="Paste a project update, writing preference, or personal fact…"
+                  className="min-h-[120px] border-border/60 bg-background/60"
+                />
+                <Button onClick={handleDigest} disabled={isDigesting}>
+                  {isDigesting ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="mr-2 h-4 w-4" />
                   )}
-
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        acceptInboxItem(selectedInboxItem, "project")
-                      }
-                    >
-                      <Check className="mr-2 h-4 w-4" />
-                      Accept as project
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => acceptInboxItem(selectedInboxItem, "fact")}
-                    >
-                      Accept as fact
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        acceptInboxItem(selectedInboxItem, "preference")
-                      }
-                    >
-                      Accept as rule
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => archiveInboxItem(selectedInboxItem.id)}
-                    >
-                      Archive
-                    </Button>
-                  </div>
-                </div>
-              )}
+                  Digest with AI
+                </Button>
+              </div>
             </section>
 
             <section className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm md:p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-semibold tracking-tight">
-                    Workspace snapshot
-                  </h2>
+                  <h2 className="text-lg font-semibold tracking-tight">Inbox</h2>
                   <p className="text-sm text-muted-foreground">
-                    Keep just the writing essentials visible here.
+                    Review pending items and promote them into the bundle.
                   </p>
                 </div>
-                <Badge variant="outline">
-                  {projects.length + facts.length + preferences.length} saved
-                </Badge>
+                <Badge variant="outline">{pendingInbox.length} pending</Badge>
               </div>
 
-              <div className="mt-4 space-y-4">
-                <div>
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Headline
-                  </div>
+              <div className="mt-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Item</TableHead>
+                      <TableHead>Kind</TableHead>
+                      <TableHead>Updated</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pendingInbox.map((item) => (
+                      <TableRow
+                        key={item.id}
+                        className={`cursor-pointer transition-colors ${selectedInboxId === item.id ? "bg-muted/40" : "hover:bg-muted/20"}`}
+                        onClick={() => setSelectedInboxId(item.id)}
+                      >
+                        <TableCell className="max-w-[260px]">
+                          <div className="truncate font-medium">{item.title}</div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={selectedInboxId === item.id ? "default" : "outline"}>
+                            {item.kind}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{formatRelativeDate(item.updatedAt)}</TableCell>
+                      </TableRow>
+                    ))}
+                    {pendingInbox.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={3} className="py-8 text-center text-sm text-muted-foreground">
+                          No pending inbox items.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {selectedInboxItem && (
+                <div className="mt-4 space-y-3 rounded-lg border border-border/60 bg-background/40 p-3">
                   <Input
-                    value={headline}
-                    onChange={(event) => setHeadline(event.target.value)}
-                    className="mt-2"
+                    value={selectedInboxItem.title}
+                    onChange={(event) =>
+                      updateSelectedInbox((item) => ({ ...item, title: event.target.value }))
+                    }
                   />
-                </div>
-                <div>
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Core summary
-                  </div>
                   <Textarea
-                    value={summary}
-                    onChange={(event) => setSummary(event.target.value)}
-                    className="mt-2 min-h-[108px]"
+                    value={selectedInboxItem.summary}
+                    onChange={(event) =>
+                      updateSelectedInbox((item) => ({ ...item, summary: event.target.value }))
+                    }
+                    className="min-h-[80px] border-border/60 bg-background/60"
                   />
-                </div>
-
-                <div>
-                  <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
-                    Projects
-                  </div>
-                  <div className="space-y-2">
-                    {projects.slice(0, 3).map((project) => (
-                      <div
-                        key={project.id}
-                        className="rounded-lg border border-border/60 bg-background/40 p-3 shadow-sm"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="font-medium">{project.name}</div>
-                            <div className="mt-1 text-sm text-muted-foreground line-clamp-2">
-                              {project.summary}
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() =>
-                              setProjects((current) =>
-                                current.filter((row) => row.id !== project.id),
-                              )
-                            }
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <Textarea
-                          value={project.roleRelevance ?? ""}
-                          onChange={(event) =>
-                            setProjects((current) =>
-                              current.map((row) =>
-                                row.id === project.id
-                                  ? {
-                                      ...row,
-                                      roleRelevance: event.target.value,
-                                    }
-                                  : row,
-                              ),
-                            )
-                          }
-                          className="mt-3 min-h-[72px] border-border/60 bg-background/60"
-                          placeholder="Role relevance / canonical framing for Ghostwriter"
-                        />
-                        <Textarea
-                          value={bulletsToText(project.cvBullets)}
-                          onChange={(event) =>
-                            setProjects((current) =>
-                              current.map((row) =>
-                                row.id === project.id
-                                  ? {
-                                      ...row,
-                                      cvBullets: parseBulletLines(
-                                        event.target.value,
-                                      ),
-                                    }
-                                  : row,
-                              ),
-                            )
-                          }
-                          className="mt-3 min-h-[88px] border-border/60 bg-background/60"
-                          placeholder="One bullet per line"
-                        />
-                      </div>
-                    ))}
-                    {projects.length === 0 && (
-                      <div className="text-sm text-muted-foreground">
-                        No projects saved yet.
-                      </div>
-                    )}
-                  </div>
-                  {!!projects.length && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="mt-2"
-                      onClick={() =>
-                        setProjects((current) =>
-                          current.map((project) => ({
-                            ...project,
-                            cvBullets: generateProjectCvBullets({
-                              summary: project.summary,
-                              impact: project.impact,
-                              role: project.role,
-                              keywords: project.keywords,
-                            }),
-                          })),
-                        )
-                      }
-                    >
-                      <Wand2 className="mr-2 h-4 w-4" />
-                      Refresh all bullets
-                    </Button>
-                  )}
-                </div>
-
-                <div>
-                  <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
-                    Facts
-                  </div>
-                  <div className="space-y-2">
-                    {facts.slice(0, 3).map((fact) => (
-                      <div
-                        key={fact.id}
-                        className="rounded-lg border border-border/60 bg-background/40 p-3 shadow-sm"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="font-medium">{fact.title}</div>
-                            <div className="mt-1 text-sm text-muted-foreground line-clamp-2">
-                              {fact.detail}
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() =>
-                              setFacts((current) =>
-                                current.filter((row) => row.id !== fact.id),
-                              )
-                            }
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                    {facts.length === 0 && (
-                      <div className="text-sm text-muted-foreground">
-                        No facts saved yet.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
-                    Rules
-                  </div>
                   <div className="flex flex-wrap gap-2">
-                    {preferences.slice(0, 6).map((rule) => (
-                      <Badge key={rule.id} variant="outline">
-                        {rule.kind}: {rule.label}
-                      </Badge>
-                    ))}
-                    {preferences.length === 0 && (
-                      <span className="text-sm text-muted-foreground">
-                        No rules saved yet.
-                      </span>
-                    )}
+                    <Button size="sm" onClick={() => acceptInboxItem(selectedInboxItem, "project")}>
+                      <Check className="mr-2 h-4 w-4" />
+                      Project
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => acceptInboxItem(selectedInboxItem, "fact")}>
+                      Fact
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => acceptInboxItem(selectedInboxItem, "preference")}>
+                      Rule
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => archiveInboxItem(selectedInboxItem.id)}>
+                      Archive
+                    </Button>
                   </div>
                 </div>
-              </div>
+              )}
             </section>
           </div>
         </section>
