@@ -50,7 +50,10 @@ import {
   buildEditorialRewritePrompt,
   shouldRunEditorialRewrite,
 } from "./ghostwriter-editor";
-import { diagnosticsFromIssueCodes } from "./ghostwriter-diagnostics";
+import {
+  diagnosticsFromIssueCodes,
+  normalizeDiagnostics,
+} from "./ghostwriter-diagnostics";
 import {
   buildReviewerRewritePrompt,
   reviewGhostwriterPayload,
@@ -1559,6 +1562,195 @@ async function generateStructuredCandidates(args: {
   return ranking;
 }
 
+async function runEditorialRewriteStage(args: {
+  llm: LlmService;
+  llmConfig: LlmRuntimeSettings;
+  context: GhostwriterRunContext;
+  runtimeState: GhostwriterRuntimeState;
+  baseMessages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+  runtimeMessages: Array<{ role: "system"; content: string }>;
+  prompt: string;
+  jobId: string;
+  signal: AbortSignal;
+  emitTimeline: GhostwriterEmitTimeline;
+  structuredPayload: GhostwriterAssistantPayload & { __variantName?: string };
+  evidenceSelection: GhostwriterEvidenceSelectionPlan;
+}): Promise<GhostwriterAssistantPayload> {
+  const rewriteDecision = shouldRunEditorialRewrite(args.structuredPayload);
+  if (!rewriteDecision.shouldRewrite) {
+    return args.structuredPayload;
+  }
+
+  await args.emitTimeline({
+    phase: "finalize",
+    eventType: "editorial_rewrite_requested",
+    title: "Editorial sharpener requested",
+    detail: "Running a final anti-generic rewrite pass on the winning draft.",
+    payload: {
+      triggerReasons: rewriteDecision.reasons,
+      diagnostics: diagnosticsFromIssueCodes(rewriteDecision.reasons),
+    },
+  });
+
+  const rewriteResult = await args.llm.callJson<GhostwriterAssistantPayload>({
+    model: args.llmConfig.model,
+    messages: [
+      ...args.baseMessages,
+      ...args.runtimeMessages,
+      {
+        role: "system",
+        content: buildEditorialRewritePrompt({
+          original: args.structuredPayload,
+          claimPlan: args.structuredPayload.claimPlan,
+          triggerReasons: rewriteDecision.reasons,
+        }),
+      },
+    ],
+    jsonSchema: CHAT_RESPONSE_SCHEMA,
+    maxRetries: 1,
+    retryDelayMs: 300,
+    jobId: args.jobId,
+    signal: args.signal,
+  });
+
+  if (!rewriteResult.success) {
+    if (args.signal.aborted) throw requestTimeout("Chat generation was cancelled");
+    throw upstreamError("Ghostwriter editorial rewrite failed", { reason: rewriteResult.error });
+  }
+
+  const rewrittenPayload = finalizePayloadCandidate({
+    raw: rewriteResult.data,
+    prompt: args.prompt,
+    profile: args.context.profile,
+    knowledgeBase: args.context.knowledgeBase,
+    evidencePack: args.context.evidencePack,
+    runtimeState: args.runtimeState,
+    claimPlan: args.structuredPayload.claimPlan,
+    evidenceSelection: args.evidenceSelection,
+  });
+
+  const nextPayload = {
+    ...rewrittenPayload,
+    claimPlan: rewrittenPayload.claimPlan ?? args.structuredPayload.claimPlan,
+  };
+
+  await args.emitTimeline({
+    phase: "finalize",
+    eventType: "editorial_rewrite_completed",
+    title: "Editorial sharpener completed",
+    detail: "Applied a final tightening pass to reduce generic phrasing and improve specificity.",
+    payload: {
+      triggerReasons: rewriteDecision.reasons,
+      improvedFields: [
+        nextPayload.coverLetterDraft ? "coverLetterDraft" : null,
+        nextPayload.response ? "response" : null,
+      ].filter((value): value is string => Boolean(value)),
+    },
+  });
+
+  return nextPayload;
+}
+
+async function runReviewerStage(args: {
+  llm: LlmService;
+  llmConfig: LlmRuntimeSettings;
+  context: GhostwriterRunContext;
+  runtimeState: GhostwriterRuntimeState;
+  baseMessages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+  runtimeMessages: Array<{ role: "system"; content: string }>;
+  prompt: string;
+  jobId: string;
+  signal: AbortSignal;
+  emitTimeline: GhostwriterEmitTimeline;
+  structuredPayload: GhostwriterAssistantPayload;
+  evidenceSelection: GhostwriterEvidenceSelectionPlan;
+}): Promise<GhostwriterAssistantPayload> {
+  let review = reviewGhostwriterPayload({
+    payload: args.structuredPayload,
+    claimPlan: args.structuredPayload.claimPlan,
+    roleFamily: args.context.evidencePack.targetRoleFamily,
+  });
+  let structuredPayload = attachReviewToPayload(args.structuredPayload, review);
+  await emitReviewCompleted(args.emitTimeline, review);
+
+  if (!review.shouldRewrite) {
+    return structuredPayload;
+  }
+
+  await args.emitTimeline({
+    phase: "finalize",
+    eventType: "review_rewrite_requested",
+    title: "Reviewer requested another rewrite",
+    detail: "The post-generation judge flagged the draft for one more quality pass.",
+    payload: {
+      issues: review.issues,
+      diagnostics: normalizeDiagnostics(review.diagnostics),
+    },
+  });
+
+  const reviewerRewriteResult = await args.llm.callJson<GhostwriterAssistantPayload>({
+    model: args.llmConfig.model,
+    messages: [
+      ...args.baseMessages,
+      ...args.runtimeMessages,
+      {
+        role: "system",
+        content: buildReviewerRewritePrompt({
+          payload: structuredPayload,
+          review,
+          claimPlan: structuredPayload.claimPlan,
+        }),
+      },
+    ],
+    jsonSchema: CHAT_RESPONSE_SCHEMA,
+    maxRetries: 1,
+    retryDelayMs: 300,
+    jobId: args.jobId,
+    signal: args.signal,
+  });
+
+  if (!reviewerRewriteResult.success) {
+    if (args.signal.aborted) throw requestTimeout("Chat generation was cancelled");
+    throw upstreamError("Ghostwriter reviewer rewrite failed", { reason: reviewerRewriteResult.error });
+  }
+
+  const rewrittenPayload = finalizePayloadCandidate({
+    raw: reviewerRewriteResult.data,
+    prompt: args.prompt,
+    profile: args.context.profile,
+    knowledgeBase: args.context.knowledgeBase,
+    evidencePack: args.context.evidencePack,
+    runtimeState: args.runtimeState,
+    claimPlan: structuredPayload.claimPlan,
+    evidenceSelection: args.evidenceSelection,
+  });
+
+  review = reviewGhostwriterPayload({
+    payload: rewrittenPayload,
+    claimPlan: structuredPayload.claimPlan,
+    roleFamily: args.context.evidencePack.targetRoleFamily,
+  });
+  structuredPayload = attachReviewToPayload(rewrittenPayload, review);
+
+  await args.emitTimeline({
+    phase: "finalize",
+    eventType: "editorial_rewrite_completed",
+    title: "Reviewer rewrite completed",
+    detail: review.summary,
+    payload: {
+      triggerReasons: structuredPayload.review?.issues ?? [],
+      improvedFields: [
+        structuredPayload.coverLetterDraft ? "coverLetterDraft" : null,
+        structuredPayload.response ? "response" : null,
+        structuredPayload.review ? "review" : null,
+      ].filter((value): value is string => Boolean(value)),
+    },
+  });
+  await emitReviewCompleted(args.emitTimeline, review);
+
+  return structuredPayload;
+}
+
 async function finalizeStructuredPayload(args: {
   llm: LlmService;
   llmConfig: LlmRuntimeSettings;
@@ -1573,135 +1765,11 @@ async function finalizeStructuredPayload(args: {
   structuredPayload: GhostwriterAssistantPayload & { __variantName?: string };
   evidenceSelection: GhostwriterEvidenceSelectionPlan;
 }): Promise<GhostwriterAssistantPayload> {
-  let structuredPayload = args.structuredPayload;
-  const rewriteDecision = shouldRunEditorialRewrite(structuredPayload);
-  if (rewriteDecision.shouldRewrite) {
-    await args.emitTimeline({
-      phase: "finalize",
-      eventType: "editorial_rewrite_requested",
-      title: "Editorial sharpener requested",
-      detail: "Running a final anti-generic rewrite pass on the winning draft.",
-      payload: {
-        triggerReasons: rewriteDecision.reasons,
-        diagnostics: diagnosticsFromIssueCodes(rewriteDecision.reasons),
-      },
-    });
-
-    const rewriteResult = await args.llm.callJson<GhostwriterAssistantPayload>({
-      model: args.llmConfig.model,
-      messages: [
-        ...args.baseMessages,
-        ...args.runtimeMessages,
-        { role: "system", content: buildEditorialRewritePrompt({ original: structuredPayload, claimPlan: structuredPayload.claimPlan, triggerReasons: rewriteDecision.reasons }) },
-      ],
-      jsonSchema: CHAT_RESPONSE_SCHEMA,
-      maxRetries: 1,
-      retryDelayMs: 300,
-      jobId: args.jobId,
-      signal: args.signal,
-    });
-
-    if (!rewriteResult.success) {
-      if (args.signal.aborted) throw requestTimeout("Chat generation was cancelled");
-      throw upstreamError("Ghostwriter editorial rewrite failed", { reason: rewriteResult.error });
-    }
-
-    const rewrittenPayload = finalizePayloadCandidate({
-      raw: rewriteResult.data,
-      prompt: args.prompt,
-      profile: args.context.profile,
-      knowledgeBase: args.context.knowledgeBase,
-      evidencePack: args.context.evidencePack,
-      runtimeState: args.runtimeState,
-      claimPlan: structuredPayload.claimPlan,
-      evidenceSelection: args.evidenceSelection,
-    });
-
-    structuredPayload = { ...rewrittenPayload, claimPlan: rewrittenPayload.claimPlan ?? structuredPayload.claimPlan };
-
-    await args.emitTimeline({
-      phase: "finalize",
-      eventType: "editorial_rewrite_completed",
-      title: "Editorial sharpener completed",
-      detail: "Applied a final tightening pass to reduce generic phrasing and improve specificity.",
-      payload: {
-        triggerReasons: rewriteDecision.reasons,
-        improvedFields: [structuredPayload.coverLetterDraft ? "coverLetterDraft" : null, structuredPayload.response ? "response" : null].filter((value): value is string => Boolean(value)),
-      },
-    });
-  }
-
-  let review = reviewGhostwriterPayload({
-    payload: structuredPayload,
-    claimPlan: structuredPayload.claimPlan,
-    roleFamily: args.context.evidencePack.targetRoleFamily,
+  const editorialPayload = await runEditorialRewriteStage(args);
+  return runReviewerStage({
+    ...args,
+    structuredPayload: editorialPayload,
   });
-  structuredPayload = attachReviewToPayload(structuredPayload, review);
-  await emitReviewCompleted(args.emitTimeline, review);
-
-  if (review.shouldRewrite) {
-    await args.emitTimeline({
-      phase: "finalize",
-      eventType: "review_rewrite_requested",
-      title: "Reviewer requested another rewrite",
-      detail: "The post-generation judge flagged the draft for one more quality pass.",
-      payload: { issues: review.issues, diagnostics: review.diagnostics },
-    });
-
-    const reviewerRewriteResult = await args.llm.callJson<GhostwriterAssistantPayload>({
-      model: args.llmConfig.model,
-      messages: [
-        ...args.baseMessages,
-        ...args.runtimeMessages,
-        { role: "system", content: buildReviewerRewritePrompt({ payload: structuredPayload, review, claimPlan: structuredPayload.claimPlan }) },
-      ],
-      jsonSchema: CHAT_RESPONSE_SCHEMA,
-      maxRetries: 1,
-      retryDelayMs: 300,
-      jobId: args.jobId,
-      signal: args.signal,
-    });
-
-    if (!reviewerRewriteResult.success) {
-      if (args.signal.aborted) throw requestTimeout("Chat generation was cancelled");
-      throw upstreamError("Ghostwriter reviewer rewrite failed", { reason: reviewerRewriteResult.error });
-    }
-
-    const twiceRewrittenPayload = finalizePayloadCandidate({
-      raw: reviewerRewriteResult.data,
-      prompt: args.prompt,
-      profile: args.context.profile,
-      knowledgeBase: args.context.knowledgeBase,
-      evidencePack: args.context.evidencePack,
-      runtimeState: args.runtimeState,
-      claimPlan: structuredPayload.claimPlan,
-      evidenceSelection: args.evidenceSelection,
-    });
-    review = reviewGhostwriterPayload({
-      payload: twiceRewrittenPayload,
-      claimPlan: structuredPayload.claimPlan,
-      roleFamily: args.context.evidencePack.targetRoleFamily,
-    });
-    structuredPayload = attachReviewToPayload(twiceRewrittenPayload, review);
-
-    await args.emitTimeline({
-      phase: "finalize",
-      eventType: "editorial_rewrite_completed",
-      title: "Reviewer rewrite completed",
-      detail: review.summary,
-      payload: {
-        triggerReasons: structuredPayload.review?.issues ?? [],
-        improvedFields: [
-          structuredPayload.coverLetterDraft ? "coverLetterDraft" : null,
-          structuredPayload.response ? "response" : null,
-          structuredPayload.review ? "review" : null,
-        ].filter((value): value is string => Boolean(value)),
-      },
-    });
-    await emitReviewCompleted(args.emitTimeline, review);
-  }
-
-  return structuredPayload;
 }
 
 async function runStructuredWritingTask(args: {

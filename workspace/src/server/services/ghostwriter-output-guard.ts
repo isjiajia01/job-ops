@@ -6,7 +6,10 @@ import type {
   GhostwriterSkillGroup,
   ResumeProfile,
 } from "@shared/types";
-import { diagnosticFromIssueCode } from "./ghostwriter-diagnostics";
+import {
+  diagnosticFromIssueCode,
+  normalizeDiagnostics,
+} from "./ghostwriter-diagnostics";
 
 const HIGH_RISK_PATCH_PATTERNS = [
   /\b(?:10\+|[1-9]\d+\+)\s+years?\b/i,
@@ -489,5 +492,13 @@ export function scoreGhostwriterCandidate(args: {
   if (mustClaimCoverage > 0) reasons.push(`must-claims:${mustClaimCoverage}`);
   if (evidenceCoverage > 0) reasons.push(`claim-coverage:${evidenceCoverage}`);
 
-  return { score, reasons, coveredClaimIds, mustClaimCoverage, evidenceCoverage, penalties, diagnostics };
+  return {
+    score,
+    reasons,
+    coveredClaimIds,
+    mustClaimCoverage,
+    evidenceCoverage,
+    penalties,
+    diagnostics: normalizeDiagnostics(diagnostics),
+  };
 }

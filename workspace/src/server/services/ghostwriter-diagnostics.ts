@@ -1,11 +1,65 @@
 import type { GhostwriterDiagnostic } from "@shared/types";
 
+const severityRank: Record<GhostwriterDiagnostic["severity"], number> = {
+  low: 0,
+  medium: 1,
+  high: 2,
+};
+
 export function buildDiagnostic(input: GhostwriterDiagnostic): GhostwriterDiagnostic {
   return input;
 }
 
+export function normalizeDiagnostics(
+  diagnostics: GhostwriterDiagnostic[],
+): GhostwriterDiagnostic[] {
+  const byCode = new Map<string, GhostwriterDiagnostic>();
+  for (const diagnostic of diagnostics) {
+    const existing = byCode.get(diagnostic.code);
+    if (!existing) {
+      byCode.set(diagnostic.code, diagnostic);
+      continue;
+    }
+    byCode.set(
+      diagnostic.code,
+      severityRank[diagnostic.severity] > severityRank[existing.severity]
+        ? diagnostic
+        : existing,
+    );
+  }
+  return Array.from(byCode.values()).sort((left, right) => {
+    const severityDelta = severityRank[right.severity] - severityRank[left.severity];
+    if (severityDelta !== 0) return severityDelta;
+    return left.code.localeCompare(right.code);
+  });
+}
+
 export function diagnosticsFromIssueCodes(codes: string[]): GhostwriterDiagnostic[] {
-  return codes.map((code) => diagnosticFromIssueCode(code));
+  return normalizeDiagnostics(codes.map((code) => diagnosticFromIssueCode(code)));
+}
+
+export function summarizeDiagnostics(
+  diagnostics: GhostwriterDiagnostic[],
+): Array<{ category: GhostwriterDiagnostic["category"]; severity: GhostwriterDiagnostic["severity"]; count: number }> {
+  const counts = new Map<string, { category: GhostwriterDiagnostic["category"]; severity: GhostwriterDiagnostic["severity"]; count: number }>();
+  for (const diagnostic of normalizeDiagnostics(diagnostics)) {
+    const key = `${diagnostic.category}:${diagnostic.severity}`;
+    const existing = counts.get(key);
+    if (existing) {
+      existing.count += 1;
+      continue;
+    }
+    counts.set(key, {
+      category: diagnostic.category,
+      severity: diagnostic.severity,
+      count: 1,
+    });
+  }
+  return Array.from(counts.values()).sort((left, right) => {
+    const severityDelta = severityRank[right.severity] - severityRank[left.severity];
+    if (severityDelta !== 0) return severityDelta;
+    return left.category.localeCompare(right.category);
+  });
 }
 
 export function diagnosticFromIssueCode(code: string): GhostwriterDiagnostic {

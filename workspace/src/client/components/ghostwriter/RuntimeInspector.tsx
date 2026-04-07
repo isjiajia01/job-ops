@@ -8,6 +8,35 @@ import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RunTimeline } from "./RunTimeline";
 
+function renderDiagnosticSummary(
+  diagnostics?: Array<{ category: string; severity: string; detail: string }>,
+) {
+  if (!diagnostics || diagnostics.length === 0) return null;
+  const grouped = new Map<string, { category: string; severity: string; count: number }>();
+  for (const diagnostic of diagnostics) {
+    const key = `${diagnostic.severity}:${diagnostic.category}`;
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.count += 1;
+      continue;
+    }
+    grouped.set(key, {
+      category: diagnostic.category,
+      severity: diagnostic.severity,
+      count: 1,
+    });
+  }
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {Array.from(grouped.values()).map((item) => (
+        <span key={`${item.severity}-${item.category}`} className="rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] text-muted-foreground">
+          {item.severity} · {item.category} · {item.count}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 type RuntimeInspectorProps = {
   activeRunId: string | null;
   currentRuntime: GhostwriterAssistantPayload | null;
@@ -144,6 +173,7 @@ export const RuntimeInspector: React.FC<RuntimeInspectorProps> = ({
             <div className="mt-2 rounded border border-border/50 bg-background/50 p-2 text-[11px] text-muted-foreground">
               <div><span className="font-medium text-foreground/80">review:</span> {currentRuntime.review.summary}</div>
               <div className="mt-1">specificity {currentRuntime.review.specificity}/5 · evidence {currentRuntime.review.evidenceStrength}/5 · risk {currentRuntime.review.overclaimRisk}/5 · naturalness {currentRuntime.review.naturalness}/5</div>
+              {renderDiagnosticSummary(currentRuntime.review.diagnostics)}
               {currentRuntime.review.diagnostics?.length ? (
                 <div className="mt-2 space-y-1">
                   {currentRuntime.review.diagnostics.slice(0, 4).map((diagnostic) => (

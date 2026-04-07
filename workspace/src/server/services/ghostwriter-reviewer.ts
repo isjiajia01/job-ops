@@ -3,7 +3,11 @@ import type {
   GhostwriterClaimPlan,
   GhostwriterDiagnostic,
 } from "@shared/types";
-import { buildDiagnostic, diagnosticFromIssueCode } from "./ghostwriter-diagnostics";
+import {
+  buildDiagnostic,
+  diagnosticFromIssueCode,
+  normalizeDiagnostics,
+} from "./ghostwriter-diagnostics";
 
 export type GhostwriterReviewScores = {
   specificity: number;
@@ -192,7 +196,7 @@ export function reviewGhostwriterPayload(args: {
       naturalness,
     },
     issues,
-    diagnostics,
+    diagnostics: normalizeDiagnostics(diagnostics),
     shouldRewrite,
   };
 }
