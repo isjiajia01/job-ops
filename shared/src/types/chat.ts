@@ -107,6 +107,15 @@ export interface GhostwriterClaimPlan {
   reviewerFocus: string[];
 }
 
+export interface GhostwriterReviewSummary {
+  summary: string;
+  specificity: number;
+  evidenceStrength: number;
+  overclaimRisk: number;
+  naturalness: number;
+  issues: string[];
+}
+
 export interface GhostwriterAssistantPayload {
   response: string;
   coverLetterDraft: string | null;
@@ -114,6 +123,7 @@ export interface GhostwriterAssistantPayload {
   resumePatch: GhostwriterResumePatch | null;
   fitBrief?: GhostwriterFitBrief | null;
   claimPlan?: GhostwriterClaimPlan | null;
+  review?: GhostwriterReviewSummary | null;
   runtimePlan?: GhostwriterRuntimePlanSummary | null;
   toolTrace?: GhostwriterToolTraceEntry[] | null;
   executionTrace?: GhostwriterExecutionStage[] | null;
@@ -186,6 +196,18 @@ export type JobChatRunEventPayloadByType = {
   editorial_rewrite_completed: {
     triggerReasons: string[];
     improvedFields: string[];
+  };
+  review_completed: {
+    summary: string;
+    specificity: number;
+    evidenceStrength: number;
+    overclaimRisk: number;
+    naturalness: number;
+    issues: string[];
+    shouldRewrite: boolean;
+  };
+  review_rewrite_requested: {
+    issues: string[];
   };
   editorial_rewrite_requested: {
     triggerReasons: string[];

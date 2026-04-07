@@ -664,7 +664,16 @@ describe("ghostwriter service", () => {
         data: {
           response: "I tightened the draft.",
           coverLetterDraft:
-            "Your role stands out to me because it is close to the planning-focused work I have been doing in my DTU thesis with Mover, where I work on rolling-horizon decisions under real delivery constraints and translate them into practical decision support.",
+            "This role stands out to me because it is close to the planning-focused work I have been doing in my DTU thesis with Mover, where I work on rolling-horizon decisions under real delivery constraints and translate them into practical decision support in a way that stays practical and grounded.",
+          coverLetterKind: "letter",
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          response: "I tightened the draft again.",
+          coverLetterDraft:
+            "The role stands out to me because it is close to the planning-focused work I have been doing in my DTU thesis with Mover, where I work with rolling-horizon decisions under real delivery constraints and turn that analysis into practical decision support.",
           coverLetterKind: "letter",
         },
       });
@@ -687,6 +696,12 @@ describe("ghostwriter service", () => {
         eventType: "editorial_rewrite_completed",
       }),
     );
+    expect(mocks.repo.createRunEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "review_completed",
+      }),
+    );
+    expect(parsed.review?.specificity).toBeGreaterThanOrEqual(3);
   });
 
   it("drops obviously overclaiming resumePatch fields before updating the job", async () => {

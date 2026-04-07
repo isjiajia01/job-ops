@@ -162,6 +162,26 @@ function renderPayloadPreview(event: JobChatRunEvent) {
       const payload = event.payload;
       return <div className="mt-2">{renderArraySummary("triggerReasons", payload.triggerReasons)}</div>;
     }
+    case "review_completed": {
+      const payload = event.payload;
+      return (
+        <div className="mt-2 space-y-2">
+          {renderChipRow([
+            `specificity:${payload.specificity}`,
+            `evidence:${payload.evidenceStrength}`,
+            `risk:${payload.overclaimRisk}`,
+            `naturalness:${payload.naturalness}`,
+            payload.shouldRewrite ? "rewrite" : "keep",
+          ])}
+          <div className="text-[11px] text-muted-foreground">{payload.summary}</div>
+          {renderArraySummary("issues", payload.issues)}
+        </div>
+      );
+    }
+    case "review_rewrite_requested": {
+      const payload = event.payload;
+      return <div className="mt-2">{renderArraySummary("issues", payload.issues)}</div>;
+    }
     case "editorial_rewrite_completed": {
       const payload = event.payload;
       return (

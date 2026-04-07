@@ -136,6 +136,12 @@ export const RuntimeInspector: React.FC<RuntimeInspectorProps> = ({
               ).join(" · ")}
             </div>
           ) : null}
+          {currentRuntime.review ? (
+            <div className="mt-2 rounded border border-border/50 bg-background/50 p-2 text-[11px] text-muted-foreground">
+              <div><span className="font-medium text-foreground/80">review:</span> {currentRuntime.review.summary}</div>
+              <div className="mt-1">specificity {currentRuntime.review.specificity}/5 · evidence {currentRuntime.review.evidenceStrength}/5 · risk {currentRuntime.review.overclaimRisk}/5 · naturalness {currentRuntime.review.naturalness}/5</div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

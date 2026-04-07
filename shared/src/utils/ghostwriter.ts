@@ -5,6 +5,7 @@ import type {
   GhostwriterExecutionStage,
   GhostwriterFitBrief,
   GhostwriterResumePatch,
+  GhostwriterReviewSummary,
   GhostwriterRuntimePlanSummary,
   GhostwriterSkillGroup,
   GhostwriterToolTraceEntry,
@@ -121,6 +122,15 @@ const ghostwriterFitBriefSchema = z.object({
   recommendedAngle: z.string().trim().max(500).nullable().optional(),
 });
 
+const ghostwriterReviewSummarySchema = z.object({
+  summary: z.string().trim().min(1).max(600),
+  specificity: z.number().min(1).max(5),
+  evidenceStrength: z.number().min(1).max(5),
+  overclaimRisk: z.number().min(1).max(5),
+  naturalness: z.number().min(1).max(5),
+  issues: z.array(z.string().trim().min(1).max(200)).max(12),
+});
+
 const ghostwriterRuntimePlanSummarySchema = z.object({
   role: z.string().trim().min(1).max(200),
   taskKind: z.string().trim().min(1).max(80),
@@ -167,6 +177,7 @@ export const ghostwriterAssistantPayloadSchema = z.object({
   resumePatch: ghostwriterResumePatchSchema.nullable().optional(),
   fitBrief: ghostwriterFitBriefSchema.nullable().optional(),
   claimPlan: ghostwriterClaimPlanSchema.nullable().optional(),
+  review: ghostwriterReviewSummarySchema.nullable().optional(),
   runtimePlan: ghostwriterRuntimePlanSummarySchema.nullable().optional(),
   toolTrace: z.array(ghostwriterToolTraceEntrySchema).max(12).nullable().optional(),
   executionTrace: z.array(ghostwriterExecutionStageSchema).max(12).nullable().optional(),
@@ -339,6 +350,21 @@ function normalizeClaimPlan(value: unknown): GhostwriterClaimPlan | null {
   return { targetRoleAngle, openingStrategy, claims, excludedClaims, reviewerFocus };
 }
 
+function normalizeReview(value: unknown): GhostwriterReviewSummary | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const summary = toNonEmptyString(record.summary);
+  const specificity = typeof record.specificity === "number" ? record.specificity : null;
+  const evidenceStrength = typeof record.evidenceStrength === "number" ? record.evidenceStrength : null;
+  const overclaimRisk = typeof record.overclaimRisk === "number" ? record.overclaimRisk : null;
+  const naturalness = typeof record.naturalness === "number" ? record.naturalness : null;
+  const issues = Array.isArray(record.issues)
+    ? record.issues.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => Boolean(entry))
+    : [];
+  if (!summary || specificity == null || evidenceStrength == null || overclaimRisk == null || naturalness == null) return null;
+  return { summary, specificity, evidenceStrength, overclaimRisk, naturalness, issues };
+}
+
 function normalizeRuntimePlan(value: unknown): GhostwriterRuntimePlanSummary | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
@@ -406,6 +432,7 @@ export function normalizeGhostwriterAssistantPayload(
       resumePatch: normalizeResumePatch(parsed.data.resumePatch),
       fitBrief: normalizeFitBrief(parsed.data.fitBrief),
       claimPlan: normalizeClaimPlan(parsed.data.claimPlan),
+      review: normalizeReview(parsed.data.review),
       runtimePlan: normalizeRuntimePlan(parsed.data.runtimePlan),
       toolTrace: normalizeToolTrace(parsed.data.toolTrace),
       executionTrace: normalizeExecutionTrace(parsed.data.executionTrace),
@@ -422,6 +449,7 @@ export function normalizeGhostwriterAssistantPayload(
           resumePatch: null,
           fitBrief: null,
           claimPlan: null,
+          review: null,
           runtimePlan: null,
           toolTrace: null,
           executionTrace: null,
@@ -461,6 +489,7 @@ export function normalizeGhostwriterAssistantPayload(
       normalizeLooseResumePatch(record),
     fitBrief: normalizeFitBrief(record.fitBrief),
     claimPlan: normalizeClaimPlan(record.claimPlan),
+    review: normalizeReview(record.review),
     runtimePlan: normalizeRuntimePlan(record.runtimePlan),
     toolTrace: normalizeToolTrace(record.toolTrace),
     executionTrace: normalizeExecutionTrace(record.executionTrace),
@@ -477,6 +506,7 @@ export function serializeGhostwriterAssistantPayload(
     resumePatch: payload.resumePatch,
     fitBrief: payload.fitBrief ?? null,
     claimPlan: payload.claimPlan ?? null,
+    review: payload.review ?? null,
     runtimePlan: payload.runtimePlan ?? null,
     toolTrace: payload.toolTrace ?? null,
     executionTrace: payload.executionTrace ?? null,
@@ -495,6 +525,7 @@ export function parseGhostwriterAssistantContent(
       resumePatch: null,
       fitBrief: null,
       claimPlan: null,
+      review: null,
       runtimePlan: null,
       toolTrace: null,
       executionTrace: null,
@@ -521,6 +552,7 @@ export function parseGhostwriterAssistantContent(
     resumePatch: null,
     fitBrief: null,
     claimPlan: null,
+    review: null,
     runtimePlan: null,
     toolTrace: null,
     executionTrace: null,

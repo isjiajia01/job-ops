@@ -46,6 +46,10 @@ import {
   shouldRunEditorialRewrite,
 } from "./ghostwriter-editor";
 import {
+  buildReviewerRewritePrompt,
+  reviewGhostwriterPayload,
+} from "./ghostwriter-reviewer";
+import {
   lintCoverLetterDraft,
   sanitizeResumePatch,
   scoreGhostwriterCandidate,
@@ -86,6 +90,9 @@ const CHAT_RESPONSE_SCHEMA: JsonSchemaDefinition = {
         type: ["object", "null"],
       },
       claimPlan: {
+        type: ["object", "null"],
+      },
+      review: {
         type: ["object", "null"],
       },
     },
@@ -725,6 +732,7 @@ function finalizePayloadCandidate(args: {
       resumePatch: sanitizedResumePatch,
       fitBrief: payload.fitBrief ?? buildFitBrief(args.evidencePack),
       claimPlan: args.claimPlan ?? payload.claimPlan ?? null,
+      review: payload.review ?? null,
       runtimePlan: args.runtimeState?.plan ?? payload.runtimePlan ?? null,
       toolTrace: args.runtimeState?.toolResults ?? payload.toolTrace ?? null,
       executionTrace:
@@ -744,6 +752,7 @@ function finalizePayloadCandidate(args: {
     resumePatch: sanitizedResumePatch,
     fitBrief: payload.fitBrief ?? buildFitBrief(args.evidencePack),
     claimPlan: args.claimPlan ?? payload.claimPlan ?? null,
+    review: payload.review ?? null,
     runtimePlan: args.runtimeState?.plan ?? payload.runtimePlan ?? null,
     toolTrace: args.runtimeState?.toolResults ?? payload.toolTrace ?? null,
     executionTrace:
@@ -1554,6 +1563,133 @@ async function runAssistantReply(
             },
           });
         }
+        let review = reviewGhostwriterPayload({
+          payload: structuredPayload,
+          claimPlan: structuredPayload.claimPlan,
+        });
+        structuredPayload = {
+          ...structuredPayload,
+          review: {
+            summary: review.summary,
+            specificity: review.scores.specificity,
+            evidenceStrength: review.scores.evidenceStrength,
+            overclaimRisk: review.scores.overclaimRisk,
+            naturalness: review.scores.naturalness,
+            issues: review.issues,
+          },
+        };
+        await emitRunTimelineEvent(run, options, {
+          phase: "finalize",
+          eventType: "review_completed",
+          title: "Post-generation review completed",
+          detail: review.summary,
+          payload: {
+            summary: review.summary,
+            specificity: review.scores.specificity,
+            evidenceStrength: review.scores.evidenceStrength,
+            overclaimRisk: review.scores.overclaimRisk,
+            naturalness: review.scores.naturalness,
+            issues: review.issues,
+            shouldRewrite: review.shouldRewrite,
+          },
+        });
+
+        if (review.shouldRewrite) {
+          await emitRunTimelineEvent(run, options, {
+            phase: "finalize",
+            eventType: "review_rewrite_requested",
+            title: "Reviewer requested another rewrite",
+            detail: "The post-generation judge flagged the draft for one more quality pass.",
+            payload: {
+              issues: review.issues,
+            },
+          });
+
+          const reviewerRewriteResult = await llm.callJson<GhostwriterAssistantPayload>({
+            model: llmConfig.model,
+            messages: [
+              ...baseMessages,
+              ...runtimeMessages,
+              {
+                role: "system",
+                content: buildReviewerRewritePrompt({
+                  payload: structuredPayload,
+                  review,
+                  claimPlan: structuredPayload.claimPlan,
+                }),
+              },
+            ],
+            jsonSchema: CHAT_RESPONSE_SCHEMA,
+            maxRetries: 1,
+            retryDelayMs: 300,
+            jobId: options.jobId,
+            signal: controller.signal,
+          });
+
+          if (!reviewerRewriteResult.success) {
+            if (controller.signal.aborted) {
+              throw requestTimeout("Chat generation was cancelled");
+            }
+            throw upstreamError("Ghostwriter reviewer rewrite failed", {
+              reason: reviewerRewriteResult.error,
+            });
+          }
+
+          const twiceRewrittenPayload = finalizePayloadCandidate({
+            raw: reviewerRewriteResult.data,
+            prompt: options.prompt,
+            profile: context.profile,
+            knowledgeBase: context.knowledgeBase,
+            evidencePack: context.evidencePack,
+            runtimeState,
+            claimPlan: structuredPayload.claimPlan,
+          });
+          review = reviewGhostwriterPayload({
+            payload: twiceRewrittenPayload,
+            claimPlan: structuredPayload.claimPlan,
+          });
+          structuredPayload = {
+            ...twiceRewrittenPayload,
+            review: {
+              summary: review.summary,
+              specificity: review.scores.specificity,
+              evidenceStrength: review.scores.evidenceStrength,
+              overclaimRisk: review.scores.overclaimRisk,
+              naturalness: review.scores.naturalness,
+              issues: review.issues,
+            },
+          };
+          await emitRunTimelineEvent(run, options, {
+            phase: "finalize",
+            eventType: "editorial_rewrite_completed",
+            title: "Reviewer rewrite completed",
+            detail: review.summary,
+            payload: {
+              triggerReasons: structuredPayload.review?.issues ?? [],
+              improvedFields: [
+                structuredPayload.coverLetterDraft ? "coverLetterDraft" : null,
+                structuredPayload.response ? "response" : null,
+                structuredPayload.review ? "review" : null,
+              ].filter((value): value is string => Boolean(value)),
+            },
+          });
+          await emitRunTimelineEvent(run, options, {
+            phase: "finalize",
+            eventType: "review_completed",
+            title: "Post-generation review completed",
+            detail: review.summary,
+            payload: {
+              summary: review.summary,
+              specificity: review.scores.specificity,
+              evidenceStrength: review.scores.evidenceStrength,
+              overclaimRisk: review.scores.overclaimRisk,
+              naturalness: review.scores.naturalness,
+              issues: review.issues,
+              shouldRewrite: review.shouldRewrite,
+            },
+          });
+        }
+
         const topEvaluation = ranking.ranked[0]?.evaluation;
         selectionMeta = {
           candidateCount: ranking.ranked.length,
