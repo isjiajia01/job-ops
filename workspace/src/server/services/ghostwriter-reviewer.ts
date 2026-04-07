@@ -25,6 +25,7 @@ function countMatches(text: string, patterns: RegExp[]): number {
 export function reviewGhostwriterPayload(args: {
   payload: GhostwriterAssistantPayload;
   claimPlan?: GhostwriterClaimPlan | null;
+  roleFamily?: string | null;
 }): GhostwriterReviewResult {
   const text = [args.payload.response, args.payload.coverLetterDraft]
     .filter(Boolean)
@@ -85,16 +86,26 @@ export function reviewGhostwriterPayload(args: {
     return normalized.includes(claimSnippet) || claim.evidenceSnippets.some((item) => normalized.includes(item.toLowerCase().slice(0, 24)));
   }).length ?? 0;
 
-  const specificity = clamp(2 + concreteEvidenceHits * 0.6 + coveredClaimCount * 0.5 - genericHits * 0.5);
-  const evidenceStrength = clamp(2 + concreteEvidenceHits * 0.6 + coveredClaimCount * 0.6 - overclaimHits * 0.4);
+  const roleSpecificBoost =
+    args.roleFamily === "planning-and-operations"
+      ? countMatches(normalized, [/planning/g, /operational/g, /constraints/g, /decision support/g]) * 0.15
+      : args.roleFamily === "analytics-and-decision-support"
+        ? countMatches(normalized, [/analysis/g, /python/g, /excel/g, /reporting/g]) * 0.15
+        : args.roleFamily === "optimization-and-research"
+          ? countMatches(normalized, [/optimization/g, /rolling-horizon/g, /model/g, /routing/g]) * 0.15
+          : 0;
+
+  const specificity = clamp(2 + concreteEvidenceHits * 0.6 + coveredClaimCount * 0.5 + roleSpecificBoost - genericHits * 0.5);
+  const evidenceStrength = clamp(2 + concreteEvidenceHits * 0.6 + coveredClaimCount * 0.6 + roleSpecificBoost - overclaimHits * 0.4);
   const overclaimRisk = clamp(4 - overclaimHits * 0.8 - genericHits * 0.2);
-  const naturalness = clamp(3 - genericHits * 0.5 - longSentenceCount * 0.4 + Math.min(sentenceCount, 4) * 0.1);
+  const naturalness = clamp(3 - genericHits * 0.5 - longSentenceCount * 0.4 + Math.min(sentenceCount, 4) * 0.1 + roleSpecificBoost * 0.2);
 
   if (genericHits > 0) issues.push(`generic-language:${genericHits}`);
   if (overclaimHits > 0) issues.push(`overclaim-risk:${overclaimHits}`);
   if (longSentenceCount > 0) issues.push(`long-sentences:${longSentenceCount}`);
   if (coveredClaimCount === 0 && args.claimPlan?.claims.length) issues.push("weak-claim-coverage");
   if (concreteEvidenceHits < 2) issues.push("thin-evidence-signal");
+  if (args.roleFamily && roleSpecificBoost < 0.2) issues.push(`weak-role-rubric:${args.roleFamily}`);
 
   const shouldRewrite =
     specificity <= 2 ||

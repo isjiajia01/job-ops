@@ -89,7 +89,7 @@ export const MessageList: React.FC<MessageListProps> = ({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4 py-4">
       {messages.length > 0 &&
         messages.map((message) => {
           const isUser = message.role === "user";
@@ -108,14 +108,14 @@ export const MessageList: React.FC<MessageListProps> = ({
           return (
             <div
               key={message.id}
-              className={`group rounded-lg border p-3 ${
+              className={`group rounded-[24px] border p-4 shadow-sm transition ${
                 isUser
-                  ? "border-primary/30 bg-primary/5"
-                  : "border-border/60 bg-background"
+                  ? "border-emerald-200 bg-[linear-gradient(180deg,#ecfdf5_0%,#f4fbf7_100%)]"
+                  : "border-slate-200 bg-white"
               }`}
             >
-              <div className="mb-1 flex items-center gap-2">
-                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              <div className="mb-2 flex items-center gap-2">
+                <span className={`rounded-full px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.18em] ${isUser ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
                   {isUser ? "You" : "Ghostwriter"}
                 </span>
                 {branch && (
@@ -129,7 +129,7 @@ export const MessageList: React.FC<MessageListProps> = ({
                     <button
                       type="button"
                       onClick={() => startEditing(message)}
-                      className="rounded p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                      className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                       aria-label="Edit message"
                       title="Edit message"
                     >
@@ -161,7 +161,7 @@ export const MessageList: React.FC<MessageListProps> = ({
                       <button
                         type="button"
                         onClick={() => onRegenerate(message.id)}
-                        className="rounded p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                        className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                         aria-label="Regenerate response"
                         title="Regenerate response"
                       >
@@ -182,7 +182,7 @@ export const MessageList: React.FC<MessageListProps> = ({
                         cancelEditing();
                       }
                     }}
-                    className="min-h-[60px]"
+                    className="min-h-[60px] rounded-2xl border-slate-200 bg-white"
                     autoFocus
                   />
                   <div className="flex items-center justify-end gap-1">
@@ -205,7 +205,7 @@ export const MessageList: React.FC<MessageListProps> = ({
                   const parsed = parseGhostwriterAssistantContent(message.content);
                   return (
                     <div className="space-y-3">
-                      <div className="text-sm leading-relaxed text-foreground [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l [&_blockquote]:border-border [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-muted/40 [&_code]:px-1 [&_h1]:mt-4 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:mt-4 [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_li]:my-1 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-muted/40 [&_pre]:p-3 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5">
+                      <div className="text-[15px] leading-7 text-slate-700 [&_a]:text-emerald-700 [&_a]:underline [&_blockquote]:border-l [&_blockquote]:border-slate-200 [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_h1]:mt-4 [&_h1]:font-serif [&_h1]:text-xl [&_h1]:font-semibold [&_h2]:mt-4 [&_h2]:font-serif [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_li]:my-1 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded-2xl [&_pre]:bg-slate-950 [&_pre]:p-3 [&_pre]:text-slate-100 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5">
                         <ReactMarkdown>
                           {parsed.response || "..."}
                         </ReactMarkdown>

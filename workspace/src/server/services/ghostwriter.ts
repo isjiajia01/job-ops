@@ -49,6 +49,7 @@ import {
   buildReviewerRewritePrompt,
   reviewGhostwriterPayload,
 } from "./ghostwriter-reviewer";
+import { inferPreferenceFromEditedPrompt } from "./ghostwriter-learning";
 import {
   lintCoverLetterDraft,
   sanitizeResumePatch,
@@ -1566,6 +1567,7 @@ async function runAssistantReply(
         let review = reviewGhostwriterPayload({
           payload: structuredPayload,
           claimPlan: structuredPayload.claimPlan,
+          roleFamily: context.evidencePack.targetRoleFamily,
         });
         structuredPayload = {
           ...structuredPayload,
@@ -1647,6 +1649,7 @@ async function runAssistantReply(
           review = reviewGhostwriterPayload({
             payload: twiceRewrittenPayload,
             claimPlan: structuredPayload.claimPlan,
+            roleFamily: context.evidencePack.targetRoleFamily,
           });
           structuredPayload = {
             ...twiceRewrittenPayload,
@@ -2069,6 +2072,20 @@ export async function editMessage(input: {
 
   if (target.role !== "user") {
     throw badRequest("Only user messages can be edited");
+  }
+
+  const currentKnowledgeBase = await getCandidateKnowledgeBase().catch(
+    () => null,
+  );
+  const learnedKnowledgeBase = currentKnowledgeBase
+    ? inferPreferenceFromEditedPrompt({
+        original: target.content,
+        edited: content,
+        knowledgeBase: currentKnowledgeBase,
+      })
+    : null;
+  if (learnedKnowledgeBase) {
+    await saveCandidateKnowledgeBase(learnedKnowledgeBase);
   }
 
   // Create a new sibling user message (same parent as the original)

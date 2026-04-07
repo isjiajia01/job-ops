@@ -31,7 +31,7 @@ export const GhostwriterDrawer: React.FC<GhostwriterDrawerProps> = ({
         <Button
           size="sm"
           variant="outline"
-          className={cn("h-8 gap-1.5 text-xs", triggerClassName)}
+          className={cn("h-9 gap-1.5 rounded-full border-slate-200 bg-white px-4 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50", triggerClassName)}
           disabled={!job}
         >
           <PanelRightOpen className="h-3.5 w-3.5" />
@@ -43,17 +43,17 @@ export const GhostwriterDrawer: React.FC<GhostwriterDrawerProps> = ({
         side="right"
         className="flex w-full flex-col p-0 sm:max-w-none lg:w-[50vw] xl:w-[40vw] 2xl:w-[30vw]"
       >
-        <div className="border-b border-border/50 p-4">
+        <div className="border-b border-slate-200/80 bg-[linear-gradient(180deg,#f8fbfa_0%,#f3f7f6_100%)] p-5">
           <SheetHeader>
-            <SheetTitle>Ghostwriter side panel</SheetTitle>
-            <SheetDescription>
-              {job && `${job.title} at ${job.employer}. Open this when you want a narrower, distraction-free writing panel.`}
+            <SheetTitle className="font-serif text-2xl text-slate-900">Ghostwriter studio</SheetTitle>
+            <SheetDescription className="text-slate-500">
+              {job && `${job.title} at ${job.employer}. Use this focused writing surface when you want the drafting system separate from the main workspace.`}
             </SheetDescription>
           </SheetHeader>
         </div>
 
         {job && (
-          <div className="flex min-h-0 flex-1 p-4 pt-0">
+          <div className="flex min-h-0 flex-1 bg-[linear-gradient(180deg,#eef4f2_0%,#f6f8f7_100%)] p-5 pt-4">
             <GhostwriterPanel job={job} />
           </div>
         )}

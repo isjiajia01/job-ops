@@ -32,25 +32,27 @@ export const Composer: React.FC<ComposerProps> = ({
   };
 
   return (
-    <div className="space-y-2">
-      <Textarea
-        placeholder="Ask anything about this job..."
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        disabled={disabled}
-        onKeyDown={(event) => {
-          if (isMetaKeyPressed(event) && event.key === "Enter") {
-            event.preventDefault();
-            void submit();
-          }
-        }}
-        className="min-h-[84px]"
-      />
+    <div className="space-y-3">
+      <div className="rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
+        <Textarea
+          placeholder="Ask anything about this job, your fit, the CV angle, or the best next draft..."
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          disabled={disabled}
+          onKeyDown={(event) => {
+            if (isMetaKeyPressed(event) && event.key === "Enter") {
+              event.preventDefault();
+              void submit();
+            }
+          }}
+          className="min-h-[108px] rounded-[24px] border-0 bg-transparent px-5 py-4 text-[15px] leading-7 text-slate-700 shadow-none focus-visible:ring-0"
+        />
+      </div>
       <div className="flex items-center justify-between">
-        <div className="text-[10px] text-muted-foreground">
-          {getMetaShortcutLabel("Enter")} to send
+        <div className="text-[11px] text-slate-400">
+          {getMetaShortcutLabel("Enter")} to send · Shift+Enter for newline
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
           <Button
             size="icon"
             variant="outline"
@@ -58,7 +60,7 @@ export const Composer: React.FC<ComposerProps> = ({
             disabled={disabled || !canReset}
             aria-label="Start over"
             title="Start over"
-            className="text-destructive hover:text-destructive"
+            className="rounded-full border-slate-200 text-slate-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
           >
             <Eraser className="h-3.5 w-3.5" />
           </Button>
@@ -70,6 +72,7 @@ export const Composer: React.FC<ComposerProps> = ({
               onClick={() => void onStop()}
               aria-label="Stop generating"
               title="Stop generating"
+            className="rounded-full border-slate-200 text-slate-500 hover:bg-slate-50"
             >
               <Square className="h-3.5 w-3.5" />
             </Button>
@@ -81,6 +84,7 @@ export const Composer: React.FC<ComposerProps> = ({
             disabled={disabled || !value.trim()}
             aria-label="Send message"
             title="Send message"
+            className="rounded-full bg-emerald-600 text-white shadow-sm hover:bg-emerald-700"
           >
             <Send className="h-3.5 w-3.5" />
           </Button>
