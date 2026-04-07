@@ -18,10 +18,13 @@ import {
   Save,
   Sparkles,
   Trash2,
+  Upload,
   Wand2,
 } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
+import { ImportProfileDialog } from "./profile-hub/ImportProfileDialog";
+import { useProfileBundleIO } from "./profile-hub/useProfileBundleIO";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -448,27 +451,37 @@ export const ProfileHubPage: React.FC = () => {
     );
   };
 
-  const downloadBundle = () => {
-    const blob = new Blob(
-      [
-        JSON.stringify(
-          {
-            profile: { basics: { headline, summary } },
-            knowledgeBase: activeKnowledgeBase,
-          },
-          null,
-          2,
-        ),
-      ],
-      { type: "application/json" },
-    );
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "ghostwriter-memory.json";
-    link.click();
-    URL.revokeObjectURL(url);
-  };
+  const {
+    confirmImport,
+    handleDownloadJson,
+    handleImportFile,
+    hasPendingImport,
+    pendingImportCounts,
+    setPendingImport,
+  } = useProfileBundleIO({
+    facts,
+    headline,
+    inboxItems,
+    knowledgeBase: activeKnowledgeBase,
+    preferences,
+    projects,
+    summary,
+    onImport: ({
+      facts: importedFacts,
+      headline: importedHeadline,
+      inboxItems: importedInboxItems,
+      preferences: importedPreferences,
+      projects: importedProjects,
+      summary: importedSummary,
+    }) => {
+      setFacts(importedFacts);
+      setHeadline(importedHeadline);
+      setInboxItems(importedInboxItems ?? []);
+      setPreferences(importedPreferences);
+      setProjects(importedProjects);
+      setSummary(importedSummary);
+    },
+  });
 
   if (isBootstrapping) {
     return (
@@ -496,7 +509,19 @@ export const ProfileHubPage: React.FC = () => {
         subtitle="Capture material, triage inbox items, and keep Ghostwriter aligned"
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={downloadBundle}>
+            <Button variant="outline" size="sm" asChild>
+              <label className="cursor-pointer">
+                <Upload className="mr-2 h-4 w-4" />
+                Import
+                <input
+                  type="file"
+                  accept="application/json"
+                  className="sr-only"
+                  onChange={handleImportFile}
+                />
+              </label>
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleDownloadJson}>
               <Download className="mr-2 h-4 w-4" />
               Export
             </Button>
@@ -510,6 +535,15 @@ export const ProfileHubPage: React.FC = () => {
             </Button>
           </div>
         }
+      />
+
+      <ImportProfileDialog
+        isOpen={hasPendingImport}
+        onOpenChange={(open) => {
+          if (!open) setPendingImport(null);
+        }}
+        onConfirm={confirmImport}
+        {...pendingImportCounts}
       />
 
       <PageMain>
