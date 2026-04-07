@@ -364,6 +364,7 @@ export const OrchestratorPage: React.FC = () => {
       >
         <OrchestratorSummary
           stats={stats}
+          jobs={jobs}
           isPipelineRunning={isPipelineRunning}
         />
 

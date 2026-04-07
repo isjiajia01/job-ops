@@ -33,6 +33,7 @@ export const candidateKnowledgeProjectSchema = z.object({
   keywords: z.array(z.string().trim().min(1).max(80)).max(12),
   role: z.string().trim().max(200).nullable().default(null),
   impact: z.string().trim().max(1200).nullable().default(null),
+  activeForDrafting: z.boolean().optional().default(false),
 });
 
 export const companyResearchNoteSchema = z.object({
@@ -52,6 +53,7 @@ export const ghostwriterAssistantPayloadSchema = z.object({
   coverLetterDraft: z.string().trim().max(12000).nullable().optional(),
   coverLetterKind: z.enum(["letter", "email"]).nullable().optional(),
   resumePatch: ghostwriterResumePatchSchema.nullable().optional(),
+  evidenceUsedProjectIds: z.array(z.string().trim().min(1).max(120)).max(12).optional(),
 });
 
 function toNonEmptyString(value: unknown): string | null {
@@ -175,6 +177,7 @@ export function normalizeGhostwriterAssistantPayload(
           : null,
       coverLetterKind: parsed.data.coverLetterKind ?? null,
       resumePatch: normalizeResumePatch(parsed.data.resumePatch),
+      evidenceUsedProjectIds: parsed.data.evidenceUsedProjectIds ?? [],
     };
   }
 
@@ -186,6 +189,7 @@ export function normalizeGhostwriterAssistantPayload(
           coverLetterDraft: null,
           coverLetterKind: null,
           resumePatch: null,
+          evidenceUsedProjectIds: [],
         }
       : null;
   }
@@ -213,6 +217,12 @@ export function normalizeGhostwriterAssistantPayload(
       ? coverLetterKindRaw
       : null;
 
+  const evidenceUsedProjectIds = Array.isArray(record.evidenceUsedProjectIds)
+    ? record.evidenceUsedProjectIds
+        .map((item) => toNonEmptyString(item))
+        .filter((item): item is string => Boolean(item))
+    : [];
+
   return {
     response,
     coverLetterDraft,
@@ -220,6 +230,7 @@ export function normalizeGhostwriterAssistantPayload(
     resumePatch:
       normalizeLooseResumePatch(record.resumePatch) ??
       normalizeLooseResumePatch(record),
+    evidenceUsedProjectIds,
   };
 }
 
@@ -231,6 +242,7 @@ export function serializeGhostwriterAssistantPayload(
     coverLetterDraft: payload.coverLetterDraft,
     coverLetterKind: payload.coverLetterKind,
     resumePatch: payload.resumePatch,
+    evidenceUsedProjectIds: payload.evidenceUsedProjectIds,
   });
 }
 
@@ -244,6 +256,7 @@ export function parseGhostwriterAssistantContent(
       coverLetterDraft: null,
       coverLetterKind: null,
       resumePatch: null,
+      evidenceUsedProjectIds: [],
       isStructured: false,
     };
   }
@@ -265,6 +278,7 @@ export function parseGhostwriterAssistantContent(
     coverLetterDraft: null,
     coverLetterKind: null,
     resumePatch: null,
+    evidenceUsedProjectIds: [],
     isStructured: false,
   };
 }

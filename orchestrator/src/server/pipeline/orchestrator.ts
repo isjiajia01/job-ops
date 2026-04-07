@@ -253,17 +253,25 @@ export async function summarizeJob(
       const tailoredLayoutDirectives = job.tailoredLayoutDirectives;
       const tailoredSectionRationale = job.tailoredSectionRationale;
       const tailoredOmissionRationale = job.tailoredOmissionRationale;
+      let documentStrategy = job.documentStrategy;
 
       if (!tailoredSummary || !tailoredHeadline || options?.force) {
         jobLogger.info("Generating tailoring content");
         const tailoringResult = await generateTailoring(
-          job.jobDescription || "",
+          {
+            title: job.title,
+            employer: job.employer,
+            location: job.location,
+            salary: job.salary,
+            jobDescription: job.jobDescription || "",
+          },
           profile,
         );
         if (tailoringResult.success && tailoringResult.data) {
           tailoredSummary = tailoringResult.data.summary;
           tailoredHeadline = tailoringResult.data.headline;
           tailoredSkills = JSON.stringify(tailoringResult.data.skills);
+          documentStrategy = JSON.stringify(tailoringResult.data.strategy);
         } else if (options?.force || !tailoredSummary || !tailoredHeadline) {
           return {
             success: false,
@@ -315,6 +323,7 @@ export async function summarizeJob(
         tailoredLayoutDirectives: tailoredLayoutDirectives ?? undefined,
         tailoredSectionRationale: tailoredSectionRationale ?? undefined,
         tailoredOmissionRationale: tailoredOmissionRationale ?? undefined,
+        documentStrategy: documentStrategy ?? undefined,
         selectedProjectIds: selectedProjectIds ?? undefined,
       });
 

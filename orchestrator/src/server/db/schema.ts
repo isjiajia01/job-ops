@@ -100,7 +100,9 @@ export const jobs = sqliteTable("jobs", {
   tailoredLayoutDirectives: text("tailored_layout_directives"),
   tailoredSectionRationale: text("tailored_section_rationale"),
   tailoredOmissionRationale: text("tailored_omission_rationale"),
+  documentStrategy: text("document_strategy"),
   selectedProjectIds: text("selected_project_ids"),
+  selectedProofPointProjectIds: text("selected_proof_point_project_ids"),
   pdfPath: text("pdf_path"),
   tracerLinksEnabled: integer("tracer_links_enabled", { mode: "boolean" })
     .notNull()

@@ -53,8 +53,12 @@ const CHAT_RESPONSE_SCHEMA: JsonSchemaDefinition = {
       resumePatch: {
         type: ["object", "null"],
       },
+      evidenceUsedProjectIds: {
+        type: "array",
+        items: { type: "string" },
+      },
     },
-    required: ["response"],
+    required: ["response", "evidenceUsedProjectIds"],
     additionalProperties: false,
   },
 };
@@ -85,6 +89,28 @@ function isRunningRunUniqueConstraintError(error: unknown): boolean {
 
 async function resolveLlmRuntimeSettings(): Promise<LlmRuntimeSettings> {
   return resolveRuntimeLlmSettings("tailoring");
+}
+
+function sanitizeEvidenceUsedProjectIds(args: {
+  evidenceUsedProjectIds: string[];
+  knowledgeProjectIds: string[];
+  selectedProofPointProjectIds: string | null | undefined;
+}): string[] {
+  const allowedIds = new Set(args.knowledgeProjectIds);
+  const selectedIds = new Set(
+    (args.selectedProofPointProjectIds ?? "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean),
+  );
+
+  return args.evidenceUsedProjectIds.filter(
+    (id, index, arr) =>
+      Boolean(id) &&
+      allowedIds.has(id) &&
+      (selectedIds.size === 0 || selectedIds.has(id)) &&
+      arr.indexOf(id) === index,
+  );
 }
 
 async function applyResumePatchToJob(
@@ -373,12 +399,22 @@ async function runAssistantReply(
       throw upstreamError("LLM returned an invalid Ghostwriter payload");
     }
 
+    const [jobForEvidence, knowledgeBaseForEvidence] = await Promise.all([
+      jobsRepo.getJobById(options.jobId),
+      getCandidateKnowledgeBase().catch(() => ({ personalFacts: [], projects: [] })),
+    ]);
+
     const { sanitized: sanitizedCoverLetterDraft } = lintCoverLetterDraft(
       payload.coverLetterDraft,
     );
     const structuredPayload = {
       ...payload,
       coverLetterDraft: sanitizedCoverLetterDraft,
+      evidenceUsedProjectIds: sanitizeEvidenceUsedProjectIds({
+        evidenceUsedProjectIds: payload.evidenceUsedProjectIds,
+        knowledgeProjectIds: (knowledgeBaseForEvidence.projects ?? []).map((project) => project.id),
+        selectedProofPointProjectIds: jobForEvidence?.selectedProofPointProjectIds,
+      }),
     };
 
     await applyResumePatchToJob(options.jobId, structuredPayload);

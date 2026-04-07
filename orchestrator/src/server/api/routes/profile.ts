@@ -10,6 +10,11 @@ import {
   getCandidateKnowledgeBase,
 } from "@server/services/candidate-knowledge";
 import {
+  getLocalProjectSources,
+  saveLocalProjectSources,
+  scanLocalProjectCandidates,
+} from "@server/services/local-project-sources";
+import {
   getInternalProfile,
   saveInternalProfile,
 } from "@server/services/internal-profile";
@@ -39,7 +44,12 @@ const createKnowledgeProjectSchema = z.object({
   keywords: z.array(z.string().trim().min(1).max(80)).max(12).optional(),
   role: z.string().trim().max(200).nullable().optional(),
   impact: z.string().trim().max(1200).nullable().optional(),
+  activeForDrafting: z.boolean().optional(),
 });
+
+const localProjectSourcesSchema = z.array(
+  z.object({ path: z.string().trim().min(1).max(2000) }),
+).max(50);
 
 /**
  * GET /api/profile/projects - Get all projects available in the base resume
@@ -179,6 +189,34 @@ profileRouter.delete(
     }
   },
 );
+
+profileRouter.get("/local-project-sources", async (_req: Request, res: Response) => {
+  try {
+    const sources = await getLocalProjectSources();
+    ok(res, sources);
+  } catch (error) {
+    fail(res, toAppError(error));
+  }
+});
+
+profileRouter.post("/local-project-sources", async (req: Request, res: Response) => {
+  try {
+    const input = localProjectSourcesSchema.parse(req.body);
+    const saved = await saveLocalProjectSources(input);
+    ok(res, saved);
+  } catch (error) {
+    fail(res, toAppError(error));
+  }
+});
+
+profileRouter.post("/local-project-sources/scan", async (_req: Request, res: Response) => {
+  try {
+    const candidates = await scanLocalProjectCandidates();
+    ok(res, candidates);
+  } catch (error) {
+    fail(res, toAppError(error));
+  }
+});
 
 /**
  * GET /api/profile/status - Check if base resume is configured and accessible

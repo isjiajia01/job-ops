@@ -172,7 +172,9 @@ const updateJobSchema = z.object({
         });
       }
     }),
+  documentStrategy: z.string().optional(),
   selectedProjectIds: z.string().optional(),
+  selectedProofPointProjectIds: z.string().optional(),
   pdfPath: z.string().optional(),
   tracerLinksEnabled: z.boolean().optional(),
   appliedAt: z.string().trim().max(100).nullable().optional(),

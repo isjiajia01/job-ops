@@ -73,7 +73,9 @@ const migrations = [
     tailored_layout_directives TEXT,
     tailored_section_rationale TEXT,
     tailored_omission_rationale TEXT,
+    document_strategy TEXT,
     selected_project_ids TEXT,
+    selected_proof_point_project_ids TEXT,
     pdf_path TEXT,
     tracer_links_enabled INTEGER NOT NULL DEFAULT 0,
     discovered_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -332,12 +334,14 @@ const migrations = [
   `ALTER TABLE jobs ADD COLUMN vacancy_count INTEGER`,
   `ALTER TABLE jobs ADD COLUMN work_from_home_type TEXT`,
   `ALTER TABLE jobs ADD COLUMN selected_project_ids TEXT`,
+  `ALTER TABLE jobs ADD COLUMN selected_proof_point_project_ids TEXT`,
   `ALTER TABLE jobs ADD COLUMN tailored_headline TEXT`,
   `ALTER TABLE jobs ADD COLUMN tailored_skills TEXT`,
   `ALTER TABLE jobs ADD COLUMN tailored_experience_edits TEXT`,
   `ALTER TABLE jobs ADD COLUMN tailored_layout_directives TEXT`,
   `ALTER TABLE jobs ADD COLUMN tailored_section_rationale TEXT`,
   `ALTER TABLE jobs ADD COLUMN tailored_omission_rationale TEXT`,
+  `ALTER TABLE jobs ADD COLUMN document_strategy TEXT`,
   `ALTER TABLE jobs ADD COLUMN tracer_links_enabled INTEGER NOT NULL DEFAULT 0`,
 
   // Add sponsor match columns for visa sponsor matching feature
@@ -451,7 +455,9 @@ const migrations = [
     tailored_layout_directives TEXT,
     tailored_section_rationale TEXT,
     tailored_omission_rationale TEXT,
+    document_strategy TEXT,
     selected_project_ids TEXT,
+    selected_proof_point_project_ids TEXT,
     pdf_path TEXT,
     tracer_links_enabled INTEGER NOT NULL DEFAULT 0,
     sponsor_match_score REAL,
@@ -470,7 +476,7 @@ const migrations = [
     vacancy_count, work_from_home_type, title, employer, employer_url, job_url, application_link, disciplines,
     deadline, salary, location, degree_required, starting, job_description, status, outcome, closed_at,
     suitability_score, suitability_reason, tailored_summary, tailored_headline, tailored_skills, tailored_experience_edits, tailored_layout_directives, tailored_section_rationale, tailored_omission_rationale,
-    selected_project_ids, pdf_path, tracer_links_enabled, sponsor_match_score, sponsor_match_names, discovered_at, processed_at,
+    document_strategy, selected_project_ids, selected_proof_point_project_ids, pdf_path, tracer_links_enabled, sponsor_match_score, sponsor_match_names, discovered_at, processed_at,
     applied_at, created_at, updated_at
   )
   SELECT
@@ -481,7 +487,7 @@ const migrations = [
     vacancy_count, work_from_home_type, title, employer, employer_url, job_url, application_link, disciplines,
     deadline, salary, location, degree_required, starting, job_description, status, outcome, closed_at,
     suitability_score, suitability_reason, tailored_summary, tailored_headline, tailored_skills, tailored_experience_edits, tailored_layout_directives, tailored_section_rationale, tailored_omission_rationale,
-    selected_project_ids, pdf_path, tracer_links_enabled, sponsor_match_score, sponsor_match_names, discovered_at, processed_at,
+    document_strategy, selected_project_ids, NULL as selected_proof_point_project_ids, pdf_path, tracer_links_enabled, sponsor_match_score, sponsor_match_names, discovered_at, processed_at,
     applied_at, created_at, updated_at
   FROM jobs`,
   `DROP TABLE IF EXISTS jobs`,

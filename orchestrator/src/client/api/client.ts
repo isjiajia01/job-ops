@@ -12,6 +12,8 @@ import type {
   BranchInfo,
   CandidateKnowledgeBase,
   DemoInfoResponse,
+  LocalProjectCandidate,
+  LocalProjectSource,
   Job,
   JobActionRequest,
   JobActionResponse,
@@ -1368,6 +1370,27 @@ export async function saveInternalProfile(
 
 export async function getCandidateKnowledgeBase(): Promise<CandidateKnowledgeBase> {
   return fetchApi<CandidateKnowledgeBase>("/profile/knowledge");
+}
+
+export async function getLocalProjectSources(): Promise<LocalProjectSource[]> {
+  return fetchApi<LocalProjectSource[]>("/profile/local-project-sources");
+}
+
+export async function saveLocalProjectSources(
+  sources: LocalProjectSource[],
+): Promise<LocalProjectSource[]> {
+  return fetchApi<LocalProjectSource[]>("/profile/local-project-sources", {
+    method: "POST",
+    body: JSON.stringify(sources),
+  });
+}
+
+export async function scanLocalProjectCandidates(): Promise<
+  LocalProjectCandidate[]
+> {
+  return fetchApi<LocalProjectCandidate[]>("/profile/local-project-sources/scan", {
+    method: "POST",
+  });
 }
 
 export async function saveCandidateKnowledgeBase(

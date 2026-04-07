@@ -31,9 +31,17 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { JobDescriptionMarkdown } from "@/client/components/JobDescriptionMarkdown";
+import { parseDocumentStrategy } from "@/client/lib/document-strategy";
+import { buildJobDecisionBrief } from "@/client/lib/job-decision";
 import { getRenderableJobDescription } from "@/client/lib/jobDescription";
+import {
+  parseSelectedProofPointIds,
+  recommendProjectsForJob,
+} from "@/client/lib/project-proof-points";
+import { queryKeys } from "@/client/lib/queryKeys";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -90,6 +98,7 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false);
   const saveTailoringRef = useRef<null | (() => Promise<void>)>(null);
   const previousSelectedJobIdRef = useRef<string | null>(null);
+  const queryClient = useQueryClient();
   const markAsAppliedMutation = useMarkAsAppliedMutation();
   const skipJobMutation = useSkipJobMutation();
   const unapplyJobMutation = useUnapplyJobMutation();
@@ -159,6 +168,29 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
       setIsSavingDescription(false);
     }
   };
+
+  const knowledgeQuery = useQuery({
+    queryKey: queryKeys.profile.knowledge(),
+    queryFn: api.getCandidateKnowledgeBase,
+  });
+
+  const decisionBrief = useMemo(
+    () => (selectedJob ? buildJobDecisionBrief(selectedJob) : null),
+    [selectedJob],
+  );
+  const documentStrategy = useMemo(
+    () => (selectedJob ? parseDocumentStrategy(selectedJob) : null),
+    [selectedJob],
+  );
+
+  const recommendedProofPoints = useMemo(
+    () => recommendProjectsForJob(selectedJob, knowledgeQuery.data?.projects ?? [], 3),
+    [selectedJob, knowledgeQuery.data],
+  );
+  const selectedProofPointIds = useMemo(
+    () => new Set(parseSelectedProofPointIds(selectedJob?.selectedProofPointProjectIds)),
+    [selectedJob?.selectedProofPointProjectIds],
+  );
 
   const tailoringAudit = useMemo(
     () => ({
@@ -239,6 +271,39 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
       selectedJob,
     ],
   );
+
+  const handleUseProofPointForJob = async (projectId: string) => {
+    if (!selectedJob) return;
+    try {
+      await api.updateJob(selectedJob.id, {
+        selectedProofPointProjectIds: projectId,
+      });
+      await onJobUpdated();
+      toast.success("Proof point selected for this job");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update proof points",
+      );
+    }
+  };
+
+  const handleRecommendTopProofPoints = async () => {
+    if (!selectedJob || recommendedProofPoints.length === 0) return;
+    const selectedIds = recommendedProofPoints
+      .map((item) => item.project.id)
+      .join(",");
+    try {
+      await api.updateJob(selectedJob.id, {
+        selectedProofPointProjectIds: selectedIds,
+      });
+      await onJobUpdated();
+      toast.success("Recommended top proof points saved for this job");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to apply recommendations",
+      );
+    }
+  };
 
   const handleProcess = async () => {
     if (!selectedJob) return;
@@ -718,6 +783,121 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
         <TabsContent value="overview" className="space-y-3 pt-2">
           <FitAssessment job={selectedJob} />
           <TailoredSummary job={selectedJob} />
+
+          {decisionBrief && (
+            <div className="space-y-4 rounded-lg border border-border/60 bg-muted/10 p-3 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Decision brief
+                </div>
+                <div className="rounded-full border border-border/60 bg-background/70 px-2.5 py-1 text-[11px] font-medium text-foreground/80">
+                  {decisionBrief.recommendationLabel}
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-md border border-border/50 bg-background/70 p-3">
+                  <div className="font-medium text-foreground/90">
+                    Why this could be worth it
+                  </div>
+                  <ul className="mt-2 list-disc space-y-1 pl-4 text-muted-foreground">
+                    {decisionBrief.whyApply.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="rounded-md border border-border/50 bg-background/70 p-3">
+                  <div className="font-medium text-foreground/90">
+                    Main watchouts
+                  </div>
+                  <ul className="mt-2 list-disc space-y-1 pl-4 text-muted-foreground">
+                    {decisionBrief.watchouts.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {documentStrategy && (
+            <div className="space-y-4 rounded-lg border border-border/60 bg-muted/10 p-3 text-xs">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Document strategy
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-md border border-border/50 bg-background/70 p-3">
+                  <div className="font-medium text-foreground/90">Role angle</div>
+                  <div className="mt-1 text-muted-foreground">
+                    {documentStrategy.roleAngle}
+                  </div>
+                </div>
+                <div className="rounded-md border border-border/50 bg-background/70 p-3">
+                  <div className="font-medium text-foreground/90">Cover letter angle</div>
+                  <div className="mt-1 text-muted-foreground">
+                    {documentStrategy.coverLetterAngle}
+                  </div>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-md border border-border/50 bg-background/70 p-3">
+                  <div className="font-medium text-foreground/90">Strongest evidence</div>
+                  <ul className="mt-2 list-disc space-y-1 pl-4 text-muted-foreground">
+                    {documentStrategy.strongestEvidence.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="rounded-md border border-border/50 bg-background/70 p-3">
+                  <div className="font-medium text-foreground/90">Priority JD terms</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {documentStrategy.priorityTerms.map((item) => (
+                      <div
+                        key={item}
+                        className="rounded-full border border-border/50 bg-muted/40 px-2.5 py-1 text-[11px] text-foreground/80"
+                      >
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {recommendedProofPoints.length > 0 ? (
+            <div className="space-y-4 rounded-lg border border-border/60 bg-muted/10 p-3 text-xs">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Recommended proof points for this job
+                </div>
+                <Button size="sm" variant="outline" onClick={() => void handleRecommendTopProofPoints()}>
+                  Recommend top 3 proof points
+                </Button>
+              </div>
+              <div className="grid gap-3">
+                {recommendedProofPoints.map((item) => (
+                  <div key={item.project.id} className="rounded-md border border-border/50 bg-background/70 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-medium text-foreground/90">{item.project.name}</div>
+                        <div className="mt-1 text-muted-foreground">Recommendation score {item.score}</div>
+                      </div>
+                      <Button size="sm" variant={selectedProofPointIds.has(item.project.id) ? "secondary" : "outline"} onClick={() => void handleUseProofPointForJob(item.project.id)}>
+                        {selectedProofPointIds.has(item.project.id) ? "Selected" : "Use for this job"}
+                      </Button>
+                    </div>
+                    <div className="mt-2 text-muted-foreground">{item.project.summary}</div>
+                    <ul className="mt-2 list-disc space-y-1 pl-4 text-muted-foreground">
+                      {item.reasons.map((reason) => (
+                        <li key={reason}>{reason}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           <div className="rounded-lg border border-border/60 bg-muted/10 p-3 text-xs space-y-4">
             <div className="text-[10px] uppercase tracking-wide text-muted-foreground">

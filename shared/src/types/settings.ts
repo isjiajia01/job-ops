@@ -25,12 +25,29 @@ export interface CandidateKnowledgeProject {
   keywords: string[];
   role: string | null;
   impact: string | null;
+  activeForDrafting?: boolean;
 }
 
 export interface CompanyResearchNote {
   company: string;
   source: string | null;
   summary: string;
+}
+
+export interface LocalProjectSource {
+  path: string;
+}
+
+export interface LocalProjectCandidate {
+  id: string;
+  path: string;
+  name: string;
+  summary: string;
+  keywords: string[];
+  role: string | null;
+  impact: string | null;
+  evidence: string[];
+  lastModifiedAt: string | null;
 }
 
 export interface CandidateKnowledgeBase {
@@ -233,4 +250,5 @@ export interface AppSettings {
   profileProjects: ResumeProjectCatalogItem[];
   candidateKnowledgeBase: Resolved<CandidateKnowledgeBase>;
   candidateResumeProfile: Resolved<ResumeProfile>;
+  localProjectSources: Resolved<LocalProjectSource[]>;
 }

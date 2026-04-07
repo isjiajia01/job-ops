@@ -2,22 +2,32 @@ import * as api from "@client/api";
 import { PageHeader, PageMain } from "@client/components/layout";
 import { useProfile } from "@client/hooks/useProfile";
 import { queryKeys } from "@client/lib/queryKeys";
-import type { CandidateKnowledgeBase, ResumeProfile } from "@shared/types";
+import type {
+  CandidateKnowledgeBase,
+  LocalProjectCandidate,
+  LocalProjectSource,
+  ResumeProfile,
+} from "@shared/types";
+import { FIXED_FACT_SLOTS } from "./profile-hub/constants";
+import { FixedFactSlotsSection } from "./profile-hub/FixedFactSlotsSection";
+import { AdvancedProfileAccordions } from "./profile-hub/AdvancedProfileAccordions";
+import { ProfileHubHeaderActions } from "./profile-hub/ProfileHubHeaderActions";
+import { useProfileBundleIO } from "./profile-hub/useProfileBundleIO";
 import {
-  bundleToProfileAndKnowledge,
-  candidateProfileBundleSchema,
-  profileAndKnowledgeToBundle,
-} from "@shared/utils/profile";
+  OverviewStatCard,
+  ProfileHubHero,
+  ProfileHubSnapshot,
+} from "./profile-hub/ProfileHubOverview";
+import { ProjectMaterialLibrarySection } from "./profile-hub/ProjectMaterialLibrarySection";
+import type {
+  ExperienceFormItem,
+  FactFormItem,
+  FixedFactSlot,
+  ProjectFormItem,
+  SkillFormItem,
+} from "./profile-hub/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Download,
-  Import,
-  Plus,
-  RefreshCcw,
-  Save,
-  Trash2,
-  UserRound,
-} from "lucide-react";
+import { Plus, Trash2, UserRound } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -27,16 +37,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ImportProfileDialog } from "./profile-hub/ImportProfileDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,38 +48,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
-type SkillFormItem = {
-  id: string;
-  name: string;
-  keywordsText: string;
-};
-
-type ExperienceFormItem = {
-  id: string;
-  company: string;
-  position: string;
-  location: string;
-  date: string;
-  summary: string;
-};
-
-type ProjectFormItem = {
-  id: string;
-  name: string;
-  date: string;
-  summary: string;
-  keywordsText: string;
-  url: string;
-};
-
-type FactFormItem = {
-  id: string;
-  title: string;
-  detail: string;
-};
 
 function asText(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -250,6 +221,49 @@ function factsToKnowledgeBase(
   };
 }
 
+function normalizeFactTitle(title: string): string {
+  return title.trim().toLowerCase();
+}
+
+function getFixedFactByTitle(title: string): FixedFactSlot | null {
+  const normalized = normalizeFactTitle(title);
+  return (
+    FIXED_FACT_SLOTS.find((slot) => normalizeFactTitle(slot.title) === normalized) ??
+    null
+  );
+}
+
+function getFixedFactValue(facts: FactFormItem[], slot: FixedFactSlot): string {
+  return (
+    facts.find((fact) => normalizeFactTitle(fact.title) === normalizeFactTitle(slot.title))
+      ?.detail ?? ""
+  );
+}
+
+function upsertFixedFact(
+  facts: FactFormItem[],
+  slot: FixedFactSlot,
+  detail: string,
+): FactFormItem[] {
+  const normalizedTitle = normalizeFactTitle(slot.title);
+  const trimmedDetail = detail.trim();
+  const existing = facts.find((fact) => normalizeFactTitle(fact.title) === normalizedTitle);
+
+  if (!trimmedDetail) {
+    return facts.filter((fact) => normalizeFactTitle(fact.title) !== normalizedTitle);
+  }
+
+  if (existing) {
+    return facts.map((fact) =>
+      normalizeFactTitle(fact.title) === normalizedTitle
+        ? { ...fact, title: slot.title, detail }
+        : fact,
+    );
+  }
+
+  return [...facts, { id: createFormItemId("fact"), title: slot.title, detail }];
+}
+
 function isSoftPersonalNote(title: string): boolean {
   const normalized = title.trim().toLowerCase();
   if (!normalized) return false;
@@ -290,58 +304,6 @@ function getCoreFactPriority(title: string): number {
   return 50;
 }
 
-function OverviewStatCard(props: {
-  label: string;
-  value: string;
-  hint: string;
-}) {
-  return (
-    <Card className="border-border/60 shadow-none">
-      <CardContent className="space-y-1 p-4">
-        <div className="text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
-          {props.label}
-        </div>
-        <div className="text-2xl font-semibold tracking-tight">
-          {props.value}
-        </div>
-        <div className="text-sm text-muted-foreground">{props.hint}</div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function SectionIntro(props: {
-  title: string;
-  description: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div className="space-y-1">
-        <h2 className="text-xl font-semibold tracking-tight">{props.title}</h2>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          {props.description}
-        </p>
-      </div>
-      {props.action}
-    </div>
-  );
-}
-
-function EmptyEditorState(props: {
-  title: string;
-  description: string;
-  action: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-lg border border-dashed border-border/70 bg-muted/20 p-5 text-sm">
-      <div className="font-medium text-foreground">{props.title}</div>
-      <div className="mt-1 text-muted-foreground">{props.description}</div>
-      <div className="mt-4">{props.action}</div>
-    </div>
-  );
-}
-
 export const ProfileHubPage: React.FC = () => {
   const queryClient = useQueryClient();
   const {
@@ -349,9 +311,6 @@ export const ProfileHubPage: React.FC = () => {
     isLoading: effectiveProfileLoading,
     refreshProfile,
   } = useProfile();
-  const [pendingImportJson, setPendingImportJson] = useState<string | null>(
-    null,
-  );
   const [basics, setBasics] = useState({
     name: "",
     headline: "",
@@ -371,6 +330,9 @@ export const ProfileHubPage: React.FC = () => {
     projects: [],
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [localSourceInput, setLocalSourceInput] = useState("");
+  const [isScanningProjects, setIsScanningProjects] = useState(false);
+  const [scannedProjects, setScannedProjects] = useState<LocalProjectCandidate[]>([]);
 
   const internalProfileQuery = useQuery<ResumeProfile>({
     queryKey: [...queryKeys.profile.all, "internal"] as const,
@@ -380,6 +342,11 @@ export const ProfileHubPage: React.FC = () => {
   const knowledgeQuery = useQuery<CandidateKnowledgeBase>({
     queryKey: queryKeys.profile.knowledge(),
     queryFn: api.getCandidateKnowledgeBase,
+  });
+
+  const localSourcesQuery = useQuery<LocalProjectSource[]>({
+    queryKey: [...queryKeys.profile.all, "local-project-sources"] as const,
+    queryFn: api.getLocalProjectSources,
   });
 
   useEffect(() => {
@@ -432,7 +399,10 @@ export const ProfileHubPage: React.FC = () => {
   const groupedFacts = useMemo(
     () => ({
       core: facts
-        .filter((fact) => !isSoftPersonalNote(fact.title))
+        .filter(
+          (fact) =>
+            !isSoftPersonalNote(fact.title) && !getFixedFactByTitle(fact.title),
+        )
         .map((fact, index) => ({ fact, index }))
         .sort((a, b) => {
           const priorityDelta =
@@ -449,6 +419,14 @@ export const ProfileHubPage: React.FC = () => {
   const hasInternalProfile =
     Boolean(internalProfileQuery.data) &&
     Object.keys(internalProfileQuery.data ?? {}).length > 0;
+  const localProjectSources = localSourcesQuery.data ?? [];
+  const curatedProjects = currentKnowledge.projects.filter(
+    (project) => !project.activeForDrafting,
+  );
+  const activeProjects = currentKnowledge.projects.filter(
+    (project) => project.activeForDrafting,
+  );
+
   const effectiveSkillTags =
     profile?.sections?.skills?.items?.flatMap((item) =>
       item.keywords?.length ? item.keywords : [item.name],
@@ -483,85 +461,143 @@ export const ProfileHubPage: React.FC = () => {
     }
   };
 
-  const handleDownloadJson = () => {
-    const bundle = profileAndKnowledgeToBundle(
-      currentFormProfile,
-      currentKnowledge,
-    );
-    const blob = new Blob([JSON.stringify(bundle, null, 2)], {
-      type: "application/json;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "jobops-candidate-profile.json";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImportFile = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = event.target.files?.[0];
-    event.currentTarget.value = "";
-    if (!file) return;
-
+  const handleAddLocalProjectSource = async () => {
+    const nextPath = localSourceInput.trim();
+    if (!nextPath) return;
     try {
-      const text = await file.text();
-      candidateProfileBundleSchema.parse(JSON.parse(text));
-      setPendingImportJson(text);
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to parse JSON file",
-      );
-    }
-  };
-
-  const confirmImport = () => {
-    if (!pendingImportJson) return;
-    try {
-      const bundle = candidateProfileBundleSchema.parse(
-        JSON.parse(pendingImportJson),
-      );
-      const imported = bundleToProfileAndKnowledge(bundle);
-
-      setBasics({
-        name: imported.profile.basics?.name ?? "",
-        headline:
-          imported.profile.basics?.headline ??
-          imported.profile.basics?.label ??
-          "",
-        email: imported.profile.basics?.email ?? "",
-        phone: imported.profile.basics?.phone ?? "",
-        locationCity: imported.profile.basics?.location?.city ?? "",
-        locationRegion: imported.profile.basics?.location?.region ?? "",
-        url: imported.profile.basics?.url ?? "",
+      const nextSources = [...localProjectSources, { path: nextPath }];
+      await api.saveLocalProjectSources(nextSources);
+      await queryClient.invalidateQueries({
+        queryKey: [...queryKeys.profile.all, "local-project-sources"],
       });
-      setSummary(
-        imported.profile.sections?.summary?.content ??
-          imported.profile.basics?.summary ??
-          "",
-      );
-      setSkills(profileToSkillForm(imported.profile));
-      setExperience(profileToExperienceForm(imported.profile));
-      setProjects(profileToProjectForm(imported.profile));
-      setKnowledgeDraft((previous) => ({
-        ...previous,
-        personalFacts: imported.knowledgeBase.personalFacts,
-      }));
-      setFacts(knowledgeToFactForm(imported.knowledgeBase));
-      setPendingImportJson(null);
-      toast.success(
-        "Imported JSON into the form. Review and click Save to apply it.",
-      );
+      setLocalSourceInput("");
+      toast.success("Local project source added");
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to import JSON",
+        error instanceof Error
+          ? error.message
+          : "Failed to add local project source",
       );
     }
   };
+
+  const handleRemoveLocalProjectSource = async (pathToRemove: string) => {
+    try {
+      await api.saveLocalProjectSources(
+        localProjectSources.filter((item) => item.path !== pathToRemove),
+      );
+      await queryClient.invalidateQueries({
+        queryKey: [...queryKeys.profile.all, "local-project-sources"],
+      });
+      toast.success("Local project source removed");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to remove local project source",
+      );
+    }
+  };
+
+  const handleScanLocalProjects = async () => {
+    try {
+      setIsScanningProjects(true);
+      const candidates = await api.scanLocalProjectCandidates();
+      setScannedProjects(candidates);
+      toast.success(`Scanned ${candidates.length} local project candidates`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to scan local projects",
+      );
+    } finally {
+      setIsScanningProjects(false);
+    }
+  };
+
+  const handleImportScannedProject = async (project: LocalProjectCandidate) => {
+    try {
+      await api.saveCandidateKnowledgeBase({
+        ...currentKnowledge,
+        projects: [
+          ...currentKnowledge.projects,
+          {
+            id: project.id,
+            name: project.name,
+            summary: project.summary,
+            keywords: project.keywords,
+            role: project.role,
+            impact: project.impact,
+            activeForDrafting: false,
+          },
+        ],
+      });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.profile.knowledge() });
+      toast.success(`Imported ${project.name} into candidate knowledge`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to import project",
+      );
+    }
+  };
+
+  const handleToggleProjectActive = async (projectId: string) => {
+    try {
+      await api.saveCandidateKnowledgeBase({
+        ...currentKnowledge,
+        projects: currentKnowledge.projects.map((project) =>
+          project.id === projectId
+            ? {
+                ...project,
+                activeForDrafting: !project.activeForDrafting,
+              }
+            : project,
+        ),
+      });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.profile.knowledge() });
+      toast.success("Drafting project selection updated");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update project state",
+      );
+    }
+  };
+
+  const handleRemoveKnowledgeProject = async (projectId: string) => {
+    try {
+      await api.saveCandidateKnowledgeBase({
+        ...currentKnowledge,
+        projects: currentKnowledge.projects.filter((project) => project.id !== projectId),
+      });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.profile.knowledge() });
+      toast.success("Project removed from knowledge");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to remove project",
+      );
+    }
+  };
+
+  const {
+    pendingImportJson,
+    setPendingImportJson,
+    handleDownloadJson,
+    handleImportFile,
+    confirmImport,
+  } = useProfileBundleIO({
+    currentFormProfile,
+    currentKnowledge,
+    setBasics,
+    setSummary,
+    setSkills,
+    setExperience,
+    setProjects,
+    setKnowledgeDraft,
+    setFacts,
+    profileToSkillForm,
+    profileToExperienceForm,
+    profileToProjectForm,
+    knowledgeToFactForm,
+  });
 
   const renderFactEditor = (
     fact: FactFormItem,
@@ -634,40 +670,13 @@ export const ProfileHubPage: React.FC = () => {
         title="Profile Hub"
         subtitle="Keep your source profile clean, editable, and ready for AI drafting"
         actions={
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <label className="cursor-pointer">
-                <Import className="mr-2 h-4 w-4" />
-                Upload JSON
-                <input
-                  type="file"
-                  accept="application/json,.json"
-                  className="hidden"
-                  onChange={(event) => void handleImportFile(event)}
-                />
-              </label>
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleDownloadJson}>
-              <Download className="mr-2 h-4 w-4" />
-              Download JSON
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void handleRefreshProfile()}
-            >
-              <RefreshCcw className="mr-2 h-4 w-4" />
-              Refresh Effective Profile
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => void handleSave()}
-              disabled={isSaving}
-            >
-              <Save className="mr-2 h-4 w-4" />
-              Save Profile
-            </Button>
-          </div>
+          <ProfileHubHeaderActions
+            isSaving={isSaving}
+            onImportFile={(event) => void handleImportFile(event)}
+            onDownloadJson={handleDownloadJson}
+            onRefreshProfile={() => void handleRefreshProfile()}
+            onSave={() => void handleSave()}
+          />
         }
       />
 
@@ -683,9 +692,14 @@ export const ProfileHubPage: React.FC = () => {
             }
           />
           <OverviewStatCard
-            label="Skills"
-            value={String(skills.filter((item) => item.name.trim()).length)}
-            hint="Grouped skills used in summaries and tailoring"
+            label="Signal Facts"
+            value={String(facts.filter((fact) => fact.title.trim()).length)}
+            hint="Short reusable context blocks for AI drafting"
+          />
+          <OverviewStatCard
+            label="Projects"
+            value={String(projects.filter((item) => item.name.trim()).length)}
+            hint="Imported proof points and portfolio-ready examples"
           />
           <OverviewStatCard
             label="Experience"
@@ -694,812 +708,90 @@ export const ProfileHubPage: React.FC = () => {
                 (item) => item.company.trim() || item.position.trim(),
               ).length,
             )}
-            hint="Core work history entries"
-          />
-          <OverviewStatCard
-            label="AI Facts"
-            value={String(facts.filter((fact) => fact.title.trim()).length)}
-            hint="Reusable facts for drafting and memory"
+            hint="Background entries kept for tailoring"
           />
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_360px]">
-          <Tabs defaultValue="profile" className="min-w-0">
-            <TabsList className="h-auto w-full flex-wrap justify-start gap-1">
-              <TabsTrigger value="profile">Core Profile</TabsTrigger>
-              <TabsTrigger value="experience">Experience</TabsTrigger>
-              <TabsTrigger value="projects">Projects</TabsTrigger>
-              <TabsTrigger value="facts">AI Facts</TabsTrigger>
-            </TabsList>
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_360px]">
+          <div className="space-y-6">
+            <ProfileHubHero
+              basics={basics}
+              summary={summary}
+              onBasicsChange={setBasics}
+              onSummaryChange={setSummary}
+            />
 
-            <TabsContent value="profile" className="space-y-6 pt-3">
-              <SectionIntro
-                title="Core Profile"
-                description="Keep the essentials tight here. This is the fastest place to improve what the AI sees first."
-              />
+            <FixedFactSlotsSection
+              facts={facts}
+              extraFacts={groupedFacts.core}
+              softFacts={groupedFacts.soft}
+              getFixedFactValue={(slot) => getFixedFactValue(facts, slot)}
+              onChangeFixedFact={(slot, value) =>
+                setFacts((current) => upsertFixedFact(current, slot, value))
+              }
+              onAddExtraFact={() =>
+                setFacts((current) => [
+                  ...current,
+                  { id: createFormItemId("fact"), title: "", detail: "" },
+                ])
+              }
+              onAddSoftFact={() =>
+                setFacts((current) => [
+                  ...current,
+                  {
+                    id: createFormItemId("fact"),
+                    title: "Soft personal note",
+                    detail: "",
+                  },
+                ])
+              }
+              renderFactEditor={renderFactEditor}
+            />
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Basics</CardTitle>
-                  <CardDescription>
-                    Identity, contact info, and primary positioning.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-3 sm:grid-cols-2">
-                  <Input
-                    placeholder="Full name"
-                    value={basics.name}
-                    onChange={(event) =>
-                      setBasics((current) => ({
-                        ...current,
-                        name: event.target.value,
-                      }))
-                    }
-                  />
-                  <Input
-                    placeholder="Headline"
-                    value={basics.headline}
-                    onChange={(event) =>
-                      setBasics((current) => ({
-                        ...current,
-                        headline: event.target.value,
-                      }))
-                    }
-                  />
-                  <Input
-                    placeholder="Email"
-                    value={basics.email}
-                    onChange={(event) =>
-                      setBasics((current) => ({
-                        ...current,
-                        email: event.target.value,
-                      }))
-                    }
-                  />
-                  <Input
-                    placeholder="Phone"
-                    value={basics.phone}
-                    onChange={(event) =>
-                      setBasics((current) => ({
-                        ...current,
-                        phone: event.target.value,
-                      }))
-                    }
-                  />
-                  <Input
-                    placeholder="City"
-                    value={basics.locationCity}
-                    onChange={(event) =>
-                      setBasics((current) => ({
-                        ...current,
-                        locationCity: event.target.value,
-                      }))
-                    }
-                  />
-                  <Input
-                    placeholder="Region / Country"
-                    value={basics.locationRegion}
-                    onChange={(event) =>
-                      setBasics((current) => ({
-                        ...current,
-                        locationRegion: event.target.value,
-                      }))
-                    }
-                  />
-                  <Input
-                    className="sm:col-span-2"
-                    placeholder="Portfolio / LinkedIn URL"
-                    value={basics.url}
-                    onChange={(event) =>
-                      setBasics((current) => ({
-                        ...current,
-                        url: event.target.value,
-                      }))
-                    }
-                  />
-                </CardContent>
-              </Card>
+            <ProjectMaterialLibrarySection
+              localSourceInput={localSourceInput}
+              onLocalSourceInputChange={setLocalSourceInput}
+              localProjectSources={localProjectSources}
+              scannedProjects={scannedProjects}
+              curatedProjects={curatedProjects}
+              activeProjects={activeProjects}
+              isScanningProjects={isScanningProjects}
+              onAddSource={() => void handleAddLocalProjectSource()}
+              onRemoveSource={(path) => void handleRemoveLocalProjectSource(path)}
+              onScan={() => void handleScanLocalProjects()}
+              onImportScannedProject={(project) => void handleImportScannedProject(project)}
+              onToggleProjectActive={(projectId) => void handleToggleProjectActive(projectId)}
+              onRemoveKnowledgeProject={(projectId) => void handleRemoveKnowledgeProject(projectId)}
+            />
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Summary</CardTitle>
-                  <CardDescription>
-                    The default profile summary for CV generation and AI
-                    writing.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Textarea
-                    value={summary}
-                    onChange={(event) => setSummary(event.target.value)}
-                    className="min-h-[180px]"
-                    placeholder="Write the core profile summary that AI and CV generation should use."
-                  />
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="space-y-1.5">
-                    <CardTitle>Skills</CardTitle>
-                    <CardDescription>
-                      Group related strengths so the AI can reuse them
-                      consistently.
-                    </CardDescription>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setSkills((current) => [
-                        ...current,
-                        {
-                          id: createFormItemId("skill"),
-                          name: "",
-                          keywordsText: "",
-                        },
-                      ])
-                    }
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Skill Group
-                  </Button>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {skills.length === 0 ? (
-                    <EmptyEditorState
-                      title="No skill groups yet"
-                      description="Add grouped skills like Planning, Analytics, or Stakeholder Management instead of dumping a flat list."
-                      action={
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setSkills((current) => [
-                              ...current,
-                              {
-                                id: createFormItemId("skill"),
-                                name: "",
-                                keywordsText: "",
-                              },
-                            ])
-                          }
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          Add First Skill Group
-                        </Button>
-                      }
-                    />
-                  ) : null}
-                  {skills.map((item) => (
-                    <div
-                      key={item.id}
-                      className="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Input
-                          placeholder="Skill group"
-                          value={item.name}
-                          onChange={(event) =>
-                            setSkills((current) =>
-                              current.map((entry) =>
-                                entry.id === item.id
-                                  ? { ...entry, name: event.target.value }
-                                  : entry,
-                              ),
-                            )
-                          }
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() =>
-                            setSkills((current) =>
-                              current.filter((entry) => entry.id !== item.id),
-                            )
-                          }
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <Textarea
-                        placeholder="Keywords, comma separated"
-                        value={item.keywordsText}
-                        onChange={(event) =>
-                          setSkills((current) =>
-                            current.map((entry) =>
-                              entry.id === item.id
-                                ? {
-                                    ...entry,
-                                    keywordsText: event.target.value,
-                                  }
-                                : entry,
-                            ),
-                          )
-                        }
-                      />
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="experience" className="space-y-6 pt-3">
-              <SectionIntro
-                title="Experience"
-                description="Focus on the roles that best explain your trajectory. Keep each entry readable and outcome-oriented."
-                action={
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setExperience((current) => [
-                        ...current,
-                        {
-                          id: createFormItemId("experience"),
-                          company: "",
-                          position: "",
-                          location: "",
-                          date: "",
-                          summary: "",
-                        },
-                      ])
-                    }
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Experience
-                  </Button>
-                }
-              />
-
-              <Card>
-                <CardContent className="space-y-3 p-6">
-                  {experience.length === 0 ? (
-                    <EmptyEditorState
-                      title="No experience entries yet"
-                      description="Add the jobs or roles that should appear in CV tailoring and job-specific drafting."
-                      action={
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setExperience((current) => [
-                              ...current,
-                              {
-                                id: createFormItemId("experience"),
-                                company: "",
-                                position: "",
-                                location: "",
-                                date: "",
-                                summary: "",
-                              },
-                            ])
-                          }
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          Add First Experience
-                        </Button>
-                      }
-                    />
-                  ) : null}
-                  {experience.map((item) => (
-                    <div
-                      key={item.id}
-                      className="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4"
-                    >
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <Input
-                          placeholder="Company"
-                          value={item.company}
-                          onChange={(event) =>
-                            setExperience((current) =>
-                              current.map((entry) =>
-                                entry.id === item.id
-                                  ? { ...entry, company: event.target.value }
-                                  : entry,
-                              ),
-                            )
-                          }
-                        />
-                        <Input
-                          placeholder="Position"
-                          value={item.position}
-                          onChange={(event) =>
-                            setExperience((current) =>
-                              current.map((entry) =>
-                                entry.id === item.id
-                                  ? { ...entry, position: event.target.value }
-                                  : entry,
-                              ),
-                            )
-                          }
-                        />
-                        <Input
-                          placeholder="Location"
-                          value={item.location}
-                          onChange={(event) =>
-                            setExperience((current) =>
-                              current.map((entry) =>
-                                entry.id === item.id
-                                  ? { ...entry, location: event.target.value }
-                                  : entry,
-                              ),
-                            )
-                          }
-                        />
-                        <Input
-                          placeholder="Date range"
-                          value={item.date}
-                          onChange={(event) =>
-                            setExperience((current) =>
-                              current.map((entry) =>
-                                entry.id === item.id
-                                  ? { ...entry, date: event.target.value }
-                                  : entry,
-                              ),
-                            )
-                          }
-                        />
-                      </div>
-                      <Textarea
-                        placeholder="Summary / bullets"
-                        value={item.summary}
-                        onChange={(event) =>
-                          setExperience((current) =>
-                            current.map((entry) =>
-                              entry.id === item.id
-                                ? { ...entry, summary: event.target.value }
-                                : entry,
-                            ),
-                          )
-                        }
-                        className="min-h-[140px]"
-                      />
-                      <div className="flex justify-end">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setExperience((current) =>
-                              current.filter((entry) => entry.id !== item.id),
-                            )
-                          }
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Remove
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="projects" className="space-y-6 pt-3">
-              <SectionIntro
-                title="Projects"
-                description="Use projects to show proof of execution, especially where work experience is too generic or too broad."
-                action={
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setProjects((current) => [
-                        ...current,
-                        {
-                          id: createFormItemId("project"),
-                          name: "",
-                          date: "",
-                          summary: "",
-                          keywordsText: "",
-                          url: "",
-                        },
-                      ])
-                    }
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Project
-                  </Button>
-                }
-              />
-
-              <Card>
-                <CardContent className="space-y-3 p-6">
-                  {projects.length === 0 ? (
-                    <EmptyEditorState
-                      title="No projects yet"
-                      description="Add projects when you need stronger proof points, tools, or domain examples for applications."
-                      action={
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setProjects((current) => [
-                              ...current,
-                              {
-                                id: createFormItemId("project"),
-                                name: "",
-                                date: "",
-                                summary: "",
-                                keywordsText: "",
-                                url: "",
-                              },
-                            ])
-                          }
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          Add First Project
-                        </Button>
-                      }
-                    />
-                  ) : null}
-                  {projects.map((item) => (
-                    <div
-                      key={item.id}
-                      className="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4"
-                    >
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <Input
-                          placeholder="Project name"
-                          value={item.name}
-                          onChange={(event) =>
-                            setProjects((current) =>
-                              current.map((entry) =>
-                                entry.id === item.id
-                                  ? { ...entry, name: event.target.value }
-                                  : entry,
-                              ),
-                            )
-                          }
-                        />
-                        <Input
-                          placeholder="Date range"
-                          value={item.date}
-                          onChange={(event) =>
-                            setProjects((current) =>
-                              current.map((entry) =>
-                                entry.id === item.id
-                                  ? { ...entry, date: event.target.value }
-                                  : entry,
-                              ),
-                            )
-                          }
-                        />
-                        <Input
-                          className="sm:col-span-2"
-                          placeholder="Project URL, optional"
-                          value={item.url}
-                          onChange={(event) =>
-                            setProjects((current) =>
-                              current.map((entry) =>
-                                entry.id === item.id
-                                  ? { ...entry, url: event.target.value }
-                                  : entry,
-                              ),
-                            )
-                          }
-                        />
-                      </div>
-                      <Textarea
-                        placeholder="Project summary"
-                        value={item.summary}
-                        onChange={(event) =>
-                          setProjects((current) =>
-                            current.map((entry) =>
-                              entry.id === item.id
-                                ? { ...entry, summary: event.target.value }
-                                : entry,
-                            ),
-                          )
-                        }
-                        className="min-h-[140px]"
-                      />
-                      <Textarea
-                        placeholder="Keywords, comma separated"
-                        value={item.keywordsText}
-                        onChange={(event) =>
-                          setProjects((current) =>
-                            current.map((entry) =>
-                              entry.id === item.id
-                                ? {
-                                    ...entry,
-                                    keywordsText: event.target.value,
-                                  }
-                                : entry,
-                            ),
-                          )
-                        }
-                      />
-                      <div className="flex justify-end">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setProjects((current) =>
-                              current.filter((entry) => entry.id !== item.id),
-                            )
-                          }
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Remove
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="facts" className="space-y-6 pt-3">
-              <SectionIntro
-                title="AI Facts"
-                description="Store reusable facts the AI should remember across jobs, such as preferences, visa status, domain context, and a few soft personal notes that make the writing feel less generic."
-                action={
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setFacts((current) => [
-                        ...current,
-                        { id: createFormItemId("fact"), title: "", detail: "" },
-                      ])
-                    }
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Fact
-                  </Button>
-                }
-              />
-
-              <Card>
-                <CardContent className="space-y-3 p-6">
-                  <div className="rounded-lg border border-border/60 bg-muted/20 p-4 text-sm text-muted-foreground">
-                    Use{" "}
-                    <span className="font-medium text-foreground">
-                      hard facts
-                    </span>{" "}
-                    for role targets, work authorization, and education. Use{" "}
-                    <span className="font-medium text-foreground">
-                      soft personal notes
-                    </span>{" "}
-                    for working style, communication style, or the kind of
-                    environments where you do your best work.
-                  </div>
-                  {facts.length === 0 ? (
-                    <EmptyEditorState
-                      title="No AI facts yet"
-                      description="Start with a few high-signal facts: target role, work authorization, preferred markets, and domain strengths."
-                      action={
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setFacts((current) => [
-                              ...current,
-                              {
-                                id: createFormItemId("fact"),
-                                title: "",
-                                detail: "",
-                              },
-                            ])
-                          }
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          Add First Fact
-                        </Button>
-                      }
-                    />
-                  ) : null}
-                  {groupedFacts.core.length > 0 ? (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                          Core Facts
-                        </h3>
-                        <Badge variant="outline">
-                          {groupedFacts.core.length}
-                        </Badge>
-                      </div>
-                      {groupedFacts.core.map((fact, index) =>
-                        renderFactEditor(fact, { pinned: index < 3 }),
-                      )}
-                    </div>
-                  ) : null}
-                  {groupedFacts.soft.length > 0 ? (
-                    <Accordion type="single" collapsible className="w-full">
-                      <AccordionItem
-                        value="soft-personal-notes"
-                        className="rounded-lg border border-border/60 bg-muted/5 px-4"
-                      >
-                        <AccordionTrigger className="py-3 text-left hover:no-underline">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                              Soft Personal Notes
-                            </span>
-                            <Badge variant="secondary">
-                              {groupedFacts.soft.length}
-                            </Badge>
-                          </div>
-                        </AccordionTrigger>
-                        <AccordionContent className="space-y-3 pt-1">
-                          <div className="rounded-lg border border-dashed border-border/70 bg-muted/10 p-4 text-sm text-muted-foreground">
-                            Keep these subtle and useful. They should shape tone
-                            and positioning, not invent hard evidence.
-                          </div>
-                          {groupedFacts.soft.map((fact) =>
-                            renderFactEditor(fact),
-                          )}
-                        </AccordionContent>
-                      </AccordionItem>
-                    </Accordion>
-                  ) : null}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+            <AdvancedProfileAccordions
+              skills={skills}
+              experience={experience}
+              projects={projects}
+              createFormItemId={createFormItemId}
+              setSkills={setSkills}
+              setExperience={setExperience}
+              setProjects={setProjects}
+            />
+          </div>
 
           <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>How This Page Works</CardTitle>
-                <CardDescription>
-                  Keep the workflow obvious and safe.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm text-muted-foreground">
-                <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
-                  Edit any tab, then click{" "}
-                  <span className="font-medium text-foreground">
-                    Save Profile
-                  </span>{" "}
-                  to persist both profile data and AI facts.
-                </div>
-                <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
-                  <span className="font-medium text-foreground">
-                    Upload JSON
-                  </span>{" "}
-                  only updates the form on this page first. It does not
-                  overwrite saved data until you save.
-                </div>
-                <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
-                  <span className="font-medium text-foreground">
-                    Refresh Effective Profile
-                  </span>{" "}
-                  reloads the current effective source so you can compare what
-                  downstream features are seeing.
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Current Effective Snapshot</CardTitle>
-                <CardDescription>
-                  What the app currently sees as your usable profile.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {effectiveProfileLoading ? (
-                  <div className="text-sm text-muted-foreground">
-                    Loading effective profile...
-                  </div>
-                ) : profile ? (
-                  <>
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="text-lg font-semibold">
-                          {profile.basics?.name || "Unnamed profile"}
-                        </div>
-                        <Badge variant="secondary">
-                          {hasInternalProfile
-                            ? "Internal profile active"
-                            : "Fallback profile active"}
-                        </Badge>
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {profile.basics?.headline ||
-                          profile.basics?.label ||
-                          "No headline"}
-                      </div>
-                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        {profile.basics?.email ? (
-                          <span>{profile.basics.email}</span>
-                        ) : null}
-                        {profile.basics?.phone ? (
-                          <span>{profile.basics.phone}</span>
-                        ) : null}
-                        {formatLocation(profile) ? (
-                          <span>{formatLocation(profile)}</span>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <div className="rounded-lg border border-border/60 bg-muted/20 p-4 text-sm leading-6 text-foreground/90">
-                      {profile.sections?.summary?.content ||
-                        profile.basics?.summary ||
-                        "No summary yet."}
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                        Effective skill tags
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {effectiveSkillTags
-                          .filter(Boolean)
-                          .slice(0, 20)
-                          .map((skill) => (
-                            <Badge key={skill} variant="secondary">
-                              {skill}
-                            </Badge>
-                          ))}
-                        {effectiveSkillTags.length === 0 ? (
-                          <span className="text-sm text-muted-foreground">
-                            No effective skills yet.
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-sm text-muted-foreground">
-                    No effective profile is available yet.
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Import Format</CardTitle>
-                <CardDescription>
-                  JSON import expects one candidate-profile bundle.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm text-muted-foreground">
-                <p>
-                  Include `basics`, `summary`, `skills`, `experience`,
-                  `projects`, and `facts`.
-                </p>
-                <p>
-                  Use download first if you want a safe template for round-trip
-                  edits.
-                </p>
-              </CardContent>
-            </Card>
+            <ProfileHubSnapshot
+              effectiveProfileLoading={effectiveProfileLoading}
+              profile={profile}
+              hasInternalProfile={hasInternalProfile}
+              effectiveSkillTags={effectiveSkillTags}
+              formatLocation={formatLocation}
+            />
           </div>
         </div>
       </PageMain>
 
-      <AlertDialog
-        open={Boolean(pendingImportJson)}
+      <ImportProfileDialog
+        pendingImportJson={pendingImportJson}
         onOpenChange={(open) => !open && setPendingImportJson(null)}
-      >
-        <AlertDialogContent className="max-w-3xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Import profile JSON?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will replace the current form values with the uploaded JSON.
-              It will not overwrite saved data until you click `Save Profile`.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          <div className="max-h-[50vh] overflow-auto rounded-md border border-border/60 bg-muted/20 p-3">
-            <pre className="whitespace-pre-wrap break-words text-xs leading-6 text-foreground/90">
-              {pendingImportJson}
-            </pre>
-          </div>
-
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setPendingImportJson(null)}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={confirmImport}>
-              Confirm Import
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onConfirm={confirmImport}
+      />
     </>
   );
 };

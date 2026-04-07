@@ -62,6 +62,8 @@ function buildJobSnapshot(job: Job): string {
       tailoredSummary: truncate(job.tailoredSummary, 1200),
       tailoredHeadline: truncate(job.tailoredHeadline, 300),
       tailoredSkills: truncate(job.tailoredSkills, 1200),
+      documentStrategy: truncate(job.documentStrategy, 1600),
+      selectedProofPointProjectIds: job.selectedProofPointProjectIds,
       jobDescription: truncate(job.jobDescription, MAX_JOB_DESCRIPTION),
     },
   };
@@ -69,9 +71,19 @@ function buildJobSnapshot(job: Job): string {
   return JSON.stringify(snapshot, null, 2);
 }
 
+function parseSelectedIds(csv: string | null | undefined): Set<string> {
+  return new Set(
+    (csv ?? "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean),
+  );
+}
+
 function buildProfileSnapshot(
   profile: ResumeProfile,
   knowledgeBase: CandidateKnowledgeBase,
+  job: Job,
 ): string {
   const summary =
     truncate(profile?.sections?.summary?.content, MAX_PROFILE_SUMMARY) ||
@@ -104,11 +116,23 @@ function buildProfileSnapshot(
     .slice(0, MAX_PERSONAL_FACTS)
     .map((item) => `${item.title}: ${truncate(item.detail, MAX_ITEM_TEXT)}`);
 
-  const customProjects = (knowledgeBase.projects ?? [])
+  const selectedProofPointIds = parseSelectedIds(job.selectedProofPointProjectIds);
+  const selectedProofPointProjects = (knowledgeBase.projects ?? []).filter((item) =>
+    selectedProofPointIds.has(item.id),
+  );
+
+  const prioritizedKnowledgeProjects =
+    selectedProofPointProjects.length > 0
+      ? selectedProofPointProjects
+      : (knowledgeBase.projects ?? []).some((item) => item.activeForDrafting)
+        ? (knowledgeBase.projects ?? []).filter((item) => item.activeForDrafting)
+        : knowledgeBase.projects ?? [];
+
+  const customProjects = prioritizedKnowledgeProjects
     .slice(0, MAX_CUSTOM_PROJECTS)
     .map((item) =>
       compactJoin([
-        `${item.name}${item.role ? ` (${item.role})` : ""}: ${truncate(item.summary, MAX_ITEM_TEXT)}`,
+        `[${item.id}] ${item.name}${item.role ? ` (${item.role})` : ""}${selectedProofPointIds.has(item.id) ? " [selected-for-job]" : item.activeForDrafting ? " [active]" : ""}: ${truncate(item.summary, MAX_ITEM_TEXT)}`,
         item.impact ? `Impact: ${truncate(item.impact, MAX_ITEM_TEXT)}` : null,
         item.keywords.length > 0
           ? `Keywords: ${item.keywords.slice(0, 8).join(", ")}`
@@ -190,7 +214,7 @@ export async function buildJobChatPromptContext(
     });
   }
 
-  const profileSnapshot = buildProfileSnapshot(profile, knowledgeBase);
+  const profileSnapshot = buildProfileSnapshot(profile, knowledgeBase, job);
   const systemPrompt = buildGhostwriterSystemPrompt(style, profile);
   const jobSnapshot = buildJobSnapshot(job);
   const companyResearchSnapshot =

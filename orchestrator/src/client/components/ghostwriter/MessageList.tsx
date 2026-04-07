@@ -1,12 +1,17 @@
-import type { BranchInfo, JobChatMessage } from "@shared/types";
-import { Check, Copy, Pencil, RefreshCcw } from "lucide-react";
+import type {
+  BranchInfo,
+  CandidateKnowledgeProject,
+  GhostwriterResumePatch,
+  JobChatMessage,
+} from "@shared/types";
+import { parseGhostwriterAssistantContent } from "@shared/utils/ghostwriter";
+import { Pencil } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { AssistantMessageCard } from "./AssistantMessageCard";
 import { BranchNavigator } from "./BranchNavigator";
 import { StreamingMessage } from "./StreamingMessage";
 
@@ -15,9 +20,12 @@ type MessageListProps = {
   branches: BranchInfo[];
   isStreaming: boolean;
   streamingMessageId: string | null;
+  selectedProofPoints?: CandidateKnowledgeProject[];
   onRegenerate: (messageId: string) => void;
   onEdit: (messageId: string, content: string) => void;
   onSwitchBranch: (messageId: string) => void;
+  onTurnIntoCoverLetter?: (message: JobChatMessage) => void;
+  onApplyResumePatch?: (patch: GhostwriterResumePatch) => void;
 };
 
 export const MessageList: React.FC<MessageListProps> = ({
@@ -25,9 +33,12 @@ export const MessageList: React.FC<MessageListProps> = ({
   branches,
   isStreaming,
   streamingMessageId,
+  selectedProofPoints = [],
   onRegenerate,
   onEdit,
   onSwitchBranch,
+  onTurnIntoCoverLetter,
+  onApplyResumePatch,
 }) => {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
@@ -35,9 +46,11 @@ export const MessageList: React.FC<MessageListProps> = ({
   const copiedTimeoutRef = useRef<number | null>(null);
 
   const branchMap = new Map<string, BranchInfo>();
-  for (const branch of branches) {
-    branchMap.set(branch.messageId, branch);
-  }
+  for (const branch of branches) branchMap.set(branch.messageId, branch);
+
+  const selectedProofPointMap = new Map(
+    selectedProofPoints.map((project) => [project.id, project] as const),
+  );
 
   const startEditing = (message: JobChatMessage) => {
     setEditingMessageId(message.id);
@@ -89,43 +102,45 @@ export const MessageList: React.FC<MessageListProps> = ({
   };
 
   return (
-    <div className="space-y-3">
-      {messages.length > 0 &&
-        messages.map((message) => {
-          const isUser = message.role === "user";
-          const isActiveStreaming =
-            isStreaming &&
-            message.role === "assistant" &&
-            streamingMessageId === message.id;
-          const isEditing = editingMessageId === message.id;
-          const canCopyResponse =
-            message.role === "assistant" &&
-            message.status === "complete" &&
-            !isStreaming &&
-            !isActiveStreaming;
-          const branch = branchMap.get(message.id);
+    <div className="space-y-6">
+      {messages.map((message) => {
+        const isUser = message.role === "user";
+        const isAssistant = message.role === "assistant";
+        const isActiveStreaming =
+          isStreaming && isAssistant && streamingMessageId === message.id;
+        const isEditing = editingMessageId === message.id;
+        const canCopyResponse =
+          isAssistant && message.status === "complete" && !isStreaming;
+        const branch = branchMap.get(message.id);
+        const parsedAssistant = isAssistant
+          ? parseGhostwriterAssistantContent(message.content)
+          : null;
+        const evidenceUsed = isAssistant
+          ? (parsedAssistant?.evidenceUsedProjectIds ?? [])
+              .map((id) => selectedProofPointMap.get(id))
+              .filter((project): project is CandidateKnowledgeProject => Boolean(project))
+          : [];
 
-          return (
-            <div
-              key={message.id}
-              className={`group rounded-lg border p-3 ${
-                isUser
-                  ? "border-primary/30 bg-primary/5"
-                  : "border-border/60 bg-background"
-              }`}
-            >
-              <div className="mb-1 flex items-center gap-2">
-                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+        return (
+          <div
+            key={message.id}
+            className={`group flex ${isUser ? "justify-end" : "justify-start"}`}
+          >
+            <div className="w-full max-w-[92%] space-y-2">
+              <div
+                className={`flex items-center gap-2 ${isUser ? "justify-end" : "justify-start"}`}
+              >
+                <span className="text-[10px] uppercase tracking-[0.24em] text-stone-400 dark:text-muted-foreground">
                   {isUser ? "You" : "Ghostwriter"}
                 </span>
-                {branch && (
+                {branch ? (
                   <BranchNavigator
                     branchInfo={branch}
                     onSwitch={onSwitchBranch}
                   />
-                )}
-                <div className="ml-auto flex items-center gap-1 opacity-100 transition-opacity sm:pointer-events-none sm:opacity-0 sm:group-hover:pointer-events-auto sm:group-hover:opacity-100 sm:group-focus-within:pointer-events-auto sm:group-focus-within:opacity-100">
-                  {isUser && !isStreaming && !isEditing && (
+                ) : null}
+                {isUser && !isStreaming && !isEditing ? (
+                  <div className="ml-auto flex items-center gap-1 opacity-100 transition-opacity sm:pointer-events-none sm:opacity-0 sm:group-hover:pointer-events-auto sm:group-hover:opacity-100 sm:group-focus-within:pointer-events-auto sm:group-focus-within:opacity-100">
                     <button
                       type="button"
                       onClick={() => startEditing(message)}
@@ -135,54 +150,19 @@ export const MessageList: React.FC<MessageListProps> = ({
                     >
                       <Pencil className="h-3 w-3" />
                     </button>
-                  )}
-                  {!isUser && !isStreaming && !isActiveStreaming && (
-                    <>
-                      {canCopyResponse ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void copyMessage(message.id, message.content)
-                          }
-                          className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                          aria-label="Copy response"
-                          title="Copy response"
-                        >
-                          {copiedMessageId === message.id ? (
-                            <Check className="h-3 w-3" />
-                          ) : (
-                            <Copy className="h-3 w-3" />
-                          )}
-                          <span>
-                            {copiedMessageId === message.id ? "Copied" : "Copy"}
-                          </span>
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => onRegenerate(message.id)}
-                        className="rounded p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                        aria-label="Regenerate response"
-                        title="Regenerate response"
-                      >
-                        <RefreshCcw className="h-3 w-3" />
-                      </button>
-                    </>
-                  )}
-                </div>
+                  </div>
+                ) : null}
               </div>
 
               {isEditing ? (
-                <div className="space-y-2">
+                <div className="space-y-2 rounded-3xl border border-stone-200/80 bg-white px-4 py-3 shadow-[0_8px_30px_rgba(120,98,68,0.06)] dark:border-border/60 dark:bg-background">
                   <Textarea
                     value={editContent}
                     onChange={(e) => setEditContent(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Escape") {
-                        cancelEditing();
-                      }
+                      if (e.key === "Escape") cancelEditing();
                     }}
-                    className="min-h-[60px]"
+                    className="min-h-[60px] border-none bg-transparent px-0 shadow-none focus-visible:ring-0"
                     autoFocus
                   />
                   <div className="flex items-center justify-end gap-1">
@@ -200,20 +180,27 @@ export const MessageList: React.FC<MessageListProps> = ({
                 </div>
               ) : isActiveStreaming ? (
                 <StreamingMessage content={message.content} />
-              ) : message.role === "assistant" ? (
-                <div className="text-sm leading-relaxed text-foreground [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l [&_blockquote]:border-border [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-muted/40 [&_code]:px-1 [&_h1]:mt-4 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:mt-4 [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_li]:my-1 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-muted/40 [&_pre]:p-3 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {message.content || "..."}
-                  </ReactMarkdown>
-                </div>
+              ) : isAssistant && parsedAssistant ? (
+                <AssistantMessageCard
+                  message={message}
+                  parsedAssistant={parsedAssistant}
+                  evidenceUsed={evidenceUsed}
+                  canCopyResponse={canCopyResponse}
+                  isCopied={copiedMessageId === message.id}
+                  onCopy={() => void copyMessage(message.id, message.content)}
+                  onTurnIntoCoverLetter={onTurnIntoCoverLetter}
+                  onApplyResumePatch={onApplyResumePatch}
+                  onRegenerate={onRegenerate}
+                />
               ) : (
-                <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                <div className="ml-auto whitespace-pre-wrap rounded-[24px] bg-[#df6f3c] px-4 py-3 text-sm leading-relaxed text-white shadow-[0_10px_30px_rgba(207,99,47,0.24)] dark:bg-primary dark:text-primary-foreground">
                   {message.content}
                 </div>
               )}
             </div>
-          );
-        })}
+          </div>
+        );
+      })}
     </div>
   );
 };

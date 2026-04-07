@@ -5,6 +5,7 @@ import {
   CHAT_STYLE_MANUAL_LANGUAGE_VALUES,
   type ChatStyleLanguageMode,
   type ChatStyleManualLanguage,
+  type LocalProjectSource,
   type ResumeProfile,
   type ResumeProjectsSettings,
 } from "./types/settings";
@@ -269,6 +270,24 @@ export const settingsRegistry = {
       }
     },
     serialize: (value: ResumeProfile | null | undefined): string | null =>
+      value ? JSON.stringify(value) : null,
+  },
+  localProjectSources: {
+    kind: "typed" as const,
+    schema: z.array(z.object({ path: z.string().trim().min(1).max(2000) })).max(50),
+    default: (): LocalProjectSource[] => [],
+    parse: (raw: string | undefined): LocalProjectSource[] | null => {
+      if (!raw) return null;
+      try {
+        return z
+          .array(z.object({ path: z.string().trim().min(1).max(2000) }))
+          .max(50)
+          .parse(JSON.parse(raw));
+      } catch {
+        return null;
+      }
+    },
+    serialize: (value: LocalProjectSource[] | null | undefined): string | null =>
       value ? JSON.stringify(value) : null,
   },
   rxresumeMode: {

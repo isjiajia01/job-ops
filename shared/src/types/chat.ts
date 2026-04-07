@@ -67,6 +67,7 @@ export interface GhostwriterAssistantPayload {
   coverLetterDraft: string | null;
   coverLetterKind: GhostwriterCoverLetterKind | null;
   resumePatch: GhostwriterResumePatch | null;
+  evidenceUsedProjectIds: string[];
 }
 
 export interface BranchInfo {

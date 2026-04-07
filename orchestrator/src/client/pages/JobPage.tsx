@@ -9,6 +9,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import confetti from "canvas-confetti";
 import {
+  AlertTriangle,
   ArrowLeft,
   CalendarClock,
   CheckCircle2,
@@ -22,6 +23,7 @@ import {
   PlusCircle,
   RefreshCcw,
   Sparkles,
+  Target,
   XCircle,
 } from "lucide-react";
 import React from "react";
@@ -40,6 +42,12 @@ import {
 import { useQueryErrorToast } from "@/client/hooks/useQueryErrorToast";
 import { downloadCoverLetterPdfForJob } from "@/client/lib/cover-letter-pdf";
 import { downloadCvPdfForJob } from "@/client/lib/cv-pdf";
+import { parseDocumentStrategy } from "@/client/lib/document-strategy";
+import { buildJobDecisionBrief } from "@/client/lib/job-decision";
+import {
+  parseSelectedProofPointIds,
+  recommendProjectsForJob,
+} from "@/client/lib/project-proof-points";
 import { queryKeys } from "@/client/lib/queryKeys";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -119,8 +127,29 @@ export const JobPage: React.FC = () => {
   const checkSponsorMutation = useCheckSponsorMutation();
 
   const job = jobQuery.data ?? null;
+  const decisionBrief = React.useMemo(
+    () => (job ? buildJobDecisionBrief(job) : null),
+    [job],
+  );
+  const documentStrategy = React.useMemo(
+    () => (job ? parseDocumentStrategy(job) : null),
+    [job],
+  );
   const events = mergeEvents(eventsQuery.data ?? [], pendingEventRef.current);
+  const knowledgeQuery = useQuery({
+    queryKey: queryKeys.profile.knowledge(),
+    queryFn: api.getCandidateKnowledgeBase,
+  });
+
   const tasks = tasksQuery.data ?? [];
+  const recommendedProofPoints = React.useMemo(
+    () => recommendProjectsForJob(job, knowledgeQuery.data?.projects ?? [], 3),
+    [job, knowledgeQuery.data],
+  );
+  const selectedProofPointIds = React.useMemo(
+    () => new Set(parseSelectedProofPointIds(job?.selectedProofPointProjectIds)),
+    [job?.selectedProofPointProjectIds],
+  );
   const isLoading =
     jobQuery.isLoading || eventsQuery.isLoading || tasksQuery.isLoading;
 
@@ -232,6 +261,40 @@ export const JobPage: React.FC = () => {
     } finally {
       setIsDeleteModalOpen(false);
       setEventToDelete(null);
+    }
+  };
+
+  const handleUseProofPointForJob = async (projectId: string) => {
+    if (!job) return;
+    try {
+      await api.updateJob(job.id, {
+        selectedProofPointProjectIds: projectId,
+      });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(job.id) });
+      toast.success("Proof point selected for this job");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to update proof points";
+      toast.error(message);
+    }
+  };
+
+  const handleRecommendTopProofPoints = async () => {
+    if (!job || recommendedProofPoints.length === 0) return;
+    const selectedIds = recommendedProofPoints
+      .slice(0, 3)
+      .map((item) => item.project.id)
+      .join(",");
+    try {
+      await api.updateJob(job.id, {
+        selectedProofPointProjectIds: selectedIds,
+      });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(job.id) });
+      toast.success("Recommended top proof points saved for this job");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to apply recommendations";
+      toast.error(message);
     }
   };
 
@@ -674,6 +737,127 @@ export const JobPage: React.FC = () => {
         </Card>
 
         <div className="space-y-4">
+          {decisionBrief && (
+            <Card className="border-border/50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Target className="h-4 w-4" />
+                  Decision brief
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Recommendation
+                  </div>
+                  <div className="mt-1 text-sm font-semibold">
+                    {decisionBrief.recommendationLabel}
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Recommended effort: {decisionBrief.effortLabel}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Why this role may be worth it
+                  </div>
+                  <ul className="mt-2 space-y-1 text-sm text-foreground/85">
+                    {decisionBrief.whyApply.map((item) => (
+                      <li key={item}>• {item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Watchouts
+                  </div>
+                  <ul className="mt-2 space-y-1 text-sm text-foreground/85">
+                    {decisionBrief.watchouts.map((item) => (
+                      <li key={item}>• {item}</li>
+                    ))}
+                  </ul>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {documentStrategy && (
+            <Card className="border-border/50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Target className="h-4 w-4" />
+                  Document strategy
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Role angle
+                  </div>
+                  <div className="mt-1 text-sm font-medium">
+                    {documentStrategy.roleAngle}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Strongest evidence
+                  </div>
+                  <ul className="mt-2 space-y-1 text-sm text-foreground/85">
+                    {documentStrategy.strongestEvidence.map((item) => (
+                      <li key={item}>• {item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Cover letter angle
+                  </div>
+                  <div className="mt-1 text-sm font-medium">
+                    {documentStrategy.coverLetterAngle}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {recommendedProofPoints.length > 0 && (
+            <Card className="border-border/50">
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Target className="h-4 w-4" />
+                    Recommended proof points for this job
+                  </CardTitle>
+                  <Button size="sm" variant="outline" onClick={() => void handleRecommendTopProofPoints()}>
+                    Recommend top 3 proof points
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {recommendedProofPoints.map((item) => (
+                  <div key={item.project.id} className="rounded-xl border border-border/60 bg-muted/10 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-medium">{item.project.name}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">Recommendation score {item.score}</div>
+                      </div>
+                      <Button size="sm" variant={selectedProofPointIds.has(item.project.id) ? "secondary" : "outline"} onClick={() => void handleUseProofPointForJob(item.project.id)}>
+                        {selectedProofPointIds.has(item.project.id) ? "Selected" : "Use for this job"}
+                      </Button>
+                    </div>
+                    <div className="mt-2 text-sm text-muted-foreground">{item.project.summary}</div>
+                    <ul className="mt-3 space-y-1 text-xs text-foreground/80">
+                      {item.reasons.map((reason) => (
+                        <li key={reason}>• {reason}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
           <Card className="border-border/50">
             <CardHeader>
               <div className="flex items-center justify-between gap-3">

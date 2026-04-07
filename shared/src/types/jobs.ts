@@ -124,6 +124,13 @@ export interface TailoredExperienceEdit {
   bullets: string[];
 }
 
+export interface DocumentStrategy {
+  roleAngle: string;
+  strongestEvidence: string[];
+  priorityTerms: string[];
+  coverLetterAngle: string;
+}
+
 export interface TailoredLayoutDirectives {
   sectionOrder?: string[];
   hiddenSections?: string[];
@@ -167,7 +174,9 @@ export interface Job {
   tailoredLayoutDirectives: string | null; // Generated layout directives (JSON)
   tailoredSectionRationale: string | null; // AI rationale for section ordering/emphasis
   tailoredOmissionRationale: string | null; // AI rationale for hidden sections/items
-  selectedProjectIds: string | null; // Comma-separated IDs of selected projects
+  documentStrategy: string | null; // Generated JD-to-document strategy artifact (JSON)
+  selectedProjectIds: string | null; // Comma-separated IDs of selected resume projects
+  selectedProofPointProjectIds: string | null; // Comma-separated IDs of selected imported knowledge proof-point projects for this job
   pdfPath: string | null; // Path to generated PDF
   tracerLinksEnabled: boolean; // Rewrite outbound resume links to tracer links on next PDF generation
   sponsorMatchScore: number | null; // 0-100 fuzzy match score with visa sponsors
@@ -327,7 +336,9 @@ export interface UpdateJobInput {
   tailoredLayoutDirectives?: string;
   tailoredSectionRationale?: string;
   tailoredOmissionRationale?: string;
+  documentStrategy?: string;
   selectedProjectIds?: string;
+  selectedProofPointProjectIds?: string;
   pdfPath?: string;
   tracerLinksEnabled?: boolean;
   appliedAt?: string | null;

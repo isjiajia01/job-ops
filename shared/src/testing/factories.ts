@@ -37,7 +37,9 @@ export const createJob = (overrides: Partial<Job> = {}): Job => ({
   tailoredLayoutDirectives: null,
   tailoredSectionRationale: null,
   tailoredOmissionRationale: null,
+  documentStrategy: null,
   selectedProjectIds: null,
+  selectedProofPointProjectIds: null,
   pdfPath: null,
   tracerLinksEnabled: false,
   sponsorMatchScore: null,
@@ -159,6 +161,11 @@ export const createAppSettings = (
   candidateResumeProfile: {
     value: {},
     default: {},
+    override: null,
+  },
+  localProjectSources: {
+    value: [],
+    default: [],
     override: null,
   },
   rxresumeBaseResumeId: null,

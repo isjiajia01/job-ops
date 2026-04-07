@@ -17,12 +17,12 @@ export const BranchNavigator: React.FC<BranchNavigatorProps> = ({
   const canGoRight = activeIndex < total - 1;
 
   return (
-    <div className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
+    <div className="inline-flex items-center gap-0.5 rounded-full border border-stone-200/80 bg-white/80 px-1.5 py-0.5 text-[10px] text-stone-500 shadow-sm dark:border-border dark:bg-muted/40 dark:text-muted-foreground">
       <button
         type="button"
         disabled={!canGoLeft}
         onClick={() => canGoLeft && onSwitch(siblingIds[activeIndex - 1])}
-        className="rounded p-0.5 hover:bg-muted/60 disabled:opacity-30 disabled:cursor-default"
+        className="rounded p-0.5 hover:bg-stone-100 disabled:cursor-default disabled:opacity-30 dark:hover:bg-muted/60"
         aria-label="Previous variant"
       >
         <ChevronLeft className="h-3 w-3" />
@@ -34,7 +34,7 @@ export const BranchNavigator: React.FC<BranchNavigatorProps> = ({
         type="button"
         disabled={!canGoRight}
         onClick={() => canGoRight && onSwitch(siblingIds[activeIndex + 1])}
-        className="rounded p-0.5 hover:bg-muted/60 disabled:opacity-30 disabled:cursor-default"
+        className="rounded p-0.5 hover:bg-stone-100 disabled:cursor-default disabled:opacity-30 dark:hover:bg-muted/60"
         aria-label="Next variant"
       >
         <ChevronRight className="h-3 w-3" />

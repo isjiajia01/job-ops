@@ -12,7 +12,7 @@ export const AI_ENTRY_PROMPTS: GhostwriterPromptPreset[] = [
     description:
       "Update the current tailored CV for this job and apply the new draft automatically.",
     prompt:
-      "Update the current tailored CV for this job and apply the changes automatically. Refresh the tailored summary, headline, and skills so they match this role more sharply. Keep the writing truthful, specific, and employer-need driven. Strengthen the language, but do not overclaim or invent experience.",
+      "Update the current tailored CV for this job and apply the changes automatically. Refresh the tailored summary, headline, and skills so they match this role more sharply. Make the summary recruiter-grade: role-specific, evidence-backed, employer-need driven, and clearly stronger than a generic profile summary. Rebuild skill groups around the JD's most relevant terms, remove weak filler, and keep everything fully truthful without inventing experience.",
   },
   {
     id: "resume-rewrite",
@@ -20,7 +20,7 @@ export const AI_ENTRY_PROMPTS: GhostwriterPromptPreset[] = [
     description:
       "Improve the current job-specific CV draft without changing the core facts.",
     prompt:
-      "Rewrite the current tailored CV draft for this job so it sounds sharper, more specific, and more persuasive while staying fully truthful. Keep the strongest evidence, remove generic phrasing, and return a resumePatch that updates the current tailored summary, headline, and skills.",
+      "Rewrite the current tailored CV draft for this job so it sounds sharper, more specific, and more persuasive while staying fully truthful. Keep the strongest evidence, remove generic phrasing, and return a resumePatch that updates the current tailored summary, headline, and skills. Prioritize concrete role fit, exact JD terminology where useful, and 2-4 strong proof points rather than broad generic claims.",
   },
   {
     id: "fit-brief",
@@ -38,7 +38,7 @@ export const COVER_LETTER_PROMPTS: GhostwriterPromptPreset[] = [
     label: "Standard Cover Letter",
     description: "3-4 short paragraphs, tailored to the role and employer.",
     prompt:
-      "Draft a tailored cover letter for this job. Keep it to 3-4 short paragraphs and under 300 words. Make the language powerful, sincere, and concrete rather than generic. Use natural first-person cover-letter voice, explain why this role and employer fit, and support that with 2-3 specific examples from the provided profile. Do not invent experience, do not repeat the resume line by line, and avoid generic praise or empty enthusiasm.",
+      "Draft a tailored cover letter for this job. Keep it to 3-4 short paragraphs and under 300 words. Make it sound like a strong human application, not a template. Open from the role, work, or employer need rather than generic enthusiasm. Explain why this role and employer fit, and support that with 2-3 specific examples from the provided profile. Each body paragraph should make one clear fit claim with evidence. Do not invent experience, do not repeat the CV line by line, and avoid generic praise or empty enthusiasm.",
   },
   {
     id: "cover-letter-denmark",
@@ -46,7 +46,7 @@ export const COVER_LETTER_PROMPTS: GhostwriterPromptPreset[] = [
     description:
       "Direct, modest, employer-need driven, and more restrained in tone.",
     prompt:
-      "Draft a concise Denmark-style cover letter for this job. Keep it to 3 short paragraphs and under 220 words. Use natural first-person voice, but keep the tone direct, modest, practical, employer-need driven, and sincere. Start with a local, non-template opening and avoid generic salutations like 'Dear Hiring Team' unless no better option is possible. Focus on why this role fits, how my background can help, and 2 concrete examples from the provided profile. End with a short, useful closing that focuses on what I can contribute, not a long polite wrap-up. Use concrete day-to-day details from the provided profile or JD when they make the letter feel more real, but do not invent personal stories or unsupported life details. Avoid overselling, exaggerated enthusiasm, and generic praise. Do not invent experience or repeat the CV line by line.",
+      "Draft a concise Denmark-style cover letter for this job. Keep it to 3 short paragraphs and under 220 words. Use natural first-person voice, but keep the tone direct, modest, practical, employer-need driven, and sincere. Start with a local, non-template opening anchored in the work or team need, and avoid generic salutations like 'Dear Hiring Team' unless no better option is possible. Focus on why this role fits, how my background can help, and 2 concrete examples from the provided profile. End with a short, useful closing that focuses on what I can contribute, not a long polite wrap-up. Use concrete day-to-day details from the provided profile or JD when they make the letter feel more real, but do not invent personal stories or unsupported life details. Avoid overselling, exaggerated enthusiasm, and generic praise. Do not invent experience or repeat the CV line by line.",
   },
   {
     id: "cover-letter-email",
