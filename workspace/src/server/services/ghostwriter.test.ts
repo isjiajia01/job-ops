@@ -702,6 +702,14 @@ describe("ghostwriter service", () => {
       }),
     );
     expect(parsed.review?.specificity).toBeGreaterThanOrEqual(3);
+    expect(mocks.repo.createRunEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "editorial_rewrite_requested",
+        payload: expect.objectContaining({
+          triggerReasons: expect.arrayContaining([expect.stringMatching(/generic-opening|long-sentences|dense-sentence-flow/)]),
+        }),
+      }),
+    );
   });
 
   it("drops obviously overclaiming resumePatch fields before updating the job", async () => {
