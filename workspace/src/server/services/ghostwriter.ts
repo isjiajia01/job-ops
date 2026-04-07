@@ -1175,6 +1175,593 @@ async function emitRunTimelineEvent<TType extends JobChatRunEventType>(
   return event;
 }
 
+type GhostwriterSelectionMeta = {
+  candidateCount?: number;
+  winnerReason: string;
+  winningVariant?: string;
+  strongestEvidence?: string[];
+  coveredClaimIds?: string[];
+};
+
+type GhostwriterRunContext = Awaited<ReturnType<typeof buildJobChatPromptContext>>;
+type GhostwriterRuntimeState = ReturnType<typeof buildGhostwriterRuntimeState>;
+type GhostwriterEmitTimeline = <TType extends JobChatRunEventType>(input: {
+  phase: JobChatRunPhase;
+  eventType: TType;
+  title: string;
+  detail?: string | null;
+  payload: JobChatRunEventPayloadByType[TType];
+}) => Promise<JobChatRunEvent>;
+
+function buildEvidenceSelectionSnapshot(
+  evidenceSelection: GhostwriterEvidenceSelectionPlan,
+): string {
+  return [
+    `Selected evidence ids: ${evidenceSelection.selectedModuleIds.join(", ") || "none"}`,
+    evidenceSelection.selectedModules.length
+      ? `Selected proof points:\n- ${evidenceSelection.selectedModules
+          .map((module) => `${module.label}: ${module.preferredFraming}`)
+          .join("\n- ")}`
+      : "Selected proof points: none",
+    evidenceSelection.requiredEvidenceSnippets.length
+      ? `Required evidence snippets:\n- ${evidenceSelection.requiredEvidenceSnippets.join("\n- ")}`
+      : null,
+    evidenceSelection.blockedClaims.length
+      ? `Blocked claims:\n- ${evidenceSelection.blockedClaims.join("\n- ")}`
+      : null,
+    evidenceSelection.writerInstructions.length
+      ? `Writer instructions:\n- ${evidenceSelection.writerInstructions.join("\n- ")}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function attachReviewToPayload(
+  payload: GhostwriterAssistantPayload,
+  review: ReturnType<typeof reviewGhostwriterPayload>,
+): GhostwriterAssistantPayload {
+  return {
+    ...payload,
+    review: {
+      summary: review.summary,
+      specificity: review.scores.specificity,
+      evidenceStrength: review.scores.evidenceStrength,
+      overclaimRisk: review.scores.overclaimRisk,
+      naturalness: review.scores.naturalness,
+      issues: review.issues,
+      diagnostics: review.diagnostics,
+    },
+  };
+}
+
+async function emitReviewCompleted(
+  emitTimeline: GhostwriterEmitTimeline,
+  review: ReturnType<typeof reviewGhostwriterPayload>,
+): Promise<void> {
+  await emitTimeline({
+    phase: "finalize",
+    eventType: "review_completed",
+    title: "Post-generation review completed",
+    detail: review.summary,
+    payload: {
+      summary: review.summary,
+      specificity: review.scores.specificity,
+      evidenceStrength: review.scores.evidenceStrength,
+      overclaimRisk: review.scores.overclaimRisk,
+      naturalness: review.scores.naturalness,
+      issues: review.issues,
+      diagnostics: review.diagnostics,
+      shouldRewrite: review.shouldRewrite,
+    },
+  });
+}
+
+async function runDirectChatTask(args: {
+  llm: LlmService;
+  llmConfig: LlmRuntimeSettings;
+  context: GhostwriterRunContext;
+  runtimeState: GhostwriterRuntimeState;
+  baseMessages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+  runtimeMessages: Array<{ role: "system"; content: string }>;
+  prompt: string;
+  jobId: string;
+  signal: AbortSignal;
+}): Promise<GhostwriterAssistantPayload> {
+  const llmResult = await args.llm.callJson<{ response: string }>({
+    model: args.llmConfig.model,
+    messages: [
+      ...args.baseMessages,
+      ...args.runtimeMessages,
+      {
+        role: "user",
+        content: args.prompt,
+      },
+    ],
+    jsonSchema: CHAT_RESPONSE_SCHEMA,
+    maxRetries: 1,
+    retryDelayMs: 300,
+    jobId: args.jobId,
+    signal: args.signal,
+  });
+
+  if (!llmResult.success) {
+    if (args.signal.aborted) {
+      throw requestTimeout("Chat generation was cancelled");
+    }
+    throw upstreamError("LLM generation failed", {
+      reason: llmResult.error,
+    });
+  }
+
+  return finalizePayloadCandidate({
+    raw: llmResult.data,
+    prompt: args.prompt,
+    profile: args.context.profile,
+    knowledgeBase: args.context.knowledgeBase,
+    evidencePack: args.context.evidencePack,
+    runtimeState: args.runtimeState,
+  });
+}
+
+async function buildWritingPlan(args: {
+  llm: LlmService;
+  llmConfig: LlmRuntimeSettings;
+  context: GhostwriterRunContext;
+  baseMessages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+  runtimeMessages: Array<{ role: "system"; content: string }>;
+  prompt: string;
+  taskKind: Exclude<GhostwriterTaskKind, "direct_chat" | "memory_update">;
+  jobId: string;
+  signal: AbortSignal;
+  emitTimeline: GhostwriterEmitTimeline;
+}): Promise<{
+  strategy: WritingStrategy;
+  claimPlan: GhostwriterClaimPlan;
+  evidenceSelection: GhostwriterEvidenceSelectionPlan;
+  coverLetterKind: GhostwriterCoverLetterKind | null;
+}> {
+  const strategyPrompt = [
+    `Task kind: ${args.taskKind}`,
+    `User request: ${args.prompt}`,
+    "Build a compact writing strategy using the evidence pack. Focus on the best angle, strongest evidence, weak points to manage, and a practical paragraph plan.",
+    "Set requiresClarification to true only if a good draft would clearly suffer without extra user input.",
+  ].join("\n\n");
+
+  await args.emitTimeline({
+    phase: "strategy",
+    eventType: "strategy_requested",
+    title: "Planning writing strategy",
+    detail: "Ghostwriter is first building an explicit strategy before drafting the artifact.",
+    payload: { prompt: args.prompt, taskKind: args.taskKind },
+  });
+
+  const strategyResult = await args.llm.callJson<WritingStrategy>({
+    model: args.llmConfig.model,
+    messages: [
+      ...args.baseMessages,
+      ...args.runtimeMessages,
+      { role: "system", content: "Return a writing strategy JSON only. Do not draft the final answer yet." },
+      { role: "user", content: strategyPrompt },
+    ],
+    jsonSchema: WRITING_STRATEGY_SCHEMA,
+    maxRetries: 1,
+    retryDelayMs: 300,
+    jobId: args.jobId,
+    signal: args.signal,
+  });
+
+  if (!strategyResult.success) {
+    if (args.signal.aborted) throw requestTimeout("Chat generation was cancelled");
+    throw upstreamError("Ghostwriter strategy generation failed", { reason: strategyResult.error });
+  }
+
+  const strategy = {
+    ...buildLocalWritingStrategy({ taskKind: args.taskKind, evidencePack: args.context.evidencePack }),
+    ...strategyResult.data,
+  } satisfies WritingStrategy;
+
+  await args.emitTimeline({
+    phase: "strategy",
+    eventType: "strategy_built",
+    title: "Strategy locked",
+    detail: strategy.angle,
+    payload: {
+      strongestEvidence: strategy.strongestEvidence.slice(0, 4),
+      weakPoints: strategy.weakPoints.slice(0, 3),
+      paragraphPlan: strategy.paragraphPlan.slice(0, 5),
+    },
+  });
+
+  const evidenceSelection = await buildHybridEvidenceSelection({
+    llm: args.llm,
+    llmConfig: args.llmConfig,
+    context: args.context,
+    prompt: args.prompt,
+    taskKind: args.taskKind,
+    jobId: args.jobId,
+    signal: args.signal,
+  });
+  const claimPlan = buildGhostwriterClaimPlan({
+    context: args.context,
+    prompt: args.prompt,
+    taskKind: args.taskKind,
+    strategy,
+    evidenceSelection,
+  });
+
+  await args.emitTimeline({
+    phase: "strategy",
+    eventType: "claim_plan_built",
+    title: "Claim plan built",
+    detail: `${claimPlan.targetRoleAngle} | selected proof points: ${evidenceSelection.selectedModules.map((module) => module.label).join(", ") || "none"}`,
+    payload: {
+      targetRoleAngle: claimPlan.targetRoleAngle,
+      openingStrategy: claimPlan.openingStrategy,
+      claimCount: claimPlan.claims.length,
+      mustClaimCount: claimPlan.claims.filter((claim) => claim.priority === "must").length,
+      excludedClaims: claimPlan.excludedClaims.slice(0, 3),
+    },
+  });
+
+  const coverLetterKind =
+    args.taskKind === "application_email"
+      ? "email"
+      : args.taskKind === "cover_letter" || args.taskKind === "mixed"
+        ? "letter"
+        : null;
+
+  return { strategy, claimPlan, evidenceSelection, coverLetterKind };
+}
+
+async function generateStructuredCandidates(args: {
+  llm: LlmService;
+  llmConfig: LlmRuntimeSettings;
+  context: GhostwriterRunContext;
+  runtimeState: GhostwriterRuntimeState;
+  baseMessages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+  runtimeMessages: Array<{ role: "system"; content: string }>;
+  prompt: string;
+  jobId: string;
+  signal: AbortSignal;
+  emitTimeline: GhostwriterEmitTimeline;
+  strategy: WritingStrategy;
+  claimPlan: GhostwriterClaimPlan;
+  evidenceSelection: GhostwriterEvidenceSelectionPlan;
+  coverLetterKind: GhostwriterCoverLetterKind | null;
+}): Promise<ReturnType<typeof rankPayloadCandidates>> {
+  const strategySnapshot = buildStrategySnapshot(args.strategy);
+  const evidenceSelectionSnapshot = buildEvidenceSelectionSnapshot(args.evidenceSelection);
+  const variantDirectives = [
+    {
+      name: "angle-led",
+      coverLetterKind: args.coverLetterKind,
+      instruction: `Variant profile: angle-led. Open from this role angle: ${args.claimPlan.targetRoleAngle}. Use this opening strategy: ${args.claimPlan.openingStrategy}`,
+    },
+    {
+      name: "balanced",
+      coverLetterKind: args.coverLetterKind,
+      instruction: `Variant profile: balanced and practical. Cover these prioritized claims in order: ${args.claimPlan.claims.map((claim) => `${claim.priority}:${claim.claim}`).join(" | ")}`,
+    },
+    {
+      name: "evidence-heavy",
+      coverLetterKind: args.coverLetterKind,
+      instruction: `Variant profile: maximize evidence density. Reuse these evidence snippets before adding softer framing: ${args.claimPlan.claims.flatMap((claim) => claim.evidenceSnippets).slice(0, 6).join(" | ")}`,
+    },
+  ] satisfies Array<{ name: string; coverLetterKind: GhostwriterCoverLetterKind | null; instruction: string }>;
+
+  const candidatePayloads: Array<GhostwriterAssistantPayload & { __variantName?: string }> = [];
+
+  for (const variant of variantDirectives) {
+    await args.emitTimeline({
+      phase: "generation",
+      eventType: "variant_requested",
+      title: `Drafting ${variant.name} variant`,
+      detail: variant.instruction,
+      payload: { variant: variant.name, coverLetterKind: variant.coverLetterKind },
+    });
+
+    const variantResult = await args.llm.callJson<GhostwriterAssistantPayload>({
+      model: args.llmConfig.model,
+      messages: [
+        ...args.baseMessages,
+        ...args.runtimeMessages,
+        { role: "system", content: `Approved Writing Strategy:\n${strategySnapshot}` },
+        { role: "system", content: `Approved Claim Plan:\n${JSON.stringify(args.claimPlan, null, 2)}` },
+        { role: "system", content: `Approved Evidence Selection:\n${evidenceSelectionSnapshot}` },
+        {
+          role: "system",
+          content: [
+            variant.instruction,
+            "Hard gate: stay inside the approved evidence selection unless the user explicitly asks to use a different project.",
+            `Prefer evidence ids: ${args.evidenceSelection.selectedModuleIds.join(", ") || "none"}.`,
+            args.evidenceSelection.blockedClaims.length
+              ? `Never do these: ${args.evidenceSelection.blockedClaims.join(" | ")}`
+              : null,
+          ].filter(Boolean).join("\n"),
+        },
+        { role: "user", content: args.prompt },
+      ],
+      jsonSchema: CHAT_RESPONSE_SCHEMA,
+      maxRetries: 1,
+      retryDelayMs: 300,
+      jobId: args.jobId,
+      signal: args.signal,
+    });
+
+    if (!variantResult.success) {
+      if (args.signal.aborted) throw requestTimeout("Chat generation was cancelled");
+      throw upstreamError(`Ghostwriter ${variant.name} draft generation failed`, { reason: variantResult.error });
+    }
+
+    const candidate = finalizePayloadCandidate({
+      raw: variantResult.data,
+      prompt: args.prompt,
+      profile: args.context.profile,
+      knowledgeBase: args.context.knowledgeBase,
+      evidencePack: args.context.evidencePack,
+      runtimeState: args.runtimeState,
+      claimPlan: args.claimPlan,
+      evidenceSelection: args.evidenceSelection,
+    });
+
+    candidatePayloads.push({
+      ...candidate,
+      __variantName: variant.name,
+      coverLetterKind: candidate.coverLetterDraft
+        ? (candidate.coverLetterKind ?? variant.coverLetterKind)
+        : candidate.coverLetterKind,
+    });
+
+    await args.emitTimeline({
+      phase: "generation",
+      eventType: "variant_completed",
+      title: `Finished ${variant.name} variant`,
+      detail: candidate.coverLetterDraft
+        ? "Variant includes a drafted application artifact."
+        : "Variant completed as a reply / patch candidate.",
+      payload: {
+        variant: variant.name,
+        hasCoverLetterDraft: Boolean(candidate.coverLetterDraft),
+        hasResumePatch: Boolean(candidate.resumePatch),
+        responsePreview: candidate.response.slice(0, 180),
+      },
+    });
+  }
+
+  const ranking = rankPayloadCandidates({
+    candidates: candidatePayloads,
+    evidencePackSnapshot: args.context.evidencePackSnapshot,
+    profile: args.context.profile,
+    knowledgeBase: args.context.knowledgeBase,
+    evidenceSelection: summarizeEvidenceSelectionPlan(args.evidenceSelection),
+  });
+
+  for (const rankedCandidate of ranking.ranked) {
+    await args.emitTimeline({
+      phase: "finalize",
+      eventType: "variant_scored",
+      title: `Scored ${rankedCandidate.candidate.__variantName ?? `variant-${rankedCandidate.index + 1}`}`,
+      detail: rankedCandidate.evaluation.reasons.slice(0, 2).join(" · ") || "Scored against evidence coverage and output quality.",
+      payload: {
+        variant: rankedCandidate.candidate.__variantName ?? `variant-${rankedCandidate.index + 1}`,
+        finalScore: rankedCandidate.evaluation.score,
+        coveredClaimIds: rankedCandidate.evaluation.coveredClaimIds,
+        mustClaimCoverage: rankedCandidate.evaluation.mustClaimCoverage,
+        evidenceCoverage: rankedCandidate.evaluation.evidenceCoverage,
+        penalties: rankedCandidate.evaluation.penalties,
+        diagnostics: rankedCandidate.evaluation.diagnostics,
+      },
+    });
+  }
+
+  return ranking;
+}
+
+async function finalizeStructuredPayload(args: {
+  llm: LlmService;
+  llmConfig: LlmRuntimeSettings;
+  context: GhostwriterRunContext;
+  runtimeState: GhostwriterRuntimeState;
+  baseMessages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+  runtimeMessages: Array<{ role: "system"; content: string }>;
+  prompt: string;
+  jobId: string;
+  signal: AbortSignal;
+  emitTimeline: GhostwriterEmitTimeline;
+  structuredPayload: GhostwriterAssistantPayload & { __variantName?: string };
+  evidenceSelection: GhostwriterEvidenceSelectionPlan;
+}): Promise<GhostwriterAssistantPayload> {
+  let structuredPayload = args.structuredPayload;
+  const rewriteDecision = shouldRunEditorialRewrite(structuredPayload);
+  if (rewriteDecision.shouldRewrite) {
+    await args.emitTimeline({
+      phase: "finalize",
+      eventType: "editorial_rewrite_requested",
+      title: "Editorial sharpener requested",
+      detail: "Running a final anti-generic rewrite pass on the winning draft.",
+      payload: {
+        triggerReasons: rewriteDecision.reasons,
+        diagnostics: rewriteDecision.reasons.map((reason) => ({
+          code: reason,
+          category: reason.includes("generic") ? "generic-language" : reason.includes("sentence") ? "structure" : "style",
+          severity: reason.includes("long-sentences") || reason.includes("generic-opening") ? "high" : "medium",
+          detail: `Editorial pass triggered by ${reason}.`,
+        })),
+      },
+    });
+
+    const rewriteResult = await args.llm.callJson<GhostwriterAssistantPayload>({
+      model: args.llmConfig.model,
+      messages: [
+        ...args.baseMessages,
+        ...args.runtimeMessages,
+        { role: "system", content: buildEditorialRewritePrompt({ original: structuredPayload, claimPlan: structuredPayload.claimPlan, triggerReasons: rewriteDecision.reasons }) },
+      ],
+      jsonSchema: CHAT_RESPONSE_SCHEMA,
+      maxRetries: 1,
+      retryDelayMs: 300,
+      jobId: args.jobId,
+      signal: args.signal,
+    });
+
+    if (!rewriteResult.success) {
+      if (args.signal.aborted) throw requestTimeout("Chat generation was cancelled");
+      throw upstreamError("Ghostwriter editorial rewrite failed", { reason: rewriteResult.error });
+    }
+
+    const rewrittenPayload = finalizePayloadCandidate({
+      raw: rewriteResult.data,
+      prompt: args.prompt,
+      profile: args.context.profile,
+      knowledgeBase: args.context.knowledgeBase,
+      evidencePack: args.context.evidencePack,
+      runtimeState: args.runtimeState,
+      claimPlan: structuredPayload.claimPlan,
+      evidenceSelection: args.evidenceSelection,
+    });
+
+    structuredPayload = { ...rewrittenPayload, claimPlan: rewrittenPayload.claimPlan ?? structuredPayload.claimPlan };
+
+    await args.emitTimeline({
+      phase: "finalize",
+      eventType: "editorial_rewrite_completed",
+      title: "Editorial sharpener completed",
+      detail: "Applied a final tightening pass to reduce generic phrasing and improve specificity.",
+      payload: {
+        triggerReasons: rewriteDecision.reasons,
+        improvedFields: [structuredPayload.coverLetterDraft ? "coverLetterDraft" : null, structuredPayload.response ? "response" : null].filter((value): value is string => Boolean(value)),
+      },
+    });
+  }
+
+  let review = reviewGhostwriterPayload({
+    payload: structuredPayload,
+    claimPlan: structuredPayload.claimPlan,
+    roleFamily: args.context.evidencePack.targetRoleFamily,
+  });
+  structuredPayload = attachReviewToPayload(structuredPayload, review);
+  await emitReviewCompleted(args.emitTimeline, review);
+
+  if (review.shouldRewrite) {
+    await args.emitTimeline({
+      phase: "finalize",
+      eventType: "review_rewrite_requested",
+      title: "Reviewer requested another rewrite",
+      detail: "The post-generation judge flagged the draft for one more quality pass.",
+      payload: { issues: review.issues, diagnostics: review.diagnostics },
+    });
+
+    const reviewerRewriteResult = await args.llm.callJson<GhostwriterAssistantPayload>({
+      model: args.llmConfig.model,
+      messages: [
+        ...args.baseMessages,
+        ...args.runtimeMessages,
+        { role: "system", content: buildReviewerRewritePrompt({ payload: structuredPayload, review, claimPlan: structuredPayload.claimPlan }) },
+      ],
+      jsonSchema: CHAT_RESPONSE_SCHEMA,
+      maxRetries: 1,
+      retryDelayMs: 300,
+      jobId: args.jobId,
+      signal: args.signal,
+    });
+
+    if (!reviewerRewriteResult.success) {
+      if (args.signal.aborted) throw requestTimeout("Chat generation was cancelled");
+      throw upstreamError("Ghostwriter reviewer rewrite failed", { reason: reviewerRewriteResult.error });
+    }
+
+    const twiceRewrittenPayload = finalizePayloadCandidate({
+      raw: reviewerRewriteResult.data,
+      prompt: args.prompt,
+      profile: args.context.profile,
+      knowledgeBase: args.context.knowledgeBase,
+      evidencePack: args.context.evidencePack,
+      runtimeState: args.runtimeState,
+      claimPlan: structuredPayload.claimPlan,
+      evidenceSelection: args.evidenceSelection,
+    });
+    review = reviewGhostwriterPayload({
+      payload: twiceRewrittenPayload,
+      claimPlan: structuredPayload.claimPlan,
+      roleFamily: args.context.evidencePack.targetRoleFamily,
+    });
+    structuredPayload = attachReviewToPayload(twiceRewrittenPayload, review);
+
+    await args.emitTimeline({
+      phase: "finalize",
+      eventType: "editorial_rewrite_completed",
+      title: "Reviewer rewrite completed",
+      detail: review.summary,
+      payload: {
+        triggerReasons: structuredPayload.review?.issues ?? [],
+        improvedFields: [
+          structuredPayload.coverLetterDraft ? "coverLetterDraft" : null,
+          structuredPayload.response ? "response" : null,
+          structuredPayload.review ? "review" : null,
+        ].filter((value): value is string => Boolean(value)),
+      },
+    });
+    await emitReviewCompleted(args.emitTimeline, review);
+  }
+
+  return structuredPayload;
+}
+
+async function runStructuredWritingTask(args: {
+  llm: LlmService;
+  llmConfig: LlmRuntimeSettings;
+  context: GhostwriterRunContext;
+  runtimeState: GhostwriterRuntimeState;
+  baseMessages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+  runtimeMessages: Array<{ role: "system"; content: string }>;
+  prompt: string;
+  taskKind: Exclude<GhostwriterTaskKind, "direct_chat" | "memory_update">;
+  jobId: string;
+  signal: AbortSignal;
+  emitTimeline: GhostwriterEmitTimeline;
+}): Promise<{ structuredPayload: GhostwriterAssistantPayload; selectionMeta: GhostwriterSelectionMeta | null }> {
+  const plan = await buildWritingPlan(args);
+
+  if (plan.strategy.requiresClarification && plan.strategy.clarifyingQuestions.length) {
+    return {
+      structuredPayload: {
+        response: plan.strategy.clarifyingQuestions.slice(0, 3).map((question, index) => `${index + 1}. ${question}`).join("\n"),
+        coverLetterDraft: null,
+        coverLetterKind: null,
+        resumePatch: null,
+        claimPlan: plan.claimPlan,
+      },
+      selectionMeta: null,
+    };
+  }
+
+  const ranking = await generateStructuredCandidates({
+    ...args,
+    strategy: plan.strategy,
+    claimPlan: plan.claimPlan,
+    evidenceSelection: plan.evidenceSelection,
+    coverLetterKind: plan.coverLetterKind,
+  });
+  const structuredPayload = await finalizeStructuredPayload({
+    ...args,
+    structuredPayload: ranking.winner,
+    evidenceSelection: plan.evidenceSelection,
+  });
+  const topEvaluation = ranking.ranked[0]?.evaluation;
+
+  return {
+    structuredPayload,
+    selectionMeta: {
+      candidateCount: ranking.ranked.length,
+      winnerReason: topEvaluation?.reasons?.[0] ?? "This variant best balanced specificity, evidence density, and output usefulness.",
+      winningVariant: ranking.winner.__variantName,
+      strongestEvidence: structuredPayload.fitBrief?.strongestPoints.slice(0, 3) ?? args.context.evidencePack.topEvidence.slice(0, 3),
+      coveredClaimIds: topEvaluation?.coveredClaimIds ?? [],
+    },
+  };
+}
+
 async function runAssistantReply(
   options: GenerateReplyOptions,
 ): Promise<{ runId: string; messageId: string; message: string }> {
@@ -1307,16 +1894,12 @@ async function runAssistantReply(
     const runtimeMessages = runtimeState.systemMessages;
 
     let structuredPayload: GhostwriterAssistantPayload;
-    let selectionMeta: {
-      candidateCount?: number;
-      winnerReason: string;
-      winningVariant?: string;
-      strongestEvidence?: string[];
-      coveredClaimIds?: string[];
-    } | null = null;
+    let selectionMeta: GhostwriterSelectionMeta | null = null;
+    const emitTimeline: GhostwriterEmitTimeline = (input) =>
+      emitRunTimelineEvent(run, options, input);
 
     if (taskKind === "memory_update") {
-      await emitRunTimelineEvent(run, options, {
+      await emitTimeline({
         phase: "memory",
         eventType: "memory_update",
         title: "Updating candidate memory",
@@ -1333,7 +1916,7 @@ async function runAssistantReply(
       context.knowledgeBase =
         memoryUpdate.nextKnowledgeBase ?? context.knowledgeBase;
     } else if (taskKind === "direct_chat") {
-      await emitRunTimelineEvent(run, options, {
+      await emitTimeline({
         phase: "generation",
         eventType: "direct_reply",
         title: "Generating direct reply",
@@ -1343,553 +1926,33 @@ async function runAssistantReply(
           responseMode: runtimeState.plan.responseMode,
         },
       });
-      const llmResult = await llm.callJson<{ response: string }>({
-        model: llmConfig.model,
-        messages: [
-          ...baseMessages,
-          ...runtimeMessages,
-          {
-            role: "user",
-            content: options.prompt,
-          },
-        ],
-        jsonSchema: CHAT_RESPONSE_SCHEMA,
-        maxRetries: 1,
-        retryDelayMs: 300,
-        jobId: options.jobId,
-        signal: controller.signal,
-      });
-
-      if (!llmResult.success) {
-        if (controller.signal.aborted) {
-          throw requestTimeout("Chat generation was cancelled");
-        }
-        throw upstreamError("LLM generation failed", {
-          reason: llmResult.error,
-        });
-      }
-
-      structuredPayload = finalizePayloadCandidate({
-        raw: llmResult.data,
-        prompt: options.prompt,
-        profile: context.profile,
-        knowledgeBase: context.knowledgeBase,
-        evidencePack: context.evidencePack,
-        runtimeState,
-      });
-    } else {
-      const strategyPrompt = [
-        `Task kind: ${taskKind}`,
-        `User request: ${options.prompt}`,
-        "Build a compact writing strategy using the evidence pack. Focus on the best angle, strongest evidence, weak points to manage, and a practical paragraph plan.",
-        "Set requiresClarification to true only if a good draft would clearly suffer without extra user input.",
-      ].join("\n\n");
-
-      await emitRunTimelineEvent(run, options, {
-        phase: "strategy",
-        eventType: "strategy_requested",
-        title: "Planning writing strategy",
-        detail: "Ghostwriter is first building an explicit strategy before drafting the artifact.",
-        payload: {
-          prompt: options.prompt,
-          taskKind,
-        },
-      });
-      const strategyResult = await llm.callJson<WritingStrategy>({
-        model: llmConfig.model,
-        messages: [
-          ...baseMessages,
-          ...runtimeMessages,
-          {
-            role: "system",
-            content:
-              "Return a writing strategy JSON only. Do not draft the final answer yet.",
-          },
-          {
-            role: "user",
-            content: strategyPrompt,
-          },
-        ],
-        jsonSchema: WRITING_STRATEGY_SCHEMA,
-        maxRetries: 1,
-        retryDelayMs: 300,
-        jobId: options.jobId,
-        signal: controller.signal,
-      });
-
-      if (!strategyResult.success) {
-        if (controller.signal.aborted) {
-          throw requestTimeout("Chat generation was cancelled");
-        }
-        throw upstreamError("Ghostwriter strategy generation failed", {
-          reason: strategyResult.error,
-        });
-      }
-
-      const strategy = {
-        ...buildLocalWritingStrategy({
-          taskKind,
-          evidencePack: context.evidencePack,
-        }),
-        ...strategyResult.data,
-      } satisfies WritingStrategy;
-      await emitRunTimelineEvent(run, options, {
-        phase: "strategy",
-        eventType: "strategy_built",
-        title: "Strategy locked",
-        detail: strategy.angle,
-        payload: {
-          strongestEvidence: strategy.strongestEvidence.slice(0, 4),
-          weakPoints: strategy.weakPoints.slice(0, 3),
-          paragraphPlan: strategy.paragraphPlan.slice(0, 5),
-        },
-      });
-
-      const evidenceSelection = await buildHybridEvidenceSelection({
+      structuredPayload = await runDirectChatTask({
         llm,
         llmConfig,
         context,
+        runtimeState,
+        baseMessages,
+        runtimeMessages,
+        prompt: options.prompt,
+        jobId: options.jobId,
+        signal: controller.signal,
+      });
+    } else {
+      const structuredResult = await runStructuredWritingTask({
+        llm,
+        llmConfig,
+        context,
+        runtimeState,
+        baseMessages,
+        runtimeMessages,
         prompt: options.prompt,
         taskKind,
         jobId: options.jobId,
         signal: controller.signal,
+        emitTimeline,
       });
-      const claimPlan = buildGhostwriterClaimPlan({
-        context,
-        prompt: options.prompt,
-        taskKind,
-        strategy,
-        evidenceSelection,
-      });
-      await emitRunTimelineEvent(run, options, {
-        phase: "strategy",
-        eventType: "claim_plan_built",
-        title: "Claim plan built",
-        detail: `${claimPlan.targetRoleAngle} | selected proof points: ${evidenceSelection.selectedModules.map((module) => module.label).join(", ") || "none"}`,
-        payload: {
-          targetRoleAngle: claimPlan.targetRoleAngle,
-          openingStrategy: claimPlan.openingStrategy,
-          claimCount: claimPlan.claims.length,
-          mustClaimCount: claimPlan.claims.filter((claim) => claim.priority === "must").length,
-          excludedClaims: claimPlan.excludedClaims.slice(0, 3),
-        },
-      });
-
-      if (
-        strategy.requiresClarification &&
-        strategy.clarifyingQuestions.length
-      ) {
-        structuredPayload = {
-          response: strategy.clarifyingQuestions
-            .slice(0, 3)
-            .map((question, index) => `${index + 1}. ${question}`)
-            .join("\n"),
-          coverLetterDraft: null,
-          coverLetterKind: null,
-          resumePatch: null,
-          claimPlan,
-        };
-      } else {
-        const strategySnapshot = buildStrategySnapshot(strategy);
-        const evidenceSelectionSnapshot = [
-          `Selected evidence ids: ${evidenceSelection.selectedModuleIds.join(", ") || "none"}`,
-          evidenceSelection.selectedModules.length
-            ? `Selected proof points:\n- ${evidenceSelection.selectedModules.map((module) => `${module.label}: ${module.preferredFraming}`).join("\n- ")}`
-            : "Selected proof points: none",
-          evidenceSelection.requiredEvidenceSnippets.length
-            ? `Required evidence snippets:\n- ${evidenceSelection.requiredEvidenceSnippets.join("\n- ")}`
-            : null,
-          evidenceSelection.blockedClaims.length
-            ? `Blocked claims:\n- ${evidenceSelection.blockedClaims.join("\n- ")}`
-            : null,
-          evidenceSelection.writerInstructions.length
-            ? `Writer instructions:\n- ${evidenceSelection.writerInstructions.join("\n- ")}`
-            : null,
-        ]
-          .filter(Boolean)
-          .join("\n\n");
-        const variantDirectives: Array<{
-          name: string;
-          coverLetterKind: GhostwriterCoverLetterKind | null;
-          instruction: string;
-        }> = [
-          {
-            name: "angle-led",
-            coverLetterKind:
-              taskKind === "application_email"
-                ? "email"
-                : taskKind === "cover_letter" || taskKind === "mixed"
-                  ? "letter"
-                  : null,
-            instruction:
-              `Variant profile: angle-led. Open from this role angle: ${claimPlan.targetRoleAngle}. Use this opening strategy: ${claimPlan.openingStrategy}`,
-          },
-          {
-            name: "balanced",
-            coverLetterKind:
-              taskKind === "application_email"
-                ? "email"
-                : taskKind === "cover_letter" || taskKind === "mixed"
-                  ? "letter"
-                  : null,
-            instruction:
-              `Variant profile: balanced and practical. Cover these prioritized claims in order: ${claimPlan.claims.map((claim) => `${claim.priority}:${claim.claim}`).join(" | ")}`,
-          },
-          {
-            name: "evidence-heavy",
-            coverLetterKind:
-              taskKind === "application_email"
-                ? "email"
-                : taskKind === "cover_letter" || taskKind === "mixed"
-                  ? "letter"
-                  : null,
-            instruction:
-              `Variant profile: maximize evidence density. Reuse these evidence snippets before adding softer framing: ${claimPlan.claims.flatMap((claim) => claim.evidenceSnippets).slice(0, 6).join(" | ")}`,
-          },
-        ];
-
-        const candidatePayloads: Array<GhostwriterAssistantPayload & { __variantName?: string }> = [];
-
-        for (const variant of variantDirectives) {
-          await emitRunTimelineEvent(run, options, {
-            phase: "generation",
-            eventType: "variant_requested",
-            title: `Drafting ${variant.name} variant`,
-            detail: variant.instruction,
-            payload: {
-              variant: variant.name,
-              coverLetterKind: variant.coverLetterKind,
-            },
-          });
-          const variantResult = await llm.callJson<GhostwriterAssistantPayload>(
-            {
-              model: llmConfig.model,
-              messages: [
-                ...baseMessages,
-                ...runtimeMessages,
-                {
-                  role: "system",
-                  content: `Approved Writing Strategy:\n${strategySnapshot}`,
-                },
-                {
-                  role: "system",
-                  content: `Approved Claim Plan:\n${JSON.stringify(claimPlan, null, 2)}`,
-                },
-                {
-                  role: "system",
-                  content: `Approved Evidence Selection:\n${evidenceSelectionSnapshot}`,
-                },
-                {
-                  role: "system",
-                  content: [
-                    variant.instruction,
-                    "Hard gate: stay inside the approved evidence selection unless the user explicitly asks to use a different project.",
-                    `Prefer evidence ids: ${evidenceSelection.selectedModuleIds.join(", ") || "none"}.`,
-                    evidenceSelection.blockedClaims.length
-                      ? `Never do these: ${evidenceSelection.blockedClaims.join(" | ")}`
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join("\n"),
-                },
-                {
-                  role: "user",
-                  content: options.prompt,
-                },
-              ],
-              jsonSchema: CHAT_RESPONSE_SCHEMA,
-              maxRetries: 1,
-              retryDelayMs: 300,
-              jobId: options.jobId,
-              signal: controller.signal,
-            },
-          );
-
-          if (!variantResult.success) {
-            if (controller.signal.aborted) {
-              throw requestTimeout("Chat generation was cancelled");
-            }
-            throw upstreamError(
-              `Ghostwriter ${variant.name} draft generation failed`,
-              {
-                reason: variantResult.error,
-              },
-            );
-          }
-
-          const candidate = finalizePayloadCandidate({
-            raw: variantResult.data,
-            prompt: options.prompt,
-            profile: context.profile,
-            knowledgeBase: context.knowledgeBase,
-            evidencePack: context.evidencePack,
-            runtimeState,
-            claimPlan,
-            evidenceSelection,
-          });
-
-          candidatePayloads.push({
-            ...candidate,
-            __variantName: variant.name,
-            coverLetterKind: candidate.coverLetterDraft
-              ? (candidate.coverLetterKind ?? variant.coverLetterKind)
-              : candidate.coverLetterKind,
-          });
-          await emitRunTimelineEvent(run, options, {
-            phase: "generation",
-            eventType: "variant_completed",
-            title: `Finished ${variant.name} variant`,
-            detail: candidate.coverLetterDraft
-              ? "Variant includes a drafted application artifact."
-              : "Variant completed as a reply / patch candidate.",
-            payload: {
-              variant: variant.name,
-              hasCoverLetterDraft: Boolean(candidate.coverLetterDraft),
-              hasResumePatch: Boolean(candidate.resumePatch),
-              responsePreview: candidate.response.slice(0, 180),
-            },
-          });
-        }
-
-        const ranking = rankPayloadCandidates({
-          candidates: candidatePayloads,
-          evidencePackSnapshot: context.evidencePackSnapshot,
-          profile: context.profile,
-          knowledgeBase: context.knowledgeBase,
-          evidenceSelection: summarizeEvidenceSelectionPlan(evidenceSelection),
-        });
-        for (const rankedCandidate of ranking.ranked) {
-          await emitRunTimelineEvent(run, options, {
-            phase: "finalize",
-            eventType: "variant_scored",
-            title: `Scored ${rankedCandidate.candidate.__variantName ?? `variant-${rankedCandidate.index + 1}`}`,
-            detail: rankedCandidate.evaluation.reasons.slice(0, 2).join(" · ") || "Scored against evidence coverage and output quality.",
-            payload: {
-              variant: rankedCandidate.candidate.__variantName ?? `variant-${rankedCandidate.index + 1}`,
-              finalScore: rankedCandidate.evaluation.score,
-              coveredClaimIds: rankedCandidate.evaluation.coveredClaimIds,
-              mustClaimCoverage: rankedCandidate.evaluation.mustClaimCoverage,
-              evidenceCoverage: rankedCandidate.evaluation.evidenceCoverage,
-              penalties: rankedCandidate.evaluation.penalties,
-            },
-          });
-        }
-        structuredPayload = ranking.winner;
-        const rewriteDecision = shouldRunEditorialRewrite(structuredPayload);
-        if (rewriteDecision.shouldRewrite) {
-          await emitRunTimelineEvent(run, options, {
-            phase: "finalize",
-            eventType: "editorial_rewrite_requested",
-            title: "Editorial sharpener requested",
-            detail: "Running a final anti-generic rewrite pass on the winning draft.",
-            payload: {
-              triggerReasons: rewriteDecision.reasons,
-            },
-          });
-
-          const rewriteResult = await llm.callJson<GhostwriterAssistantPayload>({
-            model: llmConfig.model,
-            messages: [
-              ...baseMessages,
-              ...runtimeMessages,
-              {
-                role: "system",
-                content: buildEditorialRewritePrompt({
-                  original: structuredPayload,
-                  claimPlan: structuredPayload.claimPlan,
-                  triggerReasons: rewriteDecision.reasons,
-                }),
-              },
-            ],
-            jsonSchema: CHAT_RESPONSE_SCHEMA,
-            maxRetries: 1,
-            retryDelayMs: 300,
-            jobId: options.jobId,
-            signal: controller.signal,
-          });
-
-          if (!rewriteResult.success) {
-            if (controller.signal.aborted) {
-              throw requestTimeout("Chat generation was cancelled");
-            }
-            throw upstreamError("Ghostwriter editorial rewrite failed", {
-              reason: rewriteResult.error,
-            });
-          }
-
-          const rewrittenPayload = finalizePayloadCandidate({
-            raw: rewriteResult.data,
-            prompt: options.prompt,
-            profile: context.profile,
-            knowledgeBase: context.knowledgeBase,
-            evidencePack: context.evidencePack,
-            runtimeState,
-            claimPlan: structuredPayload.claimPlan,
-            evidenceSelection,
-          });
-
-          structuredPayload = {
-            ...rewrittenPayload,
-            claimPlan: rewrittenPayload.claimPlan ?? structuredPayload.claimPlan,
-          };
-
-          await emitRunTimelineEvent(run, options, {
-            phase: "finalize",
-            eventType: "editorial_rewrite_completed",
-            title: "Editorial sharpener completed",
-            detail: "Applied a final tightening pass to reduce generic phrasing and improve specificity.",
-            payload: {
-              triggerReasons: rewriteDecision.reasons,
-              improvedFields: [
-                structuredPayload.coverLetterDraft ? "coverLetterDraft" : null,
-                structuredPayload.response ? "response" : null,
-              ].filter((value): value is string => Boolean(value)),
-            },
-          });
-        }
-        let review = reviewGhostwriterPayload({
-          payload: structuredPayload,
-          claimPlan: structuredPayload.claimPlan,
-          roleFamily: context.evidencePack.targetRoleFamily,
-        });
-        structuredPayload = {
-          ...structuredPayload,
-          review: {
-            summary: review.summary,
-            specificity: review.scores.specificity,
-            evidenceStrength: review.scores.evidenceStrength,
-            overclaimRisk: review.scores.overclaimRisk,
-            naturalness: review.scores.naturalness,
-            issues: review.issues,
-          },
-        };
-        await emitRunTimelineEvent(run, options, {
-          phase: "finalize",
-          eventType: "review_completed",
-          title: "Post-generation review completed",
-          detail: review.summary,
-          payload: {
-            summary: review.summary,
-            specificity: review.scores.specificity,
-            evidenceStrength: review.scores.evidenceStrength,
-            overclaimRisk: review.scores.overclaimRisk,
-            naturalness: review.scores.naturalness,
-            issues: review.issues,
-            shouldRewrite: review.shouldRewrite,
-          },
-        });
-
-        if (review.shouldRewrite) {
-          await emitRunTimelineEvent(run, options, {
-            phase: "finalize",
-            eventType: "review_rewrite_requested",
-            title: "Reviewer requested another rewrite",
-            detail: "The post-generation judge flagged the draft for one more quality pass.",
-            payload: {
-              issues: review.issues,
-            },
-          });
-
-          const reviewerRewriteResult = await llm.callJson<GhostwriterAssistantPayload>({
-            model: llmConfig.model,
-            messages: [
-              ...baseMessages,
-              ...runtimeMessages,
-              {
-                role: "system",
-                content: buildReviewerRewritePrompt({
-                  payload: structuredPayload,
-                  review,
-                  claimPlan: structuredPayload.claimPlan,
-                }),
-              },
-            ],
-            jsonSchema: CHAT_RESPONSE_SCHEMA,
-            maxRetries: 1,
-            retryDelayMs: 300,
-            jobId: options.jobId,
-            signal: controller.signal,
-          });
-
-          if (!reviewerRewriteResult.success) {
-            if (controller.signal.aborted) {
-              throw requestTimeout("Chat generation was cancelled");
-            }
-            throw upstreamError("Ghostwriter reviewer rewrite failed", {
-              reason: reviewerRewriteResult.error,
-            });
-          }
-
-          const twiceRewrittenPayload = finalizePayloadCandidate({
-            raw: reviewerRewriteResult.data,
-            prompt: options.prompt,
-            profile: context.profile,
-            knowledgeBase: context.knowledgeBase,
-            evidencePack: context.evidencePack,
-            runtimeState,
-            claimPlan: structuredPayload.claimPlan,
-            evidenceSelection,
-          });
-          review = reviewGhostwriterPayload({
-            payload: twiceRewrittenPayload,
-            claimPlan: structuredPayload.claimPlan,
-            roleFamily: context.evidencePack.targetRoleFamily,
-          });
-          structuredPayload = {
-            ...twiceRewrittenPayload,
-            review: {
-              summary: review.summary,
-              specificity: review.scores.specificity,
-              evidenceStrength: review.scores.evidenceStrength,
-              overclaimRisk: review.scores.overclaimRisk,
-              naturalness: review.scores.naturalness,
-              issues: review.issues,
-            },
-          };
-          await emitRunTimelineEvent(run, options, {
-            phase: "finalize",
-            eventType: "editorial_rewrite_completed",
-            title: "Reviewer rewrite completed",
-            detail: review.summary,
-            payload: {
-              triggerReasons: structuredPayload.review?.issues ?? [],
-              improvedFields: [
-                structuredPayload.coverLetterDraft ? "coverLetterDraft" : null,
-                structuredPayload.response ? "response" : null,
-                structuredPayload.review ? "review" : null,
-              ].filter((value): value is string => Boolean(value)),
-            },
-          });
-          await emitRunTimelineEvent(run, options, {
-            phase: "finalize",
-            eventType: "review_completed",
-            title: "Post-generation review completed",
-            detail: review.summary,
-            payload: {
-              summary: review.summary,
-              specificity: review.scores.specificity,
-              evidenceStrength: review.scores.evidenceStrength,
-              overclaimRisk: review.scores.overclaimRisk,
-              naturalness: review.scores.naturalness,
-              issues: review.issues,
-              shouldRewrite: review.shouldRewrite,
-            },
-          });
-        }
-
-        const topEvaluation = ranking.ranked[0]?.evaluation;
-        selectionMeta = {
-          candidateCount: ranking.ranked.length,
-          winnerReason:
-            topEvaluation?.reasons?.[0] ??
-            "This variant best balanced specificity, evidence density, and output usefulness.",
-          winningVariant: ranking.winner.__variantName,
-          strongestEvidence:
-            structuredPayload.fitBrief?.strongestPoints.slice(0, 3) ??
-            context.evidencePack.topEvidence.slice(0, 3),
-          coveredClaimIds: topEvaluation?.coveredClaimIds ?? [],
-        };
-      }
+      structuredPayload = structuredResult.structuredPayload;
+      selectionMeta = structuredResult.selectionMeta;
     }
 
     await emitRunTimelineEvent(run, options, {

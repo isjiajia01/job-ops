@@ -3,6 +3,7 @@ import type {
   GhostwriterAssistantPayload,
   GhostwriterClaimPlan,
   GhostwriterExecutionStage,
+  GhostwriterDiagnostic,
   GhostwriterEvidenceSelectionSummary,
   GhostwriterFitBrief,
   GhostwriterResumePatch,
@@ -123,6 +124,22 @@ const ghostwriterFitBriefSchema = z.object({
   recommendedAngle: z.string().trim().max(500).nullable().optional(),
 });
 
+const ghostwriterDiagnosticSchema = z.object({
+  code: z.string().trim().min(1).max(120),
+  category: z.enum([
+    "generic-language",
+    "structure",
+    "claim-coverage",
+    "evidence-boundary",
+    "overclaim",
+    "role-fit",
+    "style",
+    "quality",
+  ]),
+  severity: z.enum(["low", "medium", "high"]),
+  detail: z.string().trim().min(1).max(300),
+});
+
 const ghostwriterReviewSummarySchema = z.object({
   summary: z.string().trim().min(1).max(600),
   specificity: z.number().min(1).max(5),
@@ -130,6 +147,7 @@ const ghostwriterReviewSummarySchema = z.object({
   overclaimRisk: z.number().min(1).max(5),
   naturalness: z.number().min(1).max(5),
   issues: z.array(z.string().trim().min(1).max(200)).max(12),
+  diagnostics: z.array(ghostwriterDiagnosticSchema).max(16).optional(),
 });
 
 const ghostwriterEvidenceSelectionSummarySchema = z.object({
@@ -362,6 +380,37 @@ function normalizeClaimPlan(value: unknown): GhostwriterClaimPlan | null {
   return { targetRoleAngle, openingStrategy, claims, excludedClaims, reviewerFocus };
 }
 
+function normalizeDiagnostics(value: unknown): GhostwriterDiagnostic[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const record = item as Record<string, unknown>;
+      const code = toNonEmptyString(record.code);
+      const category = toNonEmptyString(record.category);
+      const severity = toNonEmptyString(record.severity);
+      const detail = toNonEmptyString(record.detail);
+      if (!code || !detail) return null;
+      if (
+        category !== "generic-language" &&
+        category !== "structure" &&
+        category !== "claim-coverage" &&
+        category !== "evidence-boundary" &&
+        category !== "overclaim" &&
+        category !== "role-fit" &&
+        category !== "style" &&
+        category !== "quality"
+      ) {
+        return null;
+      }
+      if (severity !== "low" && severity !== "medium" && severity !== "high") {
+        return null;
+      }
+      return { code, category, severity, detail };
+    })
+    .filter((item): item is GhostwriterDiagnostic => Boolean(item));
+}
+
 function normalizeReview(value: unknown): GhostwriterReviewSummary | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
@@ -374,7 +423,8 @@ function normalizeReview(value: unknown): GhostwriterReviewSummary | null {
     ? record.issues.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => Boolean(entry))
     : [];
   if (!summary || specificity == null || evidenceStrength == null || overclaimRisk == null || naturalness == null) return null;
-  return { summary, specificity, evidenceStrength, overclaimRisk, naturalness, issues };
+  const diagnostics = normalizeDiagnostics(record.diagnostics);
+  return { summary, specificity, evidenceStrength, overclaimRisk, naturalness, issues, diagnostics };
 }
 
 function normalizeEvidenceSelection(value: unknown): GhostwriterEvidenceSelectionSummary | null {

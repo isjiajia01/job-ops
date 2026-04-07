@@ -107,6 +107,21 @@ export interface GhostwriterClaimPlan {
   reviewerFocus: string[];
 }
 
+export interface GhostwriterDiagnostic {
+  code: string;
+  category:
+    | "generic-language"
+    | "structure"
+    | "claim-coverage"
+    | "evidence-boundary"
+    | "overclaim"
+    | "role-fit"
+    | "style"
+    | "quality";
+  severity: "low" | "medium" | "high";
+  detail: string;
+}
+
 export interface GhostwriterReviewSummary {
   summary: string;
   specificity: number;
@@ -114,6 +129,7 @@ export interface GhostwriterReviewSummary {
   overclaimRisk: number;
   naturalness: number;
   issues: string[];
+  diagnostics?: GhostwriterDiagnostic[];
 }
 
 export interface GhostwriterEvidenceSelectionSummary {
@@ -215,13 +231,16 @@ export type JobChatRunEventPayloadByType = {
     overclaimRisk: number;
     naturalness: number;
     issues: string[];
+    diagnostics?: GhostwriterDiagnostic[];
     shouldRewrite: boolean;
   };
   review_rewrite_requested: {
     issues: string[];
+    diagnostics?: GhostwriterDiagnostic[];
   };
   editorial_rewrite_requested: {
     triggerReasons: string[];
+    diagnostics?: GhostwriterDiagnostic[];
   };
   selection: {
     hasCoverLetterDraft: boolean;
@@ -263,6 +282,7 @@ export type JobChatRunEventPayloadByType = {
     mustClaimCoverage: number;
     evidenceCoverage: number;
     penalties: string[];
+    diagnostics?: GhostwriterDiagnostic[];
   };
   variant_requested: {
     variant: string;

@@ -1,4 +1,8 @@
-import type { GhostwriterAssistantPayload, GhostwriterClaimPlan } from "@shared/types";
+import type {
+  GhostwriterAssistantPayload,
+  GhostwriterClaimPlan,
+  GhostwriterDiagnostic,
+} from "@shared/types";
 
 export type GhostwriterReviewScores = {
   specificity: number;
@@ -11,6 +15,7 @@ export type GhostwriterReviewResult = {
   summary: string;
   scores: GhostwriterReviewScores;
   issues: string[];
+  diagnostics: GhostwriterDiagnostic[];
   shouldRewrite: boolean;
 };
 
@@ -42,12 +47,21 @@ export function reviewGhostwriterPayload(args: {
         naturalness: 1,
       },
       issues: ["empty-output"],
+      diagnostics: [
+        {
+          code: "empty-output",
+          category: "quality",
+          severity: "high",
+          detail: "The model returned no substantive draft text.",
+        },
+      ],
       shouldRewrite: false,
     };
   }
 
   const normalized = text.toLowerCase();
   const issues: string[] = [];
+  const diagnostics: GhostwriterDiagnostic[] = [];
 
   const genericHits = countMatches(normalized, [
     /i am writing to express my interest/g,
@@ -120,14 +134,78 @@ export function reviewGhostwriterPayload(args: {
       roleSpecificBoost * 0.2,
   );
 
-  if (genericHits > 0) issues.push(`generic-language:${genericHits}`);
-  if (overclaimHits > 0) issues.push(`overclaim-risk:${overclaimHits}`);
-  if (longSentenceCount > 0) issues.push(`long-sentences:${longSentenceCount}`);
-  if (averageSentenceLength > 165) issues.push("dense-sentence-flow");
-  if (repeatedOpeners > 2) issues.push(`repetitive-openers:${repeatedOpeners}`);
-  if (coveredClaimCount === 0 && args.claimPlan?.claims.length) issues.push("weak-claim-coverage");
-  if (concreteEvidenceHits < 2) issues.push("thin-evidence-signal");
-  if (args.roleFamily && roleSpecificBoost < 0.2) issues.push(`weak-role-rubric:${args.roleFamily}`);
+  if (genericHits > 0) {
+    issues.push(`generic-language:${genericHits}`);
+    diagnostics.push({
+      code: `generic-language:${genericHits}`,
+      category: "generic-language",
+      severity: genericHits >= 3 ? "high" : "medium",
+      detail: "The draft still contains template-style application language.",
+    });
+  }
+  if (overclaimHits > 0) {
+    issues.push(`overclaim-risk:${overclaimHits}`);
+    diagnostics.push({
+      code: `overclaim-risk:${overclaimHits}`,
+      category: "overclaim",
+      severity: overclaimHits >= 2 ? "high" : "medium",
+      detail: "Some wording implies unsupported scope, seniority, or ownership.",
+    });
+  }
+  if (longSentenceCount > 0) {
+    issues.push(`long-sentences:${longSentenceCount}`);
+    diagnostics.push({
+      code: `long-sentences:${longSentenceCount}`,
+      category: "structure",
+      severity: longSentenceCount >= 2 ? "high" : "medium",
+      detail: "One or more sentences are too long and reduce clarity.",
+    });
+  }
+  if (averageSentenceLength > 165) {
+    issues.push("dense-sentence-flow");
+    diagnostics.push({
+      code: "dense-sentence-flow",
+      category: "style",
+      severity: "medium",
+      detail: "Sentence flow is too dense and over-smoothed.",
+    });
+  }
+  if (repeatedOpeners > 2) {
+    issues.push(`repetitive-openers:${repeatedOpeners}`);
+    diagnostics.push({
+      code: `repetitive-openers:${repeatedOpeners}`,
+      category: "style",
+      severity: "medium",
+      detail: "Too many sentences start with the same opener pattern.",
+    });
+  }
+  if (coveredClaimCount === 0 && args.claimPlan?.claims.length) {
+    issues.push("weak-claim-coverage");
+    diagnostics.push({
+      code: "weak-claim-coverage",
+      category: "claim-coverage",
+      severity: "high",
+      detail: "The final draft does not clearly cover the planned must-claims.",
+    });
+  }
+  if (concreteEvidenceHits < 2) {
+    issues.push("thin-evidence-signal");
+    diagnostics.push({
+      code: "thin-evidence-signal",
+      category: "claim-coverage",
+      severity: "medium",
+      detail: "The draft does not surface enough concrete evidence.",
+    });
+  }
+  if (args.roleFamily && roleSpecificBoost < 0.2) {
+    issues.push(`weak-role-rubric:${args.roleFamily}`);
+    diagnostics.push({
+      code: `weak-role-rubric:${args.roleFamily}`,
+      category: "role-fit",
+      severity: "medium",
+      detail: "Role-specific wording is weaker than expected for the selected role family.",
+    });
+  }
 
   const shouldRewrite =
     specificity <= 2 ||
@@ -145,6 +223,7 @@ export function reviewGhostwriterPayload(args: {
       naturalness,
     },
     issues,
+    diagnostics,
     shouldRewrite,
   };
 }

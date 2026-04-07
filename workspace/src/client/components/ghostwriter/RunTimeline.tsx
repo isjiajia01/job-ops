@@ -53,6 +53,21 @@ function renderArraySummary(label: string, value?: string[]) {
   );
 }
 
+function renderDiagnostics(
+  diagnostics?: Array<{ code: string; severity: string; detail: string }>,
+) {
+  if (!diagnostics || diagnostics.length === 0) return null;
+  return (
+    <div className="space-y-1.5">
+      {diagnostics.slice(0, 4).map((diagnostic) => (
+        <div key={`${diagnostic.code}-${diagnostic.detail}`} className="rounded border border-border/50 bg-background/60 px-2 py-1 text-[11px] text-muted-foreground">
+          <span className="font-medium text-foreground/80">{diagnostic.severity}</span> · {diagnostic.code} · {diagnostic.detail}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function renderPayloadPreview(event: JobChatRunEvent) {
   if (!event.payload) return null;
 
@@ -160,7 +175,7 @@ function renderPayloadPreview(event: JobChatRunEvent) {
     }
     case "editorial_rewrite_requested": {
       const payload = event.payload;
-      return <div className="mt-2">{renderArraySummary("triggerReasons", payload.triggerReasons)}</div>;
+      return <div className="mt-2 space-y-2">{renderArraySummary("triggerReasons", payload.triggerReasons)}{renderDiagnostics(payload.diagnostics)}</div>;
     }
     case "review_completed": {
       const payload = event.payload;
@@ -175,12 +190,13 @@ function renderPayloadPreview(event: JobChatRunEvent) {
           ])}
           <div className="text-[11px] text-muted-foreground">{payload.summary}</div>
           {renderArraySummary("issues", payload.issues)}
+          {renderDiagnostics(payload.diagnostics)}
         </div>
       );
     }
     case "review_rewrite_requested": {
       const payload = event.payload;
-      return <div className="mt-2">{renderArraySummary("issues", payload.issues)}</div>;
+      return <div className="mt-2 space-y-2">{renderArraySummary("issues", payload.issues)}{renderDiagnostics(payload.diagnostics)}</div>;
     }
     case "editorial_rewrite_completed": {
       const payload = event.payload;
@@ -230,6 +246,7 @@ function renderPayloadPreview(event: JobChatRunEvent) {
           ])}
           {renderArraySummary("coveredClaimIds", payload.coveredClaimIds)}
           {renderArraySummary("penalties", payload.penalties)}
+          {renderDiagnostics(payload.diagnostics)}
         </div>
       );
     }

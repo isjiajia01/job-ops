@@ -144,6 +144,15 @@ export const RuntimeInspector: React.FC<RuntimeInspectorProps> = ({
             <div className="mt-2 rounded border border-border/50 bg-background/50 p-2 text-[11px] text-muted-foreground">
               <div><span className="font-medium text-foreground/80">review:</span> {currentRuntime.review.summary}</div>
               <div className="mt-1">specificity {currentRuntime.review.specificity}/5 · evidence {currentRuntime.review.evidenceStrength}/5 · risk {currentRuntime.review.overclaimRisk}/5 · naturalness {currentRuntime.review.naturalness}/5</div>
+              {currentRuntime.review.diagnostics?.length ? (
+                <div className="mt-2 space-y-1">
+                  {currentRuntime.review.diagnostics.slice(0, 4).map((diagnostic) => (
+                    <div key={`${diagnostic.code}-${diagnostic.detail}`} className="rounded border border-border/50 bg-background/60 px-2 py-1">
+                      <span className="font-medium text-foreground/80">{diagnostic.severity}</span> · {diagnostic.code} · {diagnostic.detail}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
