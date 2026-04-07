@@ -258,6 +258,36 @@ export const MessageList: React.FC<MessageListProps> = ({
                         </div>
                       )}
 
+                      {parsed.evidenceSelection && (
+                        <div className="rounded-md border border-border/60 bg-muted/20 p-3 text-xs">
+                          <div className="mb-2 font-medium text-foreground/90">Evidence used</div>
+                          {parsed.evidenceSelection.leadModuleLabel ? (
+                            <div className="mb-2 text-muted-foreground">
+                              <span className="font-medium text-foreground/80">Lead proof point:</span>{" "}
+                              {parsed.evidenceSelection.leadModuleLabel}
+                            </div>
+                          ) : null}
+                          {parsed.evidenceSelection.allowedModuleLabels.length > 0 && (
+                            <div className="mb-2">
+                              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Allowed modules</div>
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {parsed.evidenceSelection.allowedModuleLabels.map((label) => (
+                                  <span key={label} className="rounded-full border border-border/60 bg-background/60 px-2 py-0.5 text-[10px] text-foreground/80">
+                                    {label}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {parsed.evidenceSelection.blockedClaims.length > 0 && (
+                            <div className="text-muted-foreground">
+                              <span className="font-medium text-foreground/80">Blocked claims:</span>{" "}
+                              {parsed.evidenceSelection.blockedClaims.slice(0, 3).join(" · ")}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {parsed.executionTrace && parsed.executionTrace.length > 0 && (
                         <div className="rounded-md border border-border/60 bg-muted/20 p-3 text-xs">
                           <div className="mb-2 font-medium text-foreground/90">Execution trace</div>

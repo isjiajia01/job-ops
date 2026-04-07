@@ -56,6 +56,8 @@ export function reviewGhostwriterPayload(args: {
     /perfect fit/g,
     /dynamic team/g,
     /fast-paced environment/g,
+    /strong fit/g,
+    /thrilled to/g,
   ]);
 
   const overclaimHits = countMatches(normalized, [
@@ -78,8 +80,18 @@ export function reviewGhostwriterPayload(args: {
     /excel/g,
   ]);
 
-  const sentenceCount = text.split(/(?<=[.!?])\s+/).map((item) => item.trim()).filter(Boolean).length;
-  const longSentenceCount = text.split(/(?<=[.!?])\s+/).filter((sentence) => sentence.trim().length > 220).length;
+  const sentences = text.split(/(?<=[.!?])\s+/).map((item) => item.trim()).filter(Boolean);
+  const sentenceCount = sentences.length;
+  const longSentenceCount = sentences.filter((sentence) => sentence.trim().length > 220).length;
+  const averageSentenceLength =
+    sentenceCount > 0
+      ? sentences.reduce((total, sentence) => total + sentence.length, 0) / sentenceCount
+      : 0;
+  const repeatedOpeners = countMatches(normalized, [
+    /^i /gm,
+    /^this role/gm,
+    /^the role/gm,
+  ]);
 
   const coveredClaimCount = args.claimPlan?.claims.filter((claim) => {
     const claimSnippet = claim.claim.toLowerCase().slice(0, 36);
@@ -98,11 +110,21 @@ export function reviewGhostwriterPayload(args: {
   const specificity = clamp(2 + concreteEvidenceHits * 0.6 + coveredClaimCount * 0.5 + roleSpecificBoost - genericHits * 0.5);
   const evidenceStrength = clamp(2 + concreteEvidenceHits * 0.6 + coveredClaimCount * 0.6 + roleSpecificBoost - overclaimHits * 0.4);
   const overclaimRisk = clamp(4 - overclaimHits * 0.8 - genericHits * 0.2);
-  const naturalness = clamp(3 - genericHits * 0.5 - longSentenceCount * 0.4 + Math.min(sentenceCount, 4) * 0.1 + roleSpecificBoost * 0.2);
+  const naturalness = clamp(
+    3 -
+      genericHits * 0.55 -
+      longSentenceCount * 0.45 -
+      (averageSentenceLength > 165 ? 0.7 : 0) -
+      (repeatedOpeners > 2 ? 0.5 : 0) +
+      Math.min(sentenceCount, 4) * 0.1 +
+      roleSpecificBoost * 0.2,
+  );
 
   if (genericHits > 0) issues.push(`generic-language:${genericHits}`);
   if (overclaimHits > 0) issues.push(`overclaim-risk:${overclaimHits}`);
   if (longSentenceCount > 0) issues.push(`long-sentences:${longSentenceCount}`);
+  if (averageSentenceLength > 165) issues.push("dense-sentence-flow");
+  if (repeatedOpeners > 2) issues.push(`repetitive-openers:${repeatedOpeners}`);
   if (coveredClaimCount === 0 && args.claimPlan?.claims.length) issues.push("weak-claim-coverage");
   if (concreteEvidenceHits < 2) issues.push("thin-evidence-signal");
   if (args.roleFamily && roleSpecificBoost < 0.2) issues.push(`weak-role-rubric:${args.roleFamily}`);
