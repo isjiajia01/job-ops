@@ -61,11 +61,17 @@ import {
 } from "./ghostwriter-reviewer";
 import { inferPreferenceFromEditedPrompt } from "./ghostwriter-learning";
 import {
-  lintCoverLetterDraft,
   sanitizeResumePatch,
   scoreGhostwriterCandidate,
 } from "./ghostwriter-output-guard";
 import { LlmService } from "./llm/service";
+import {
+  attachReviewToPayload,
+  buildBaseLlmMessages,
+  emitRunTimelineEvent,
+  finalizePayloadCandidate,
+  type GhostwriterEmitTimeline,
+} from "./ghostwriter-stage-helpers";
 import type { JsonSchemaDefinition } from "./llm/types";
 import { resolveLlmRuntimeSettings as resolveRuntimeLlmSettings } from "./modelSelection";
 import { getProfile } from "./profile";
@@ -524,273 +530,6 @@ function buildStrategySnapshot(strategy: WritingStrategy): string {
     .join("\n");
 }
 
-function buildBaseLlmMessages(args: {
-  systemPrompt: string;
-  jobSnapshot: string;
-  profileSnapshot: string;
-  companyResearchSnapshot: string;
-  evidencePackSnapshot: string;
-  history: Array<{ role: "user" | "assistant"; content: string }>;
-}) {
-  return [
-    {
-      role: "system" as const,
-      content: args.systemPrompt,
-    },
-    {
-      role: "system" as const,
-      content: `Job Context (JSON):\n${args.jobSnapshot}`,
-    },
-    {
-      role: "system" as const,
-      content: `Profile Context:\n${args.profileSnapshot || "No profile context available."}`,
-    },
-    ...(args.companyResearchSnapshot
-      ? [
-          {
-            role: "system" as const,
-            content: `Company Research Context:\n${args.companyResearchSnapshot}`,
-          },
-        ]
-      : []),
-    {
-      role: "system" as const,
-      content: `Evidence Pack:\n${args.evidencePackSnapshot}`,
-    },
-    ...args.history,
-  ];
-}
-
-function isPartialCoverLetterRequest(prompt: string): boolean {
-  const normalized = prompt.toLowerCase();
-  const asksCoverLetter =
-    /cover[ -]?letter|motivation letter|application letter/.test(normalized);
-  const asksPartial =
-    /opening|intro|introduction|hook|paragraph|2-sentence|two-sentence|sentence|closing line|closing paragraph/.test(
-      normalized,
-    );
-  return asksCoverLetter && asksPartial;
-}
-
-function stripLeadingSalutationBlock(text: string): string {
-  const trimmed = text.trim();
-  return trimmed.replace(/^Dear[^\n]*\n\n/i, "").trim();
-}
-
-function isDirectBulletRequest(prompt: string): boolean {
-  const normalized = prompt.toLowerCase();
-  return (
-    /\bbullets?\b/.test(normalized) &&
-    /just give the wording|just the wording|resume/.test(normalized)
-  );
-}
-
-function countBulletLines(text: string): number {
-  return text
-    .split("\n")
-    .filter((line) => /^\s*(?:[-•*]|\d+[.)])\s+/.test(line)).length;
-}
-
-function normalizeBulletSentence(text: string): string {
-  return text
-    .replace(/^\s*(?:[-•*]|\d+[.)])\s+/, "")
-    .trim()
-    .replace(/[.;:,\s]+$/, "");
-}
-
-function buildFallbackBulletResponse(
-  evidencePack: GhostwriterEvidencePack,
-): string | null {
-  const lead = evidencePack.experienceBank[0];
-  const support = evidencePack.experienceBank[1];
-  if (!lead) return null;
-
-  const candidateLines = [
-    ...lead.strongestClaims,
-    ...(support?.strongestClaims ?? []),
-    ...lead.supportSignals,
-    ...(support?.supportSignals ?? []),
-  ]
-    .map(normalizeBulletSentence)
-    .filter(
-      (line) =>
-        line.length >= 28 &&
-        !/^lead module:|^support module:|^optional third signal:/i.test(line) &&
-        !/^strong evidence\b|^use this as\b|^lead with\b|^support for\b|^best evidence\b|^primary evidence\b|^important execution evidence\b|^useful bridge\b/i.test(
-          line,
-        ) &&
-        !/especially useful when a role values|rather than a generic school project/i.test(
-          line,
-        ) &&
-        !/@/.test(line),
-    );
-
-  const uniqueLines: string[] = [];
-  for (const line of candidateLines) {
-    if (
-      uniqueLines.some(
-        (existing) => existing.toLowerCase() === line.toLowerCase(),
-      )
-    ) {
-      continue;
-    }
-    uniqueLines.push(line);
-    if (uniqueLines.length === 3) break;
-  }
-
-  if (uniqueLines.length < 2) return null;
-
-  if (uniqueLines.length < 3) {
-    uniqueLines.push(
-      evidencePack.targetRoleFamily === "analytics-and-decision-support"
-        ? "Turned recurring analysis into stakeholder-ready materials, reporting structure, and practical follow-up for day-to-day business decisions"
-        : evidencePack.targetRoleFamily === "planning-and-operations"
-          ? "Translated planning analysis into practical decision support that could help day-to-day operational coordination under changing constraints"
-          : "Turned structured modelling work into decision-useful outputs that stayed practical, grounded, and relevant to real operational needs",
-    );
-  }
-
-  return uniqueLines
-    .slice(0, 3)
-    .map((line) => `• ${line}.`)
-    .join("\n");
-}
-
-function sharpenBulletListResponse(text: string): string {
-  const lines = text.split("\n");
-  const bulletIndexes = lines
-    .map((line, index) => ({ line, index }))
-    .filter(({ line }) => /^\s*[-•*]/.test(line));
-
-  if (bulletIndexes.length < 3) return text;
-
-  const lower = text.toLowerCase();
-  const last = bulletIndexes[bulletIndexes.length - 1];
-  const genericSupportPattern =
-    /supported (day-to-day )?(business analysis|business follow-up|practical business analysis tasks|ongoing business follow-up)/i;
-
-  if (!genericSupportPattern.test(last.line)) return text;
-
-  let replacement = last.line;
-  if (/python|excel|reporting|decision-ready|stakeholder/.test(lower)) {
-    replacement =
-      last.line.charAt(0) +
-      " Built a reliable bridge from recurring reporting and operational analysis to stakeholder-ready materials, documentation, and practical follow-up.";
-  } else if (
-    /planning|routing|delivery|logistics|operational constraints/.test(lower)
-  ) {
-    replacement =
-      last.line.charAt(0) +
-      " Turned logistics-planning analysis into structured, decision-useful outputs that could support day-to-day operational coordination.";
-  }
-
-  const next = [...lines];
-  next[last.index] = replacement;
-  return next.join("\n");
-}
-
-function buildFitBrief(
-  evidencePack?: GhostwriterEvidencePack,
-): GhostwriterFitBrief | null {
-  if (!evidencePack) return null;
-  const strongestPoints = [
-    ...evidencePack.topFitReasons,
-    ...evidencePack.topEvidence,
-  ].slice(0, 4);
-  const risks = [
-    ...evidencePack.biggestGaps,
-    ...evidencePack.forbiddenClaims,
-  ].slice(0, 4);
-  if (!strongestPoints.length && !risks.length && !evidencePack.recommendedAngle) {
-    return null;
-  }
-  return {
-    strongestPoints,
-    risks,
-    recommendedAngle: evidencePack.recommendedAngle || null,
-  };
-}
-
-function finalizePayloadCandidate(args: {
-  raw: unknown;
-  prompt?: string;
-  profile: Awaited<ReturnType<typeof buildJobChatPromptContext>>["profile"];
-  knowledgeBase: Awaited<
-    ReturnType<typeof buildJobChatPromptContext>
-  >["knowledgeBase"];
-  evidencePack?: GhostwriterEvidencePack;
-  runtimeState?: ReturnType<typeof buildGhostwriterRuntimeState>;
-  claimPlan?: GhostwriterClaimPlan | null;
-  evidenceSelection?: GhostwriterEvidenceSelectionPlan | null;
-}): GhostwriterAssistantPayload {
-  const payload = normalizeGhostwriterAssistantPayload(args.raw);
-  if (!payload) {
-    throw upstreamError("LLM returned an invalid Ghostwriter payload");
-  }
-
-  const { sanitized: sanitizedCoverLetterDraft } = lintCoverLetterDraft(
-    payload.coverLetterDraft,
-  );
-  const sanitizedResumePatch = payload.resumePatch
-    ? sanitizeResumePatch({
-        patch: payload.resumePatch,
-        profile: args.profile,
-        knowledgeBase: args.knowledgeBase,
-      }).sanitized
-    : null;
-  const fallbackBulletResponse =
-    args.prompt &&
-    isDirectBulletRequest(args.prompt) &&
-    countBulletLines(payload.response) < 3 &&
-    args.evidencePack
-      ? buildFallbackBulletResponse(args.evidencePack)
-      : null;
-  const summarizedEvidenceSelection = args.evidenceSelection
-    ? summarizeEvidenceSelectionPlan(args.evidenceSelection)
-    : (payload.evidenceSelection ?? null);
-
-  if (
-    sanitizedCoverLetterDraft &&
-    args.prompt &&
-    isPartialCoverLetterRequest(args.prompt)
-  ) {
-    return {
-      ...payload,
-      response: stripLeadingSalutationBlock(sanitizedCoverLetterDraft),
-      coverLetterDraft: null,
-      coverLetterKind: null,
-      resumePatch: sanitizedResumePatch,
-      fitBrief: payload.fitBrief ?? buildFitBrief(args.evidencePack),
-      claimPlan: args.claimPlan ?? payload.claimPlan ?? null,
-      evidenceSelection: summarizedEvidenceSelection,
-      review: payload.review ?? null,
-      runtimePlan: args.runtimeState?.plan ?? payload.runtimePlan ?? null,
-      toolTrace: args.runtimeState?.toolResults ?? payload.toolTrace ?? null,
-      executionTrace:
-        args.runtimeState?.executionTrace ?? payload.executionTrace ?? null,
-    };
-  }
-
-  const baseResponse = fallbackBulletResponse ?? payload.response;
-  const sharpenedResponse = payload.coverLetterDraft
-    ? baseResponse
-    : sharpenBulletListResponse(baseResponse);
-
-  return {
-    ...payload,
-    response: sharpenedResponse,
-    coverLetterDraft: sanitizedCoverLetterDraft,
-    resumePatch: sanitizedResumePatch,
-    fitBrief: payload.fitBrief ?? buildFitBrief(args.evidencePack),
-    claimPlan: args.claimPlan ?? payload.claimPlan ?? null,
-    evidenceSelection: summarizedEvidenceSelection,
-    review: payload.review ?? null,
-    runtimePlan: args.runtimeState?.plan ?? payload.runtimePlan ?? null,
-    toolTrace: args.runtimeState?.toolResults ?? payload.toolTrace ?? null,
-    executionTrace:
-      args.runtimeState?.executionTrace ?? payload.executionTrace ?? null,
-  };
-}
 
 function rankPayloadCandidates(args: {
   candidates: Array<GhostwriterAssistantPayload & { __variantName?: string }>;
@@ -1155,31 +894,6 @@ export async function listRunEventsForJob(input: {
   return jobChatRepo.listRunEvents(input.runId);
 }
 
-async function emitRunTimelineEvent<TType extends JobChatRunEventType>(
-  run: JobChatRun,
-  options: GenerateReplyOptions,
-  input: {
-    phase: JobChatRunPhase;
-    eventType: TType;
-    title: string;
-    detail?: string | null;
-    payload: JobChatRunEventPayloadByType[TType];
-  },
-): Promise<JobChatRunEvent> {
-  const event = await jobChatRepo.createRunEvent({
-    runId: run.id,
-    threadId: run.threadId,
-    jobId: run.jobId,
-    phase: input.phase,
-    eventType: input.eventType,
-    title: input.title,
-    detail: input.detail ?? null,
-    payload: input.payload ?? null,
-  });
-  options.stream?.onTimeline?.({ runId: run.id, event });
-  return event;
-}
-
 type GhostwriterSelectionMeta = {
   candidateCount?: number;
   winnerReason: string;
@@ -1190,13 +904,6 @@ type GhostwriterSelectionMeta = {
 
 type GhostwriterRunContext = Awaited<ReturnType<typeof buildJobChatPromptContext>>;
 type GhostwriterRuntimeState = ReturnType<typeof buildGhostwriterRuntimeState>;
-type GhostwriterEmitTimeline = <TType extends JobChatRunEventType>(input: {
-  phase: JobChatRunPhase;
-  eventType: TType;
-  title: string;
-  detail?: string | null;
-  payload: JobChatRunEventPayloadByType[TType];
-}) => Promise<JobChatRunEvent>;
 
 function buildEvidenceSelectionSnapshot(
   evidenceSelection: GhostwriterEvidenceSelectionPlan,
@@ -1220,25 +927,6 @@ function buildEvidenceSelectionSnapshot(
   ]
     .filter(Boolean)
     .join("\n\n");
-}
-
-function attachReviewToPayload(
-  payload: GhostwriterAssistantPayload,
-  review: ReturnType<typeof reviewGhostwriterPayload>,
-): GhostwriterAssistantPayload {
-  return {
-    ...payload,
-    review: {
-      summary: review.summary,
-      specificity: review.scores.specificity,
-      evidenceStrength: review.scores.evidenceStrength,
-      overclaimRisk: review.scores.overclaimRisk,
-      naturalness: review.scores.naturalness,
-      issues: review.issues,
-      diagnostics: review.diagnostics,
-      diagnosticSummary: summarizeDiagnostics(review.diagnostics),
-    },
-  };
 }
 
 async function emitReviewCompleted(
@@ -1901,16 +1589,21 @@ async function runAssistantReply(
     messageId: assistantMessage.id,
     requestId,
   });
-  await emitRunTimelineEvent(run, options, {
-    phase: "run",
-    eventType: "status",
-    title: "Run started",
-    detail: "Ghostwriter created a persisted run record and opened a reply stream.",
-    payload: {
-      requestId,
-      assistantMessageId: assistantMessage.id,
-      model: llmConfig.model,
-      provider: llmConfig.provider,
+  await emitRunTimelineEvent({
+    createRunEvent: jobChatRepo.createRunEvent,
+    onTimeline: options.stream?.onTimeline,
+    run,
+    input: {
+      phase: "run",
+      eventType: "status",
+      title: "Run started",
+      detail: "Ghostwriter created a persisted run record and opened a reply stream.",
+      payload: {
+        requestId,
+        assistantMessageId: assistantMessage.id,
+        model: llmConfig.model,
+        provider: llmConfig.provider,
+      },
     },
   });
 
@@ -1924,17 +1617,22 @@ async function runAssistantReply(
     });
 
     const taskKind = classifyGhostwriterTask(options.prompt);
-    await emitRunTimelineEvent(run, options, {
-      phase: "context",
-      eventType: "context_built",
-      title: "Context assembled",
-      detail: "Loaded the job brief, active thread history, profile context, and evidence pack for this request.",
-      payload: {
-        historyMessages: history.length,
-        employer: context.job.employer,
-        title: context.job.title,
-        topFitReasons: context.evidencePack.topFitReasons.slice(0, 3),
-        topEvidence: context.evidencePack.topEvidence.slice(0, 3),
+    await emitRunTimelineEvent({
+      createRunEvent: jobChatRepo.createRunEvent,
+      onTimeline: options.stream?.onTimeline,
+      run,
+      input: {
+        phase: "context",
+        eventType: "context_built",
+        title: "Context assembled",
+        detail: "Loaded the job brief, active thread history, profile context, and evidence pack for this request.",
+        payload: {
+          historyMessages: history.length,
+          employer: context.job.employer,
+          title: context.job.title,
+          topFitReasons: context.evidencePack.topFitReasons.slice(0, 3),
+          topEvidence: context.evidencePack.topEvidence.slice(0, 3),
+        },
       },
     });
     const runtimeState = buildGhostwriterRuntimeState({
@@ -1942,15 +1640,20 @@ async function runAssistantReply(
       prompt: options.prompt,
       taskKind,
     });
-    await emitRunTimelineEvent(run, options, {
-      phase: "runtime",
-      eventType: "runtime_planned",
-      title: "Runtime planned",
-      detail: runtimeState.plan.deliverable,
-      payload: {
-        taskKind: runtimeState.plan.taskKind,
-        responseMode: runtimeState.plan.responseMode,
-        selectedTools: runtimeState.plan.selectedTools,
+    await emitRunTimelineEvent({
+      createRunEvent: jobChatRepo.createRunEvent,
+      onTimeline: options.stream?.onTimeline,
+      run,
+      input: {
+        phase: "runtime",
+        eventType: "runtime_planned",
+        title: "Runtime planned",
+        detail: runtimeState.plan.deliverable,
+        payload: {
+          taskKind: runtimeState.plan.taskKind,
+          responseMode: runtimeState.plan.responseMode,
+          selectedTools: runtimeState.plan.selectedTools,
+        },
       },
     });
     const baseMessages = buildBaseLlmMessages({
@@ -1966,7 +1669,12 @@ async function runAssistantReply(
     let structuredPayload: GhostwriterAssistantPayload;
     let selectionMeta: GhostwriterSelectionMeta | null = null;
     const emitTimeline: GhostwriterEmitTimeline = (input) =>
-      emitRunTimelineEvent(run, options, input);
+      emitRunTimelineEvent({
+        createRunEvent: jobChatRepo.createRunEvent,
+        onTimeline: options.stream?.onTimeline,
+        run,
+        input,
+      });
 
     if (taskKind === "memory_update") {
       await emitTimeline({
@@ -2025,31 +1733,36 @@ async function runAssistantReply(
       selectionMeta = structuredResult.selectionMeta;
     }
 
-    await emitRunTimelineEvent(run, options, {
-      phase: "finalize",
-      eventType: "selection",
-      title: "Final response selected",
-      detail: "Ranked the generated candidate(s) and prepared the final structured assistant payload.",
-      payload: {
-        hasCoverLetterDraft: Boolean(structuredPayload.coverLetterDraft),
-        coverLetterKind: structuredPayload.coverLetterKind,
-        hasResumePatch: Boolean(structuredPayload.resumePatch),
-        fitBriefStrongPoints:
-          structuredPayload.fitBrief?.strongestPoints.slice(0, 3) ?? [],
-        selectedOutputMode: structuredPayload.coverLetterDraft
-          ? structuredPayload.coverLetterKind === "email"
-            ? "application_email"
-            : "cover_letter"
-          : structuredPayload.resumePatch
-            ? "resume_patch"
-            : "direct_response",
-        winnerReason:
-          selectionMeta?.winnerReason ??
-          "Selected the strongest available final response for this request.",
-        candidateCount: selectionMeta?.candidateCount,
-        winningVariant: selectionMeta?.winningVariant,
-        strongestEvidence: selectionMeta?.strongestEvidence,
-        coveredClaimIds: selectionMeta?.coveredClaimIds,
+    await emitRunTimelineEvent({
+      createRunEvent: jobChatRepo.createRunEvent,
+      onTimeline: options.stream?.onTimeline,
+      run,
+      input: {
+        phase: "finalize",
+        eventType: "selection",
+        title: "Final response selected",
+        detail: "Ranked the generated candidate(s) and prepared the final structured assistant payload.",
+        payload: {
+          hasCoverLetterDraft: Boolean(structuredPayload.coverLetterDraft),
+          coverLetterKind: structuredPayload.coverLetterKind,
+          hasResumePatch: Boolean(structuredPayload.resumePatch),
+          fitBriefStrongPoints:
+            structuredPayload.fitBrief?.strongestPoints.slice(0, 3) ?? [],
+          selectedOutputMode: structuredPayload.coverLetterDraft
+            ? structuredPayload.coverLetterKind === "email"
+              ? "application_email"
+              : "cover_letter"
+            : structuredPayload.resumePatch
+              ? "resume_patch"
+              : "direct_response",
+          winnerReason:
+            selectionMeta?.winnerReason ??
+            "Selected the strongest available final response for this request.",
+          candidateCount: selectionMeta?.candidateCount,
+          winningVariant: selectionMeta?.winningVariant,
+          strongestEvidence: selectionMeta?.strongestEvidence,
+          coveredClaimIds: selectionMeta?.coveredClaimIds,
+        },
       },
     });
 
@@ -2074,12 +1787,17 @@ async function runAssistantReply(
           errorCode: "REQUEST_TIMEOUT",
           errorMessage: "Generation cancelled by user",
         });
-        await emitRunTimelineEvent(run, options, {
-          phase: "terminal",
-          eventType: "cancelled",
-          title: "Run cancelled",
-          detail: "The operator stopped the stream before the response finished.",
-          payload: {},
+        await emitRunTimelineEvent({
+          createRunEvent: jobChatRepo.createRunEvent,
+          onTimeline: options.stream?.onTimeline,
+          run,
+          input: {
+            phase: "terminal",
+            eventType: "cancelled",
+            title: "Run cancelled",
+            detail: "The operator stopped the stream before the response finished.",
+            payload: {},
+          },
         });
         options.stream?.onCancelled({ runId: run.id, message: cancelled });
         return {
@@ -2110,13 +1828,18 @@ async function runAssistantReply(
     await jobChatRepo.completeRun(run.id, {
       status: "completed",
     });
-    await emitRunTimelineEvent(run, options, {
-      phase: "terminal",
-      eventType: "completed",
-      title: "Run completed",
-      detail: "The assistant response was persisted and the stream closed cleanly.",
-      payload: {
-        outputChars: accumulated.length,
+    await emitRunTimelineEvent({
+      createRunEvent: jobChatRepo.createRunEvent,
+      onTimeline: options.stream?.onTimeline,
+      run,
+      input: {
+        phase: "terminal",
+        eventType: "completed",
+        title: "Run completed",
+        detail: "The assistant response was persisted and the stream closed cleanly.",
+        payload: {
+          outputChars: accumulated.length,
+        },
       },
     });
 
@@ -2153,21 +1876,31 @@ async function runAssistantReply(
       errorMessage: message,
     });
     if (isCancelled) {
-      await emitRunTimelineEvent(run, options, {
-        phase: "terminal",
-        eventType: "cancelled",
-        title: "Run cancelled",
-        detail: message,
-        payload: {},
+      await emitRunTimelineEvent({
+        createRunEvent: jobChatRepo.createRunEvent,
+        onTimeline: options.stream?.onTimeline,
+        run,
+        input: {
+          phase: "terminal",
+          eventType: "cancelled",
+          title: "Run cancelled",
+          detail: message,
+          payload: {},
+        },
       });
     } else {
-      await emitRunTimelineEvent(run, options, {
-        phase: "terminal",
-        eventType: "failed",
-        title: "Run failed",
-        detail: message,
-        payload: {
-          code,
+      await emitRunTimelineEvent({
+        createRunEvent: jobChatRepo.createRunEvent,
+        onTimeline: options.stream?.onTimeline,
+        run,
+        input: {
+          phase: "terminal",
+          eventType: "failed",
+          title: "Run failed",
+          detail: message,
+          payload: {
+            code,
+          },
         },
       });
     }
