@@ -498,35 +498,7 @@ export const ProfileHubPage: React.FC = () => {
       <PageHeader
         icon={ContactRound}
         title="Profile Hub"
-        subtitle="Capture material, triage inbox items, and keep Ghostwriter aligned"
-        actions={
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <label className="cursor-pointer">
-                <Upload className="mr-2 h-4 w-4" />
-                Import
-                <input
-                  type="file"
-                  accept="application/json"
-                  className="sr-only"
-                  onChange={handleImportFile}
-                />
-              </label>
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleDownloadJson}>
-              <Download className="mr-2 h-4 w-4" />
-              Export
-            </Button>
-            <Button size="sm" onClick={handleSave} disabled={isSaving}>
-              {isSaving ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="mr-2 h-4 w-4" />
-              )}
-              Save
-            </Button>
-          </div>
-        }
+        subtitle="One JSON-backed profile bundle for Ghostwriter"
       />
 
       <ImportProfileDialog
