@@ -538,9 +538,9 @@ export const ProfileHubPage: React.FC = () => {
         {...pendingImportCounts}
       />
 
-      <PageMain>
+      <PageMain className="space-y-4">
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-xl border border-border/60 bg-card/40 p-4">
+          <div className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm">
             <div className="text-xs uppercase tracking-wide text-muted-foreground">
               Pending inbox
             </div>
@@ -548,7 +548,7 @@ export const ProfileHubPage: React.FC = () => {
               {pendingInbox.length}
             </div>
           </div>
-          <div className="rounded-xl border border-border/60 bg-card/40 p-4">
+          <div className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm">
             <div className="text-xs uppercase tracking-wide text-muted-foreground">
               Projects
             </div>
@@ -556,7 +556,7 @@ export const ProfileHubPage: React.FC = () => {
               {projects.length}
             </div>
           </div>
-          <div className="rounded-xl border border-border/60 bg-card/40 p-4">
+          <div className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm">
             <div className="text-xs uppercase tracking-wide text-muted-foreground">
               Facts
             </div>
@@ -564,7 +564,7 @@ export const ProfileHubPage: React.FC = () => {
               {facts.length}
             </div>
           </div>
-          <div className="rounded-xl border border-border/60 bg-card/40 p-4">
+          <div className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm">
             <div className="text-xs uppercase tracking-wide text-muted-foreground">
               Rules
             </div>
@@ -574,7 +574,7 @@ export const ProfileHubPage: React.FC = () => {
           </div>
         </section>
 
-        <section className="mt-4 rounded-xl border border-border/60 bg-card/40 p-4 md:p-5">
+        <section className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm md:p-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-lg font-semibold tracking-tight">
@@ -598,7 +598,7 @@ export const ProfileHubPage: React.FC = () => {
               value={captureText}
               onChange={(event) => setCaptureText(event.target.value)}
               placeholder="Paste a project update, writing preference, or personal fact…"
-              className="min-h-[120px] xl:flex-1"
+              className="min-h-[120px] border-border/60 bg-background/60 xl:flex-1"
             />
             <Button
               onClick={handleDigest}
@@ -615,8 +615,8 @@ export const ProfileHubPage: React.FC = () => {
           </div>
         </section>
 
-        <section className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
-          <div className="rounded-xl border border-border/60 bg-card/40 p-4 md:p-5">
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
+          <div className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm md:p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold tracking-tight">
@@ -644,7 +644,7 @@ export const ProfileHubPage: React.FC = () => {
                   {pendingInbox.map((item) => (
                     <TableRow
                       key={item.id}
-                      className="cursor-pointer"
+                      className={`cursor-pointer transition-colors ${selectedInboxId === item.id ? "bg-muted/40" : "hover:bg-muted/20"}`}
                       onClick={() => setSelectedInboxId(item.id)}
                     >
                       <TableCell>
@@ -687,7 +687,7 @@ export const ProfileHubPage: React.FC = () => {
           </div>
 
           <div className="space-y-4">
-            <section className="rounded-xl border border-border/60 bg-card/40 p-4 md:p-5">
+            <section className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm md:p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-semibold tracking-tight">
@@ -726,7 +726,7 @@ export const ProfileHubPage: React.FC = () => {
                         summary: event.target.value,
                       }))
                     }
-                    className="min-h-[88px]"
+                    className="min-h-[88px] border-border/60 bg-background/60"
                   />
                   <Input
                     value={selectedInboxItem.tags.join(", ")}
@@ -750,11 +750,11 @@ export const ProfileHubPage: React.FC = () => {
                         rawText: event.target.value,
                       }))
                     }
-                    className="min-h-[120px]"
+                    className="min-h-[120px] border-border/60 bg-background/60"
                   />
 
                   {selectedInboxItem.suggestedProject && (
-                    <div className="rounded-lg border border-border/60 bg-background/30 p-3">
+                    <div className="rounded-lg border border-border/60 bg-background/40 p-3 shadow-sm">
                       <div className="text-sm font-medium">
                         Starter CV bullets
                       </div>
@@ -811,7 +811,7 @@ export const ProfileHubPage: React.FC = () => {
               )}
             </section>
 
-            <section className="rounded-xl border border-border/60 bg-card/40 p-4 md:p-5">
+            <section className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm md:p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-semibold tracking-tight">
@@ -856,7 +856,7 @@ export const ProfileHubPage: React.FC = () => {
                     {projects.slice(0, 3).map((project) => (
                       <div
                         key={project.id}
-                        className="rounded-lg border border-border/60 bg-background/30 p-3"
+                        className="rounded-lg border border-border/60 bg-background/40 p-3 shadow-sm"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
@@ -891,7 +891,7 @@ export const ProfileHubPage: React.FC = () => {
                               ),
                             )
                           }
-                          className="mt-3 min-h-[72px]"
+                          className="mt-3 min-h-[72px] border-border/60 bg-background/60"
                           placeholder="Role relevance / canonical framing for Ghostwriter"
                         />
                         <Textarea
@@ -910,7 +910,7 @@ export const ProfileHubPage: React.FC = () => {
                               ),
                             )
                           }
-                          className="mt-3 min-h-[88px]"
+                          className="mt-3 min-h-[88px] border-border/60 bg-background/60"
                           placeholder="One bullet per line"
                         />
                       </div>
@@ -954,7 +954,7 @@ export const ProfileHubPage: React.FC = () => {
                     {facts.slice(0, 3).map((fact) => (
                       <div
                         key={fact.id}
-                        className="rounded-lg border border-border/60 bg-background/30 p-3"
+                        className="rounded-lg border border-border/60 bg-background/40 p-3 shadow-sm"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">

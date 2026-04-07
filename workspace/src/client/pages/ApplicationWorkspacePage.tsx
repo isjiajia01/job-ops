@@ -424,7 +424,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
 
   return (
     <main className="container mx-auto max-w-6xl space-y-6 px-4 py-6 pb-12">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-4 rounded-lg border border-border/40 bg-background/70 px-3 py-2 shadow-sm backdrop-blur-sm">
         <Button
           variant="ghost"
           size="sm"
@@ -474,7 +474,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
               </div>
 
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)]">
-                <div className="rounded-xl border border-border/60 bg-background/30 p-4">
+                <div className="rounded-xl border border-border/60 bg-background/40 p-4 shadow-sm">
                   <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                     Workspace focus
                   </div>
@@ -490,7 +490,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
                   {quickFacts.slice(0, 3).map((fact) => (
                     <div
                       key={fact.label}
-                      className="rounded-xl border border-border/60 bg-background/20 p-3"
+                      className="rounded-xl border border-border/60 bg-background/30 p-3 shadow-sm"
                     >
                       <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                         {fact.label}
@@ -504,7 +504,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
               </div>
 
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-                <div className="rounded-xl border border-border/60 bg-background/20 p-3">
+                <div className="rounded-xl border border-border/60 bg-background/30 p-3 shadow-sm">
                   <div className="mb-2 text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
                     Do next
                   </div>
@@ -599,7 +599,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-border/60 bg-background/20 p-3">
+                <div className="rounded-xl border border-border/60 bg-background/30 p-3 shadow-sm">
                   <div className="mb-2 text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
                     Documents
                   </div>
@@ -705,8 +705,8 @@ export const ApplicationWorkspacePage: React.FC = () => {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.95fr)]">
         <div className="space-y-6">
-          <Card className="border-border/50 overflow-hidden">
-            <CardHeader className="border-b border-border/50 bg-muted/20">
+          <Card className="overflow-hidden border-border/50 shadow-sm">
+            <CardHeader className="border-b border-border/50 bg-muted/20 pb-5">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <CardTitle className="flex items-center gap-2 text-base">
@@ -729,7 +729,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
             </CardContent>
           </Card>
 
-          <Card className="border-border/50">
+          <Card className="border-border/50 shadow-sm">
             <CardHeader>
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <CardTitle className="flex items-center gap-2 text-base">
@@ -780,7 +780,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
         </div>
 
         <div className="space-y-4">
-          <Card className="border-border/50">
+          <Card className="border-border/50 shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <CalendarClock className="h-4 w-4" />
@@ -871,7 +871,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
           </Card>
 
           {tasks.length > 0 && (
-            <Card className="border-border/50">
+            <Card className="border-border/50 shadow-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <CalendarClock className="h-4 w-4" />
