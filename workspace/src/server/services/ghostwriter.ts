@@ -27,7 +27,6 @@ import type {
 import {
   getGhostwriterDisplayText,
   normalizeGhostwriterAssistantPayload,
-  serializeGhostwriterAssistantPayload,
 } from "@shared/utils/ghostwriter";
 import * as jobChatRepo from "../repositories/ghostwriter";
 import * as jobsRepo from "../repositories/jobs";
@@ -62,12 +61,28 @@ import { inferPreferenceFromEditedPrompt } from "./ghostwriter-learning";
 import { applyMemoryUpdateForPrompt } from "./ghostwriter-memory";
 import { sanitizeResumePatch } from "./ghostwriter-output-guard";
 import { LlmService } from "./llm/service";
+import { runDirectChatTask } from "./ghostwriter-direct-chat";
+import {
+  chunkText,
+  estimateTokenCount,
+  handleRunFailure,
+  isRunningRunUniqueConstraintError,
+  logRunFinished,
+  streamStructuredPayload,
+} from "./ghostwriter-run-lifecycle";
+import {
+  buildLocalWritingStrategy,
+  buildStrategySnapshot,
+  WRITING_STRATEGY_SCHEMA,
+  type WritingStrategy,
+} from "./ghostwriter-strategy";
 import {
   buildBaseLlmMessages,
   emitRunTimelineEvent,
   finalizePayloadCandidate,
   type GhostwriterEmitTimeline,
 } from "./ghostwriter-stage-helpers";
+import type { JsonSchemaDefinition } from "./llm/types";
 import {
   buildWritingPlan,
   finalizeStructuredPayload,
@@ -75,7 +90,6 @@ import {
 } from "./ghostwriter-structured-writing";
 import { buildHybridEvidenceSelection } from "./ghostwriter-hybrid-evidence";
 import { rankPayloadCandidates } from "./ghostwriter-ranking";
-import type { JsonSchemaDefinition } from "./llm/types";
 import { resolveLlmRuntimeSettings as resolveRuntimeLlmSettings } from "./modelSelection";
 import { getProfile } from "./profile";
 
@@ -121,44 +135,6 @@ const CHAT_RESPONSE_SCHEMA: JsonSchemaDefinition = {
   },
 };
 
-const WRITING_STRATEGY_SCHEMA: JsonSchemaDefinition = {
-  name: "job_chat_writing_strategy",
-  schema: {
-    type: "object",
-    properties: {
-      angle: { type: "string" },
-      strongestEvidence: {
-        type: "array",
-        items: { type: "string" },
-      },
-      weakPoints: {
-        type: "array",
-        items: { type: "string" },
-      },
-      paragraphPlan: {
-        type: "array",
-        items: { type: "string" },
-      },
-      tonePlan: { type: "string" },
-      requiresClarification: { type: "boolean" },
-      clarifyingQuestions: {
-        type: "array",
-        items: { type: "string" },
-      },
-    },
-    required: [
-      "angle",
-      "strongestEvidence",
-      "weakPoints",
-      "paragraphPlan",
-      "tonePlan",
-      "requiresClarification",
-      "clarifyingQuestions",
-    ],
-    additionalProperties: false,
-  },
-};
-
 type GhostwriterTaskKind =
   | "direct_chat"
   | "memory_update"
@@ -166,16 +142,6 @@ type GhostwriterTaskKind =
   | "application_email"
   | "resume_patch"
   | "mixed";
-
-type WritingStrategy = {
-  angle: string;
-  strongestEvidence: string[];
-  weakPoints: string[];
-  paragraphPlan: string[];
-  tonePlan: string;
-  requiresClarification: boolean;
-  clarifyingQuestions: string[];
-};
 
 function classifyGhostwriterTask(prompt: string): GhostwriterTaskKind {
   const normalized = prompt.toLowerCase();
@@ -202,90 +168,6 @@ function classifyGhostwriterTask(prompt: string): GhostwriterTaskKind {
   if (asksCoverLetter) return "cover_letter";
   if (asksResumePatch) return "resume_patch";
   return "direct_chat";
-}
-
-function buildLocalWritingStrategy(args: {
-  taskKind: GhostwriterTaskKind;
-  evidencePack: GhostwriterEvidencePack;
-}): WritingStrategy {
-  const { taskKind, evidencePack } = args;
-  const paragraphPlan =
-    taskKind === "resume_patch"
-      ? [
-          "Sharpen the tailored summary around the recommended angle and preferred framing.",
-          "Keep the headline disciplined and close to the target role wording.",
-          "Select only skills that reinforce the strongest evidence.",
-        ]
-      : taskKind === "application_email"
-        ? [
-            "Open with a direct, local, non-template note tied to the role.",
-            "State the two strongest evidence-backed reasons for fit.",
-            "Close briefly with what the candidate can contribute next.",
-          ]
-        : [
-            "Open from the work or operating need, not from generic motivation language.",
-            "Use the strongest selected experience first and package it with the preferred framing guidance.",
-            "Use another body paragraph for a second practical contribution angle while staying modest about gaps.",
-            "Close briefly with contribution-focused language.",
-          ];
-
-  return {
-    angle: evidencePack.recommendedAngle,
-    strongestEvidence: [
-      ...evidencePack.selectedNarrative,
-      ...evidencePack.voiceProfile,
-      ...evidencePack.topEvidence,
-      ...evidencePack.evidenceStory,
-    ].slice(0, 8),
-    weakPoints: evidencePack.biggestGaps,
-    paragraphPlan,
-    tonePlan: `${evidencePack.toneRecommendation} Role family: ${evidencePack.targetRoleFamily}. Voice cues: ${evidencePack.voiceProfile.join(" | ") || "direct, restrained, useful"}. Lead with: ${evidencePack.selectedNarrative[0] ?? evidencePack.topEvidence[0] ?? "strongest evidence-backed module"}.`,
-    requiresClarification: false,
-    clarifyingQuestions: [],
-  };
-}
-
-function buildStrategySnapshot(strategy: WritingStrategy): string {
-  return [
-    `Angle: ${strategy.angle}`,
-    strategy.strongestEvidence.length > 0
-      ? `Strongest evidence:\n- ${strategy.strongestEvidence.join("\n- ")}`
-      : null,
-    strategy.weakPoints.length > 0
-      ? `Weak points / caution:\n- ${strategy.weakPoints.join("\n- ")}`
-      : null,
-    strategy.paragraphPlan.length > 0
-      ? `Paragraph plan:\n- ${strategy.paragraphPlan.join("\n- ")}`
-      : null,
-    `Tone plan: ${strategy.tonePlan}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-
-function estimateTokenCount(value: string): number {
-  if (!value) return 0;
-  return Math.ceil(value.length / 4);
-}
-
-function chunkText(value: string, maxChunk = 60): string[] {
-  if (!value) return [];
-  const chunks: string[] = [];
-  let cursor = 0;
-  while (cursor < value.length) {
-    chunks.push(value.slice(cursor, cursor + maxChunk));
-    cursor += maxChunk;
-  }
-  return chunks;
-}
-
-function isRunningRunUniqueConstraintError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return (
-    message.includes("idx_job_chat_runs_thread_running_unique") ||
-    message.includes("UNIQUE constraint failed: job_chat_runs.thread_id")
-  );
 }
 
 async function resolveLlmRuntimeSettings(): Promise<LlmRuntimeSettings> {
@@ -490,53 +372,6 @@ type GhostwriterSelectionMeta = {
 type GhostwriterRunContext = Awaited<ReturnType<typeof buildJobChatPromptContext>>;
 type GhostwriterRuntimeState = ReturnType<typeof buildGhostwriterRuntimeState>;
 
-async function runDirectChatTask(args: {
-  llm: LlmService;
-  llmConfig: LlmRuntimeSettings;
-  context: GhostwriterRunContext;
-  runtimeState: GhostwriterRuntimeState;
-  baseMessages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
-  runtimeMessages: Array<{ role: "system"; content: string }>;
-  prompt: string;
-  jobId: string;
-  signal: AbortSignal;
-}): Promise<GhostwriterAssistantPayload> {
-  const llmResult = await args.llm.callJson<{ response: string }>({
-    model: args.llmConfig.model,
-    messages: [
-      ...args.baseMessages,
-      ...args.runtimeMessages,
-      {
-        role: "user",
-        content: args.prompt,
-      },
-    ],
-    jsonSchema: CHAT_RESPONSE_SCHEMA,
-    maxRetries: 1,
-    retryDelayMs: 300,
-    jobId: args.jobId,
-    signal: args.signal,
-  });
-
-  if (!llmResult.success) {
-    if (args.signal.aborted) {
-      throw requestTimeout("Chat generation was cancelled");
-    }
-    throw upstreamError("LLM generation failed", {
-      reason: llmResult.error,
-    });
-  }
-
-  return finalizePayloadCandidate({
-    raw: llmResult.data,
-    prompt: args.prompt,
-    profile: args.context.profile,
-    knowledgeBase: args.context.knowledgeBase,
-    evidencePack: args.context.evidencePack,
-    runtimeState: args.runtimeState,
-  });
-}
-
 async function runStructuredWritingTask(args: {
   llm: LlmService;
   llmConfig: LlmRuntimeSettings;
@@ -692,6 +527,13 @@ async function runAssistantReply(
   });
 
   let accumulated = "";
+  const emitTimeline: GhostwriterEmitTimeline = (input) =>
+    emitRunTimelineEvent({
+      createRunEvent: jobChatRepo.createRunEvent,
+      onTimeline: options.stream?.onTimeline,
+      run,
+      input,
+    });
 
   try {
     const llm = new LlmService({
@@ -752,13 +594,6 @@ async function runAssistantReply(
 
     let structuredPayload: GhostwriterAssistantPayload;
     let selectionMeta: GhostwriterSelectionMeta | null = null;
-    const emitTimeline: GhostwriterEmitTimeline = (input) =>
-      emitRunTimelineEvent({
-        createRunEvent: jobChatRepo.createRunEvent,
-        onTimeline: options.stream?.onTimeline,
-        run,
-        input,
-      });
 
     if (taskKind === "memory_update") {
       await emitTimeline({
@@ -798,6 +633,7 @@ async function runAssistantReply(
         prompt: options.prompt,
         jobId: options.jobId,
         signal: controller.signal,
+        chatResponseSchema: CHAT_RESPONSE_SCHEMA,
       });
     } else {
       const structuredResult = await runStructuredWritingTask({
@@ -855,160 +691,47 @@ async function runAssistantReply(
       knowledgeBase: context.knowledgeBase,
     });
 
-    const finalText = serializeGhostwriterAssistantPayload(structuredPayload);
-    const chunks = chunkText(finalText);
-
-    for (const chunk of chunks) {
-      if (controller.signal.aborted) {
-        const cancelled = await jobChatRepo.updateMessage(assistantMessage.id, {
-          content: accumulated,
-          status: "cancelled",
-          tokensIn: estimateTokenCount(options.prompt),
-          tokensOut: estimateTokenCount(accumulated),
-        });
-        await jobChatRepo.completeRun(run.id, {
-          status: "cancelled",
-          errorCode: "REQUEST_TIMEOUT",
-          errorMessage: "Generation cancelled by user",
-        });
-        await emitRunTimelineEvent({
-          createRunEvent: jobChatRepo.createRunEvent,
-          onTimeline: options.stream?.onTimeline,
-          run,
-          input: {
-            phase: "terminal",
-            eventType: "cancelled",
-            title: "Run cancelled",
-            detail: "The operator stopped the stream before the response finished.",
-            payload: {},
-          },
-        });
-        options.stream?.onCancelled({ runId: run.id, message: cancelled });
-        return {
-          runId: run.id,
-          messageId: assistantMessage.id,
-          message: accumulated,
-        };
-      }
-
-      accumulated += chunk;
-      options.stream?.onDelta({
-        runId: run.id,
-        messageId: assistantMessage.id,
-        delta: chunk,
-      });
-    }
-
-    const completedMessage = await jobChatRepo.updateMessage(
-      assistantMessage.id,
-      {
-        content: accumulated,
-        status: "complete",
-        tokensIn: estimateTokenCount(options.prompt),
-        tokensOut: estimateTokenCount(accumulated),
-      },
-    );
-
-    await jobChatRepo.completeRun(run.id, {
-      status: "completed",
-    });
-    await emitRunTimelineEvent({
-      createRunEvent: jobChatRepo.createRunEvent,
-      onTimeline: options.stream?.onTimeline,
+    const streamed = await streamStructuredPayload({
       run,
-      input: {
-        phase: "terminal",
-        eventType: "completed",
-        title: "Run completed",
-        detail: "The assistant response was persisted and the stream closed cleanly.",
-        payload: {
-          outputChars: accumulated.length,
-        },
+      assistantMessage,
+      prompt: options.prompt,
+      payload: structuredPayload,
+      signal: controller.signal,
+      updateMessage: jobChatRepo.updateMessage,
+      completeRun: jobChatRepo.completeRun,
+      emitTimeline,
+      stream: {
+        onDelta: options.stream?.onDelta,
+        onCompleted: options.stream?.onCompleted,
+        onCancelled: options.stream?.onCancelled,
       },
-    });
-
-    options.stream?.onCompleted({
-      runId: run.id,
-      message: completedMessage,
     });
 
     return {
       runId: run.id,
       messageId: assistantMessage.id,
-      message: accumulated,
+      message: streamed.message,
     };
   } catch (error) {
-    const appError = error instanceof Error ? error : new Error(String(error));
-    const isCancelled =
-      controller.signal.aborted || appError.name === "AbortError";
-    const status = isCancelled ? "cancelled" : "failed";
-    const code = isCancelled ? "REQUEST_TIMEOUT" : "UPSTREAM_ERROR";
-    const message = isCancelled
-      ? "Generation cancelled by user"
-      : appError.message || "Generation failed";
-
-    const failedMessage = await jobChatRepo.updateMessage(assistantMessage.id, {
-      content: accumulated,
-      status: isCancelled ? "cancelled" : "failed",
-      tokensIn: estimateTokenCount(options.prompt),
-      tokensOut: estimateTokenCount(accumulated),
-    });
-
-    await jobChatRepo.completeRun(run.id, {
-      status,
-      errorCode: code,
-      errorMessage: message,
-    });
-    if (isCancelled) {
-      await emitRunTimelineEvent({
-        createRunEvent: jobChatRepo.createRunEvent,
-        onTimeline: options.stream?.onTimeline,
-        run,
-        input: {
-          phase: "terminal",
-          eventType: "cancelled",
-          title: "Run cancelled",
-          detail: message,
-          payload: {},
-        },
-      });
-    } else {
-      await emitRunTimelineEvent({
-        createRunEvent: jobChatRepo.createRunEvent,
-        onTimeline: options.stream?.onTimeline,
-        run,
-        input: {
-          phase: "terminal",
-          eventType: "failed",
-          title: "Run failed",
-          detail: message,
-          payload: {
-            code,
-          },
-        },
-      });
-    }
-
-    if (isCancelled) {
-      options.stream?.onCancelled({ runId: run.id, message: failedMessage });
-      return {
-        runId: run.id,
-        messageId: assistantMessage.id,
-        message: accumulated,
-      };
-    }
-
-    options.stream?.onError({
-      runId: run.id,
-      code,
-      message,
+    return handleRunFailure({
+      run,
+      assistantMessage,
+      prompt: options.prompt,
+      accumulated,
+      signal: controller.signal,
+      error,
       requestId,
+      updateMessage: jobChatRepo.updateMessage,
+      completeRun: jobChatRepo.completeRun,
+      emitTimeline,
+      stream: {
+        onCancelled: options.stream?.onCancelled,
+        onError: options.stream?.onError,
+      },
     });
-
-    throw upstreamError(message, { runId: run.id });
   } finally {
     abortControllers.delete(run.id);
-    logger.info("Job chat run finished", {
+    logRunFinished({
       jobId: options.jobId,
       threadId: options.threadId,
       runId: run.id,
