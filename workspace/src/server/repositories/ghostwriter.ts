@@ -4,13 +4,16 @@ import type {
   JobChatMessageRole,
   JobChatMessageStatus,
   JobChatRun,
+  JobChatRunEvent,
+  JobChatRunPhase,
   JobChatRunStatus,
+  JobChatRunEventType,
   JobChatThread,
 } from "@shared/types";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, max } from "drizzle-orm";
 import { db, schema } from "../db";
 
-const { jobChatMessages, jobChatRuns, jobChatThreads } = schema;
+const { jobChatMessages, jobChatRunEvents, jobChatRuns, jobChatThreads } = schema;
 
 function mapThread(row: typeof jobChatThreads.$inferSelect): JobChatThread {
   return {
@@ -59,6 +62,24 @@ function mapRun(row: typeof jobChatRuns.$inferSelect): JobChatRun {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+function mapRunEvent(
+  row: typeof jobChatRunEvents.$inferSelect,
+): JobChatRunEvent {
+  return {
+    id: row.id,
+    runId: row.runId,
+    threadId: row.threadId,
+    jobId: row.jobId,
+    sequence: row.sequence,
+    phase: row.phase as JobChatRunPhase,
+    eventType: row.eventType as JobChatRunEventType,
+    title: row.title,
+    detail: row.detail,
+    payload: ((row.payload as Record<string, unknown> | null) ?? {}) as JobChatRunEvent["payload"],
+    createdAt: row.createdAt,
+  } as JobChatRunEvent;
 }
 
 export async function listThreadsForJob(
@@ -320,6 +341,72 @@ export async function getActiveRunForThread(
     .limit(1);
 
   return row ? mapRun(row) : null;
+}
+
+export async function listRunsForJob(
+  jobId: string,
+  options?: { limit?: number },
+): Promise<JobChatRun[]> {
+  const rows = await db
+    .select()
+    .from(jobChatRuns)
+    .where(eq(jobChatRuns.jobId, jobId))
+    .orderBy(desc(jobChatRuns.startedAt))
+    .limit(options?.limit ?? 20);
+
+  return rows.map(mapRun);
+}
+
+export async function createRunEvent(input: {
+  runId: string;
+  threadId: string;
+  jobId: string;
+  phase: string;
+  eventType: string;
+  title: string;
+  detail?: string | null;
+  payload?: Record<string, unknown> | null;
+}): Promise<JobChatRunEvent> {
+  const id = randomUUID();
+  const createdAt = Date.now();
+  const [lastSequence] = await db
+    .select({ value: max(jobChatRunEvents.sequence) })
+    .from(jobChatRunEvents)
+    .where(eq(jobChatRunEvents.runId, input.runId));
+  const sequence = (lastSequence?.value ?? 0) + 1;
+
+  await db.insert(jobChatRunEvents).values({
+    id,
+    runId: input.runId,
+    threadId: input.threadId,
+    jobId: input.jobId,
+    sequence,
+    phase: input.phase,
+    eventType: input.eventType,
+    title: input.title,
+    detail: input.detail ?? null,
+    payload: input.payload ?? null,
+    createdAt,
+  });
+
+  const [row] = await db
+    .select()
+    .from(jobChatRunEvents)
+    .where(eq(jobChatRunEvents.id, id));
+  if (!row) {
+    throw new Error(`Failed to load created chat run event ${id}.`);
+  }
+  return mapRunEvent(row);
+}
+
+export async function listRunEvents(runId: string): Promise<JobChatRunEvent[]> {
+  const rows = await db
+    .select()
+    .from(jobChatRunEvents)
+    .where(eq(jobChatRunEvents.runId, runId))
+    .orderBy(jobChatRunEvents.sequence, jobChatRunEvents.createdAt);
+
+  return rows.map(mapRunEvent);
 }
 
 export async function completeRun(

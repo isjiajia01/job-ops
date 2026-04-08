@@ -359,12 +359,42 @@ function buildProfileSnapshot(
 
 function buildCompanyResearchSnapshot(
   note: CompanyResearchNote | null,
+  job?: Job | null,
 ): string {
   if (!note) return "";
+  const summary = truncate(note.summary, 1200);
+  if (!job) {
+    return compactJoin([
+      `Company: ${note.company}`,
+      note.source ? `Source: ${note.source}` : null,
+      `Research summary: ${summary}`,
+    ]);
+  }
+
+  const roleTerms = [job.title, job.employer, job.location, job.jobDescription]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/g)
+    .filter((token) => token.length >= 4);
+  const roleTermSet = new Set(roleTerms);
+  const relevantSentences = summary
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean)
+    .filter((sentence) => {
+      const tokens = sentence
+        .toLowerCase()
+        .split(/[^a-z0-9]+/g)
+        .filter((token) => token.length >= 4);
+      return tokens.some((token) => roleTermSet.has(token));
+    })
+    .slice(0, 3);
+
   return compactJoin([
     `Company: ${note.company}`,
     note.source ? `Source: ${note.source}` : null,
-    `Research summary: ${truncate(note.summary, 1200)}`,
+    `Research summary: ${relevantSentences.length ? relevantSentences.join(" ") : summary}`,
   ]);
 }
 
@@ -1128,7 +1158,7 @@ export async function buildJobChatPromptContext(
   const systemPrompt = buildGhostwriterSystemPrompt(style, profile);
   const jobSnapshot = buildJobSnapshot(job);
   const companyResearchSnapshot =
-    buildCompanyResearchSnapshot(companyResearchNote);
+    buildCompanyResearchSnapshot(companyResearchNote, job);
   const evidencePack = buildGhostwriterEvidencePack({
     job,
     profile,

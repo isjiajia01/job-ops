@@ -13,15 +13,20 @@ import type {
   CandidateKnowledgeFact,
   CandidateKnowledgeProject,
   GhostwriterAssistantPayload,
+  GhostwriterClaimPlan,
   GhostwriterCoverLetterKind,
+  GhostwriterFitBrief,
   GhostwriterWritingPreference,
   JobChatMessage,
   JobChatRun,
+  JobChatRunEvent,
+  JobChatRunEventPayloadByType,
+  JobChatRunEventType,
+  JobChatRunPhase,
 } from "@shared/types";
 import {
   getGhostwriterDisplayText,
   normalizeGhostwriterAssistantPayload,
-  serializeGhostwriterAssistantPayload,
 } from "@shared/utils/ghostwriter";
 import * as jobChatRepo from "../repositories/ghostwriter";
 import * as jobsRepo from "../repositories/jobs";
@@ -33,13 +38,58 @@ import {
   buildJobChatPromptContext,
   type GhostwriterEvidencePack,
 } from "./ghostwriter-context";
+import { buildGhostwriterRuntimeState } from "./ghostwriter-runtime";
+import { buildGhostwriterClaimPlan } from "./ghostwriter-claim-plan";
 import {
-  lintCoverLetterDraft,
-  sanitizeResumePatch,
-  scoreGhostwriterCandidate,
-} from "./ghostwriter-output-guard";
+  summarizeEvidenceSelectionPlan,
+  type GhostwriterEvidenceSelectionPlan,
+} from "./ghostwriter-evidence-selector";
+import {
+  buildEditorialRewritePrompt,
+  shouldRunEditorialRewrite,
+} from "./ghostwriter-editor";
+import {
+  diagnosticsFromIssueCodes,
+  normalizeDiagnostics,
+  summarizeDiagnostics,
+} from "./ghostwriter-diagnostics";
+import {
+  buildReviewerRewritePrompt,
+  reviewGhostwriterPayload,
+} from "./ghostwriter-reviewer";
+import { inferPreferenceFromEditedPrompt } from "./ghostwriter-learning";
+import { applyMemoryUpdateForPrompt } from "./ghostwriter-memory";
+import { sanitizeResumePatch } from "./ghostwriter-output-guard";
 import { LlmService } from "./llm/service";
+import { runDirectChatTask } from "./ghostwriter-direct-chat";
+import {
+  chunkText,
+  estimateTokenCount,
+  handleRunFailure,
+  isRunningRunUniqueConstraintError,
+  logRunFinished,
+  streamStructuredPayload,
+} from "./ghostwriter-run-lifecycle";
+import {
+  buildLocalWritingStrategy,
+  buildStrategySnapshot,
+  WRITING_STRATEGY_SCHEMA,
+  type WritingStrategy,
+} from "./ghostwriter-strategy";
+import {
+  buildBaseLlmMessages,
+  emitRunTimelineEvent,
+  finalizePayloadCandidate,
+  type GhostwriterEmitTimeline,
+} from "./ghostwriter-stage-helpers";
 import type { JsonSchemaDefinition } from "./llm/types";
+import {
+  buildWritingPlan,
+  finalizeStructuredPayload,
+  generateStructuredCandidates,
+} from "./ghostwriter-structured-writing";
+import { buildHybridEvidenceSelection } from "./ghostwriter-hybrid-evidence";
+import { rankPayloadCandidates } from "./ghostwriter-ranking";
 import { resolveLlmRuntimeSettings as resolveRuntimeLlmSettings } from "./modelSelection";
 import { getProfile } from "./profile";
 
@@ -70,46 +120,17 @@ const CHAT_RESPONSE_SCHEMA: JsonSchemaDefinition = {
       resumePatch: {
         type: ["object", "null"],
       },
+      fitBrief: {
+        type: ["object", "null"],
+      },
+      claimPlan: {
+        type: ["object", "null"],
+      },
+      review: {
+        type: ["object", "null"],
+      },
     },
     required: ["response"],
-    additionalProperties: false,
-  },
-};
-
-const WRITING_STRATEGY_SCHEMA: JsonSchemaDefinition = {
-  name: "job_chat_writing_strategy",
-  schema: {
-    type: "object",
-    properties: {
-      angle: { type: "string" },
-      strongestEvidence: {
-        type: "array",
-        items: { type: "string" },
-      },
-      weakPoints: {
-        type: "array",
-        items: { type: "string" },
-      },
-      paragraphPlan: {
-        type: "array",
-        items: { type: "string" },
-      },
-      tonePlan: { type: "string" },
-      requiresClarification: { type: "boolean" },
-      clarifyingQuestions: {
-        type: "array",
-        items: { type: "string" },
-      },
-    },
-    required: [
-      "angle",
-      "strongestEvidence",
-      "weakPoints",
-      "paragraphPlan",
-      "tonePlan",
-      "requiresClarification",
-      "clarifyingQuestions",
-    ],
     additionalProperties: false,
   },
 };
@@ -121,16 +142,6 @@ type GhostwriterTaskKind =
   | "application_email"
   | "resume_patch"
   | "mixed";
-
-type WritingStrategy = {
-  angle: string;
-  strongestEvidence: string[];
-  weakPoints: string[];
-  paragraphPlan: string[];
-  tonePlan: string;
-  requiresClarification: boolean;
-  clarifyingQuestions: string[];
-};
 
 function classifyGhostwriterTask(prompt: string): GhostwriterTaskKind {
   const normalized = prompt.toLowerCase();
@@ -157,592 +168,6 @@ function classifyGhostwriterTask(prompt: string): GhostwriterTaskKind {
   if (asksCoverLetter) return "cover_letter";
   if (asksResumePatch) return "resume_patch";
   return "direct_chat";
-}
-
-function hasCjk(text: string): boolean {
-  return /[\u3400-\u9fff]/.test(text);
-}
-
-function normalizeMemoryKey(text: string | null | undefined): string {
-  return (text ?? "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\u3400-\u9fff]+/g, " ")
-    .trim();
-}
-
-function dedupeByKey<T>(items: T[], getKey: (item: T) => string): T[] {
-  const seen = new Set<string>();
-  const result: T[] = [];
-  for (const item of items) {
-    const key = getKey(item);
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    result.push(item);
-  }
-  return result;
-}
-
-type MemoryUpdateResult = {
-  payload: GhostwriterAssistantPayload;
-  nextKnowledgeBase: CandidateKnowledgeBase | null;
-  saved: {
-    facts: number;
-    projects: number;
-    preferences: number;
-  };
-};
-
-function upsertFact(
-  facts: CandidateKnowledgeFact[],
-  fact: CandidateKnowledgeFact,
-): { items: CandidateKnowledgeFact[]; created: boolean } {
-  const key = normalizeMemoryKey(fact.title);
-  const existingIndex = facts.findIndex(
-    (item) => normalizeMemoryKey(item.title) === key,
-  );
-  if (existingIndex >= 0) {
-    const next = [...facts];
-    next[existingIndex] = { ...next[existingIndex], ...fact };
-    return { items: next, created: false };
-  }
-  return { items: [fact, ...facts], created: true };
-}
-
-function upsertProject(
-  projects: CandidateKnowledgeProject[],
-  project: CandidateKnowledgeProject,
-): { items: CandidateKnowledgeProject[]; created: boolean } {
-  const key = normalizeMemoryKey(project.name);
-  const existingIndex = projects.findIndex(
-    (item) => normalizeMemoryKey(item.name) === key,
-  );
-  if (existingIndex >= 0) {
-    const mergedKeywords = dedupeByKey(
-      [
-        ...(projects[existingIndex]?.keywords ?? []),
-        ...(project.keywords ?? []),
-      ],
-      (item) => normalizeMemoryKey(item),
-    );
-    const mergedBullets = dedupeByKey(
-      [
-        ...(project.cvBullets ?? []),
-        ...(projects[existingIndex]?.cvBullets ?? []),
-      ],
-      (item) => normalizeMemoryKey(item),
-    ).slice(0, 8);
-    const next = [...projects];
-    next[existingIndex] = {
-      ...next[existingIndex],
-      ...project,
-      keywords: mergedKeywords,
-      cvBullets: mergedBullets,
-    };
-    return { items: next, created: false };
-  }
-  return { items: [project, ...projects], created: true };
-}
-
-function upsertPreference(
-  preferences: GhostwriterWritingPreference[],
-  preference: GhostwriterWritingPreference,
-): { items: GhostwriterWritingPreference[]; created: boolean } {
-  const key = normalizeMemoryKey(preference.label);
-  const existingIndex = preferences.findIndex(
-    (item) => normalizeMemoryKey(item.label) === key,
-  );
-  if (existingIndex >= 0) {
-    const next = [...preferences];
-    next[existingIndex] = { ...next[existingIndex], ...preference };
-    return { items: next, created: false };
-  }
-  return { items: [preference, ...preferences], created: true };
-}
-
-function trimMemoryPrompt(prompt: string): string {
-  return prompt
-    .replace(
-      /^[\s,，。:：-]*(记住|记一下|remember this|please remember|keep this in mind)\s*/i,
-      "",
-    )
-    .replace(/[\s,，。!！]*你记住了?$/i, "")
-    .trim();
-}
-
-async function applyMemoryUpdateForPrompt(args: {
-  prompt: string;
-  knowledgeBase: CandidateKnowledgeBase;
-}): Promise<MemoryUpdateResult> {
-  const trimmedPrompt = args.prompt.trim();
-  const lower = trimmedPrompt.toLowerCase();
-  const isChinese = hasCjk(trimmedPrompt);
-  const nextKnowledgeBase: CandidateKnowledgeBase = {
-    ...args.knowledgeBase,
-    personalFacts: [...(args.knowledgeBase.personalFacts ?? [])],
-    projects: [...(args.knowledgeBase.projects ?? [])],
-    companyResearchNotes: [...(args.knowledgeBase.companyResearchNotes ?? [])],
-    writingPreferences: [...(args.knowledgeBase.writingPreferences ?? [])],
-    inboxItems: [...(args.knowledgeBase.inboxItems ?? [])],
-  };
-
-  let savedFacts = 0;
-  let savedProjects = 0;
-  let savedPreferences = 0;
-
-  const mentionsMover = /\bmover\b/i.test(trimmedPrompt);
-  const mentionsThesisContext =
-    /dtu|master'?s thesis|masters thesis|thesis|optimization research|last-mile|rolling-horizon|delivery|合作|一起做|collaboration|毕业|论文|研究/.test(
-      lower,
-    );
-
-  const savedMoverThesisFraming = mentionsMover && mentionsThesisContext;
-
-  if (savedMoverThesisFraming) {
-    const project: CandidateKnowledgeProject = {
-      id: "project-mover-dtu-thesis",
-      name: "Mover x DTU Master's Thesis",
-      summary:
-        "Master's thesis / optimization research conducted in collaboration with Mover, focused on a multi-day rolling-horizon planning problem in last-mile delivery under real operational constraints.",
-      keywords: [
-        "Mover",
-        "DTU",
-        "optimization",
-        "operations research",
-        "last-mile delivery",
-        "rolling-horizon planning",
-        "routing",
-        "decision support",
-      ],
-      role: "Master's Thesis / Optimization Research (in collaboration with Mover)",
-      impact:
-        "Strong evidence for planning, logistics, optimisation, and decision-support roles; frame it as a real operations-linked collaboration rather than a standalone academic thesis.",
-      roleRelevance:
-        "Best used as a lead narrative module for planning, optimisation, logistics, and decision-support roles where real operational constraints matter.",
-      cvBullets: [
-        "Working on a multi-day rolling-horizon planning problem in last-mile delivery, combining assignment, routing, runtime limits, and stability-aware re-optimization.",
-        "Modelling planning decisions under operational constraints, including service windows, heterogeneous resources, and evolving daily demand.",
-        "Using optimization and computational methods to evaluate feasible planning approaches and support structured operational decision-making in a real operations-linked context.",
-      ],
-    };
-
-    const fact: CandidateKnowledgeFact = {
-      id: "fact-mover-dtu-thesis-collab",
-      title: "DTU thesis collaboration framing",
-      detail:
-        "The DTU master's thesis / optimization research (2025–2026) is done in collaboration with Mover and should be framed as a real operational collaboration rather than a purely independent academic thesis.",
-    };
-
-    const preference: GhostwriterWritingPreference = {
-      id: "pref-mover-dtu-thesis-framing",
-      label: "Frame DTU thesis as Mover collaboration",
-      instruction:
-        "When referencing the DTU master's thesis, frame it as optimization research conducted in collaboration with Mover and tied to a real operational planning problem, not as a purely standalone academic project.",
-      kind: "positioning",
-      strength: "strong",
-    };
-
-    const nextFacts = upsertFact(nextKnowledgeBase.personalFacts, fact);
-    nextKnowledgeBase.personalFacts = nextFacts.items;
-    savedFacts += nextFacts.created ? 1 : 0;
-
-    const nextProjects = upsertProject(nextKnowledgeBase.projects, project);
-    nextKnowledgeBase.projects = nextProjects.items;
-    savedProjects += nextProjects.created ? 1 : 0;
-
-    const nextPreferences = upsertPreference(
-      nextKnowledgeBase.writingPreferences ?? [],
-      preference,
-    );
-    nextKnowledgeBase.writingPreferences = nextPreferences.items;
-    savedPreferences += nextPreferences.created ? 1 : 0;
-  } else {
-    const cleaned = trimMemoryPrompt(trimmedPrompt);
-    if (!cleaned) {
-      return {
-        payload: {
-          response: isChinese
-            ? "我可以记，但你先给我一句更具体的事实、表述规则，或经历纠正。"
-            : "I can remember that, but give me one more concrete fact, framing rule, or experience correction to store.",
-          coverLetterDraft: null,
-          coverLetterKind: null,
-          resumePatch: null,
-        },
-        nextKnowledgeBase: null,
-        saved: { facts: 0, projects: 0, preferences: 0 },
-      };
-    }
-
-    const fact: CandidateKnowledgeFact = {
-      id: `fact-memory-${crypto.randomUUID()}`,
-      title: isChinese ? "Ghostwriter memory note" : "Ghostwriter memory note",
-      detail: cleaned,
-    };
-    const nextFacts = upsertFact(nextKnowledgeBase.personalFacts, fact);
-    nextKnowledgeBase.personalFacts = nextFacts.items;
-    savedFacts += nextFacts.created ? 1 : 0;
-  }
-
-  await saveCandidateKnowledgeBase(nextKnowledgeBase);
-
-  const savedSummary = [
-    savedProjects ? `${savedProjects} project note` : null,
-    savedFacts ? `${savedFacts} fact` : null,
-    savedPreferences ? `${savedPreferences} writing rule` : null,
-  ]
-    .filter(Boolean)
-    .join(", ");
-
-  return {
-    payload: {
-      response: savedMoverThesisFraming
-        ? isChinese
-          ? `记住了。我后面会把这段按与 Mover 相关的真实运营合作来写，不再把它当成纯学术 thesis。${savedSummary ? ` 已更新：${savedSummary}。` : ""}`
-          : `Got it. I’ll treat this as operations-linked work with Mover rather than a standalone academic thesis going forward.${savedSummary ? ` Updated: ${savedSummary}.` : ""}`
-        : isChinese
-          ? `记住了，我后面会按这条事实来写。${savedSummary ? ` 已更新：${savedSummary}。` : ""}`
-          : `Got it. I’ll use that as a saved profile fact going forward.${savedSummary ? ` Updated: ${savedSummary}.` : ""}`,
-      coverLetterDraft: null,
-      coverLetterKind: null,
-      resumePatch: null,
-    },
-    nextKnowledgeBase,
-    saved: {
-      facts: savedFacts,
-      projects: savedProjects,
-      preferences: savedPreferences,
-    },
-  };
-}
-
-function buildLocalWritingStrategy(args: {
-  taskKind: GhostwriterTaskKind;
-  evidencePack: GhostwriterEvidencePack;
-}): WritingStrategy {
-  const { taskKind, evidencePack } = args;
-  const paragraphPlan =
-    taskKind === "resume_patch"
-      ? [
-          "Sharpen the tailored summary around the recommended angle and preferred framing.",
-          "Keep the headline disciplined and close to the target role wording.",
-          "Select only skills that reinforce the strongest evidence.",
-        ]
-      : taskKind === "application_email"
-        ? [
-            "Open with a direct, local, non-template note tied to the role.",
-            "State the two strongest evidence-backed reasons for fit.",
-            "Close briefly with what the candidate can contribute next.",
-          ]
-        : [
-            "Open from the work or operating need, not from generic motivation language.",
-            "Use the strongest selected experience first and package it with the preferred framing guidance.",
-            "Use another body paragraph for a second practical contribution angle while staying modest about gaps.",
-            "Close briefly with contribution-focused language.",
-          ];
-
-  return {
-    angle: evidencePack.recommendedAngle,
-    strongestEvidence: [
-      ...evidencePack.selectedNarrative,
-      ...evidencePack.voiceProfile,
-      ...evidencePack.topEvidence,
-      ...evidencePack.evidenceStory,
-    ].slice(0, 8),
-    weakPoints: evidencePack.biggestGaps,
-    paragraphPlan,
-    tonePlan: `${evidencePack.toneRecommendation} Role family: ${evidencePack.targetRoleFamily}. Voice cues: ${evidencePack.voiceProfile.join(" | ") || "direct, restrained, useful"}. Lead with: ${evidencePack.selectedNarrative[0] ?? evidencePack.topEvidence[0] ?? "strongest evidence-backed module"}.`,
-    requiresClarification: false,
-    clarifyingQuestions: [],
-  };
-}
-
-function buildStrategySnapshot(strategy: WritingStrategy): string {
-  return [
-    `Angle: ${strategy.angle}`,
-    strategy.strongestEvidence.length > 0
-      ? `Strongest evidence:\n- ${strategy.strongestEvidence.join("\n- ")}`
-      : null,
-    strategy.weakPoints.length > 0
-      ? `Weak points / caution:\n- ${strategy.weakPoints.join("\n- ")}`
-      : null,
-    strategy.paragraphPlan.length > 0
-      ? `Paragraph plan:\n- ${strategy.paragraphPlan.join("\n- ")}`
-      : null,
-    `Tone plan: ${strategy.tonePlan}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-function buildBaseLlmMessages(args: {
-  systemPrompt: string;
-  jobSnapshot: string;
-  profileSnapshot: string;
-  companyResearchSnapshot: string;
-  evidencePackSnapshot: string;
-  history: Array<{ role: "user" | "assistant"; content: string }>;
-}) {
-  return [
-    {
-      role: "system" as const,
-      content: args.systemPrompt,
-    },
-    {
-      role: "system" as const,
-      content: `Job Context (JSON):\n${args.jobSnapshot}`,
-    },
-    {
-      role: "system" as const,
-      content: `Profile Context:\n${args.profileSnapshot || "No profile context available."}`,
-    },
-    ...(args.companyResearchSnapshot
-      ? [
-          {
-            role: "system" as const,
-            content: `Company Research Context:\n${args.companyResearchSnapshot}`,
-          },
-        ]
-      : []),
-    {
-      role: "system" as const,
-      content: `Evidence Pack:\n${args.evidencePackSnapshot}`,
-    },
-    ...args.history,
-  ];
-}
-
-function isPartialCoverLetterRequest(prompt: string): boolean {
-  const normalized = prompt.toLowerCase();
-  const asksCoverLetter =
-    /cover[ -]?letter|motivation letter|application letter/.test(normalized);
-  const asksPartial =
-    /opening|intro|introduction|hook|paragraph|2-sentence|two-sentence|sentence|closing line|closing paragraph/.test(
-      normalized,
-    );
-  return asksCoverLetter && asksPartial;
-}
-
-function stripLeadingSalutationBlock(text: string): string {
-  const trimmed = text.trim();
-  return trimmed.replace(/^Dear[^\n]*\n\n/i, "").trim();
-}
-
-function isDirectBulletRequest(prompt: string): boolean {
-  const normalized = prompt.toLowerCase();
-  return (
-    /\bbullets?\b/.test(normalized) &&
-    /just give the wording|just the wording|resume/.test(normalized)
-  );
-}
-
-function countBulletLines(text: string): number {
-  return text
-    .split("\n")
-    .filter((line) => /^\s*(?:[-•*]|\d+[.)])\s+/.test(line)).length;
-}
-
-function normalizeBulletSentence(text: string): string {
-  return text
-    .replace(/^\s*(?:[-•*]|\d+[.)])\s+/, "")
-    .trim()
-    .replace(/[.;:,\s]+$/, "");
-}
-
-function buildFallbackBulletResponse(
-  evidencePack: GhostwriterEvidencePack,
-): string | null {
-  const lead = evidencePack.experienceBank[0];
-  const support = evidencePack.experienceBank[1];
-  if (!lead) return null;
-
-  const candidateLines = [
-    ...lead.strongestClaims,
-    ...(support?.strongestClaims ?? []),
-    ...lead.supportSignals,
-    ...(support?.supportSignals ?? []),
-  ]
-    .map(normalizeBulletSentence)
-    .filter(
-      (line) =>
-        line.length >= 28 &&
-        !/^lead module:|^support module:|^optional third signal:/i.test(line) &&
-        !/^strong evidence\b|^use this as\b|^lead with\b|^support for\b|^best evidence\b|^primary evidence\b|^important execution evidence\b|^useful bridge\b/i.test(
-          line,
-        ) &&
-        !/especially useful when a role values|rather than a generic school project/i.test(
-          line,
-        ) &&
-        !/@/.test(line),
-    );
-
-  const uniqueLines: string[] = [];
-  for (const line of candidateLines) {
-    if (
-      uniqueLines.some(
-        (existing) => existing.toLowerCase() === line.toLowerCase(),
-      )
-    ) {
-      continue;
-    }
-    uniqueLines.push(line);
-    if (uniqueLines.length === 3) break;
-  }
-
-  if (uniqueLines.length < 2) return null;
-
-  if (uniqueLines.length < 3) {
-    uniqueLines.push(
-      evidencePack.targetRoleFamily === "analytics-and-decision-support"
-        ? "Turned recurring analysis into stakeholder-ready materials, reporting structure, and practical follow-up for day-to-day business decisions"
-        : evidencePack.targetRoleFamily === "planning-and-operations"
-          ? "Translated planning analysis into practical decision support that could help day-to-day operational coordination under changing constraints"
-          : "Turned structured modelling work into decision-useful outputs that stayed practical, grounded, and relevant to real operational needs",
-    );
-  }
-
-  return uniqueLines
-    .slice(0, 3)
-    .map((line) => `• ${line}.`)
-    .join("\n");
-}
-
-function sharpenBulletListResponse(text: string): string {
-  const lines = text.split("\n");
-  const bulletIndexes = lines
-    .map((line, index) => ({ line, index }))
-    .filter(({ line }) => /^\s*[-•*]/.test(line));
-
-  if (bulletIndexes.length < 3) return text;
-
-  const lower = text.toLowerCase();
-  const last = bulletIndexes[bulletIndexes.length - 1];
-  const genericSupportPattern =
-    /supported (day-to-day )?(business analysis|business follow-up|practical business analysis tasks|ongoing business follow-up)/i;
-
-  if (!genericSupportPattern.test(last.line)) return text;
-
-  let replacement = last.line;
-  if (/python|excel|reporting|decision-ready|stakeholder/.test(lower)) {
-    replacement =
-      last.line.charAt(0) +
-      " Built a reliable bridge from recurring reporting and operational analysis to stakeholder-ready materials, documentation, and practical follow-up.";
-  } else if (
-    /planning|routing|delivery|logistics|operational constraints/.test(lower)
-  ) {
-    replacement =
-      last.line.charAt(0) +
-      " Turned logistics-planning analysis into structured, decision-useful outputs that could support day-to-day operational coordination.";
-  }
-
-  const next = [...lines];
-  next[last.index] = replacement;
-  return next.join("\n");
-}
-
-function finalizePayloadCandidate(args: {
-  raw: unknown;
-  prompt?: string;
-  profile: Awaited<ReturnType<typeof buildJobChatPromptContext>>["profile"];
-  knowledgeBase: Awaited<
-    ReturnType<typeof buildJobChatPromptContext>
-  >["knowledgeBase"];
-  evidencePack?: GhostwriterEvidencePack;
-}): GhostwriterAssistantPayload {
-  const payload = normalizeGhostwriterAssistantPayload(args.raw);
-  if (!payload) {
-    throw upstreamError("LLM returned an invalid Ghostwriter payload");
-  }
-
-  const { sanitized: sanitizedCoverLetterDraft } = lintCoverLetterDraft(
-    payload.coverLetterDraft,
-  );
-  const sanitizedResumePatch = payload.resumePatch
-    ? sanitizeResumePatch({
-        patch: payload.resumePatch,
-        profile: args.profile,
-        knowledgeBase: args.knowledgeBase,
-      }).sanitized
-    : null;
-  const fallbackBulletResponse =
-    args.prompt &&
-    isDirectBulletRequest(args.prompt) &&
-    countBulletLines(payload.response) < 3 &&
-    args.evidencePack
-      ? buildFallbackBulletResponse(args.evidencePack)
-      : null;
-
-  if (
-    sanitizedCoverLetterDraft &&
-    args.prompt &&
-    isPartialCoverLetterRequest(args.prompt)
-  ) {
-    return {
-      ...payload,
-      response: stripLeadingSalutationBlock(sanitizedCoverLetterDraft),
-      coverLetterDraft: null,
-      coverLetterKind: null,
-      resumePatch: sanitizedResumePatch,
-    };
-  }
-
-  const baseResponse = fallbackBulletResponse ?? payload.response;
-  const sharpenedResponse = payload.coverLetterDraft
-    ? baseResponse
-    : sharpenBulletListResponse(baseResponse);
-
-  return {
-    ...payload,
-    response: sharpenedResponse,
-    coverLetterDraft: sanitizedCoverLetterDraft,
-    resumePatch: sanitizedResumePatch,
-  };
-}
-
-function rankPayloadCandidates(args: {
-  candidates: GhostwriterAssistantPayload[];
-  evidencePackSnapshot: string;
-  profile: Awaited<ReturnType<typeof buildJobChatPromptContext>>["profile"];
-  knowledgeBase: Awaited<
-    ReturnType<typeof buildJobChatPromptContext>
-  >["knowledgeBase"];
-}): GhostwriterAssistantPayload {
-  const ranked = args.candidates
-    .map((candidate, index) => ({
-      index,
-      candidate,
-      evaluation: scoreGhostwriterCandidate({
-        payload: candidate,
-        evidencePackText: args.evidencePackSnapshot,
-        profile: args.profile,
-        knowledgeBase: args.knowledgeBase,
-      }),
-    }))
-    .sort((a, b) => b.evaluation.score - a.evaluation.score);
-
-  return ranked[0]?.candidate ?? args.candidates[0];
-}
-
-function estimateTokenCount(value: string): number {
-  if (!value) return 0;
-  return Math.ceil(value.length / 4);
-}
-
-function chunkText(value: string, maxChunk = 60): string[] {
-  if (!value) return [];
-  const chunks: string[] = [];
-  let cursor = 0;
-  while (cursor < value.length) {
-    chunks.push(value.slice(cursor, cursor + maxChunk));
-    cursor += maxChunk;
-  }
-  return chunks;
-}
-
-function isRunningRunUniqueConstraintError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return (
-    message.includes("idx_job_chat_runs_thread_running_unique") ||
-    message.includes("UNIQUE constraint failed: job_chat_runs.thread_id")
-  );
 }
 
 async function resolveLlmRuntimeSettings(): Promise<LlmRuntimeSettings> {
@@ -829,6 +254,7 @@ type GenerateReplyOptions = {
       messageId: string;
       requestId: string;
     }) => void;
+    onTimeline?: (payload: { runId: string; event: JobChatRunEvent }) => void;
     onDelta: (payload: {
       runId: string;
       messageId: string;
@@ -916,6 +342,103 @@ export async function listMessagesForJob(input: {
   return { messages, branches };
 }
 
+export async function listRunsForJob(input: {
+  jobId: string;
+  limit?: number;
+}): Promise<JobChatRun[]> {
+  await ensureJobThread(input.jobId);
+  return jobChatRepo.listRunsForJob(input.jobId, { limit: input.limit });
+}
+
+export async function listRunEventsForJob(input: {
+  jobId: string;
+  runId: string;
+}): Promise<JobChatRunEvent[]> {
+  const run = await jobChatRepo.getRunById(input.runId);
+  if (!run || run.jobId !== input.jobId) {
+    throw notFound("Run not found for this job");
+  }
+  return jobChatRepo.listRunEvents(input.runId);
+}
+
+type GhostwriterSelectionMeta = {
+  candidateCount?: number;
+  winnerReason: string;
+  winningVariant?: string;
+  strongestEvidence?: string[];
+  coveredClaimIds?: string[];
+};
+
+type GhostwriterRunContext = Awaited<ReturnType<typeof buildJobChatPromptContext>>;
+type GhostwriterRuntimeState = ReturnType<typeof buildGhostwriterRuntimeState>;
+
+async function runStructuredWritingTask(args: {
+  llm: LlmService;
+  llmConfig: LlmRuntimeSettings;
+  context: GhostwriterRunContext;
+  runtimeState: GhostwriterRuntimeState;
+  baseMessages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+  runtimeMessages: Array<{ role: "system"; content: string }>;
+  prompt: string;
+  taskKind: Exclude<GhostwriterTaskKind, "direct_chat" | "memory_update">;
+  jobId: string;
+  signal: AbortSignal;
+  emitTimeline: GhostwriterEmitTimeline;
+}): Promise<{ structuredPayload: GhostwriterAssistantPayload; selectionMeta: GhostwriterSelectionMeta | null }> {
+  const plan = await buildWritingPlan({
+    ...args,
+    writingStrategySchema: WRITING_STRATEGY_SCHEMA,
+    buildLocalWritingStrategy,
+    buildHybridEvidenceSelection,
+    buildGhostwriterClaimPlan,
+  });
+
+  if (plan.strategy.requiresClarification && plan.strategy.clarifyingQuestions.length) {
+    return {
+      structuredPayload: {
+        response: plan.strategy.clarifyingQuestions.slice(0, 3).map((question, index) => `${index + 1}. ${question}`).join("\n"),
+        coverLetterDraft: null,
+        coverLetterKind: null,
+        resumePatch: null,
+        claimPlan: plan.claimPlan,
+      },
+      selectionMeta: null,
+    };
+  }
+
+  const ranking = await generateStructuredCandidates({
+    ...args,
+    strategy: plan.strategy,
+    claimPlan: plan.claimPlan,
+    evidenceSelection: plan.evidenceSelection,
+    coverLetterKind: plan.coverLetterKind,
+    chatResponseSchema: CHAT_RESPONSE_SCHEMA,
+    rankPayloadCandidates,
+  });
+  const structuredPayload = await finalizeStructuredPayload({
+    ...args,
+    structuredPayload: ranking.winner,
+    evidenceSelection: plan.evidenceSelection,
+    chatResponseSchema: CHAT_RESPONSE_SCHEMA,
+    shouldRunEditorialRewrite,
+    buildEditorialRewritePrompt,
+    reviewGhostwriterPayload,
+    buildReviewerRewritePrompt,
+  });
+  const topEvaluation = ranking.ranked[0]?.evaluation;
+
+  return {
+    structuredPayload,
+    selectionMeta: {
+      candidateCount: ranking.ranked.length,
+      winnerReason: topEvaluation?.reasons?.[0] ?? "This variant best balanced specificity, evidence density, and output usefulness.",
+      winningVariant: ranking.winner.__variantName,
+      strongestEvidence: structuredPayload.fitBrief?.strongestPoints.slice(0, 3) ?? args.context.evidencePack.topEvidence.slice(0, 3),
+      coveredClaimIds: topEvaluation?.coveredClaimIds ?? [],
+    },
+  };
+}
+
 async function runAssistantReply(
   options: GenerateReplyOptions,
 ): Promise<{ runId: string; messageId: string; message: string }> {
@@ -985,8 +508,32 @@ async function runAssistantReply(
     messageId: assistantMessage.id,
     requestId,
   });
+  await emitRunTimelineEvent({
+    createRunEvent: jobChatRepo.createRunEvent,
+    onTimeline: options.stream?.onTimeline,
+    run,
+    input: {
+      phase: "run",
+      eventType: "status",
+      title: "Run started",
+      detail: "Ghostwriter created a persisted run record and opened a reply stream.",
+      payload: {
+        requestId,
+        assistantMessageId: assistantMessage.id,
+        model: llmConfig.model,
+        provider: llmConfig.provider,
+      },
+    },
+  });
 
   let accumulated = "";
+  const emitTimeline: GhostwriterEmitTimeline = (input) =>
+    emitRunTimelineEvent({
+      createRunEvent: jobChatRepo.createRunEvent,
+      onTimeline: options.stream?.onTimeline,
+      run,
+      input,
+    });
 
   try {
     const llm = new LlmService({
@@ -996,6 +543,45 @@ async function runAssistantReply(
     });
 
     const taskKind = classifyGhostwriterTask(options.prompt);
+    await emitRunTimelineEvent({
+      createRunEvent: jobChatRepo.createRunEvent,
+      onTimeline: options.stream?.onTimeline,
+      run,
+      input: {
+        phase: "context",
+        eventType: "context_built",
+        title: "Context assembled",
+        detail: "Loaded the job brief, active thread history, profile context, and evidence pack for this request.",
+        payload: {
+          historyMessages: history.length,
+          employer: context.job.employer,
+          title: context.job.title,
+          topFitReasons: context.evidencePack.topFitReasons.slice(0, 3),
+          topEvidence: context.evidencePack.topEvidence.slice(0, 3),
+        },
+      },
+    });
+    const runtimeState = buildGhostwriterRuntimeState({
+      context,
+      prompt: options.prompt,
+      taskKind,
+    });
+    await emitRunTimelineEvent({
+      createRunEvent: jobChatRepo.createRunEvent,
+      onTimeline: options.stream?.onTimeline,
+      run,
+      input: {
+        phase: "runtime",
+        eventType: "runtime_planned",
+        title: "Runtime planned",
+        detail: runtimeState.plan.deliverable,
+        payload: {
+          taskKind: runtimeState.plan.taskKind,
+          responseMode: runtimeState.plan.responseMode,
+          selectedTools: runtimeState.plan.selectedTools,
+        },
+      },
+    });
     const baseMessages = buildBaseLlmMessages({
       systemPrompt: context.systemPrompt,
       jobSnapshot: context.jobSnapshot,
@@ -1004,10 +590,21 @@ async function runAssistantReply(
       evidencePackSnapshot: context.evidencePackSnapshot,
       history,
     });
+    const runtimeMessages = runtimeState.systemMessages;
 
     let structuredPayload: GhostwriterAssistantPayload;
+    let selectionMeta: GhostwriterSelectionMeta | null = null;
 
     if (taskKind === "memory_update") {
+      await emitTimeline({
+        phase: "memory",
+        eventType: "memory_update",
+        title: "Updating candidate memory",
+        detail: "The request was classified as a memory/profile update instead of a drafting run.",
+        payload: {
+          prompt: options.prompt,
+        },
+      });
       const memoryUpdate = await applyMemoryUpdateForPrompt({
         prompt: options.prompt,
         knowledgeBase: context.knowledgeBase,
@@ -1016,309 +613,125 @@ async function runAssistantReply(
       context.knowledgeBase =
         memoryUpdate.nextKnowledgeBase ?? context.knowledgeBase;
     } else if (taskKind === "direct_chat") {
-      const llmResult = await llm.callJson<{ response: string }>({
-        model: llmConfig.model,
-        messages: [
-          ...baseMessages,
-          {
-            role: "user",
-            content: options.prompt,
-          },
-        ],
-        jsonSchema: CHAT_RESPONSE_SCHEMA,
-        maxRetries: 1,
-        retryDelayMs: 300,
+      await emitTimeline({
+        phase: "generation",
+        eventType: "direct_reply",
+        title: "Generating direct reply",
+        detail: "Using the runtime brief to produce a concise answer or wording help response.",
+        payload: {
+          prompt: options.prompt,
+          responseMode: runtimeState.plan.responseMode,
+        },
+      });
+      structuredPayload = await runDirectChatTask({
+        llm,
+        llmConfig,
+        context,
+        runtimeState,
+        baseMessages,
+        runtimeMessages,
+        prompt: options.prompt,
         jobId: options.jobId,
         signal: controller.signal,
-      });
-
-      if (!llmResult.success) {
-        if (controller.signal.aborted) {
-          throw requestTimeout("Chat generation was cancelled");
-        }
-        throw upstreamError("LLM generation failed", {
-          reason: llmResult.error,
-        });
-      }
-
-      structuredPayload = finalizePayloadCandidate({
-        raw: llmResult.data,
-        prompt: options.prompt,
-        profile: context.profile,
-        knowledgeBase: context.knowledgeBase,
-        evidencePack: context.evidencePack,
+        chatResponseSchema: CHAT_RESPONSE_SCHEMA,
       });
     } else {
-      const strategyPrompt = [
-        `Task kind: ${taskKind}`,
-        `User request: ${options.prompt}`,
-        "Build a compact writing strategy using the evidence pack. Focus on the best angle, strongest evidence, weak points to manage, and a practical paragraph plan.",
-        "Set requiresClarification to true only if a good draft would clearly suffer without extra user input.",
-      ].join("\n\n");
-
-      const strategyResult = await llm.callJson<WritingStrategy>({
-        model: llmConfig.model,
-        messages: [
-          ...baseMessages,
-          {
-            role: "system",
-            content:
-              "Return a writing strategy JSON only. Do not draft the final answer yet.",
-          },
-          {
-            role: "user",
-            content: strategyPrompt,
-          },
-        ],
-        jsonSchema: WRITING_STRATEGY_SCHEMA,
-        maxRetries: 1,
-        retryDelayMs: 300,
+      const structuredResult = await runStructuredWritingTask({
+        llm,
+        llmConfig,
+        context,
+        runtimeState,
+        baseMessages,
+        runtimeMessages,
+        prompt: options.prompt,
+        taskKind,
         jobId: options.jobId,
         signal: controller.signal,
+        emitTimeline,
       });
-
-      if (!strategyResult.success) {
-        if (controller.signal.aborted) {
-          throw requestTimeout("Chat generation was cancelled");
-        }
-        throw upstreamError("Ghostwriter strategy generation failed", {
-          reason: strategyResult.error,
-        });
-      }
-
-      const strategy = {
-        ...buildLocalWritingStrategy({
-          taskKind,
-          evidencePack: context.evidencePack,
-        }),
-        ...strategyResult.data,
-      } satisfies WritingStrategy;
-
-      if (
-        strategy.requiresClarification &&
-        strategy.clarifyingQuestions.length
-      ) {
-        structuredPayload = {
-          response: strategy.clarifyingQuestions
-            .slice(0, 3)
-            .map((question, index) => `${index + 1}. ${question}`)
-            .join("\n"),
-          coverLetterDraft: null,
-          coverLetterKind: null,
-          resumePatch: null,
-        };
-      } else {
-        const strategySnapshot = buildStrategySnapshot(strategy);
-        const variantDirectives: Array<{
-          name: string;
-          coverLetterKind: GhostwriterCoverLetterKind | null;
-          instruction: string;
-        }> = [
-          {
-            name: "conservative",
-            coverLetterKind:
-              taskKind === "application_email"
-                ? "email"
-                : taskKind === "cover_letter" || taskKind === "mixed"
-                  ? "letter"
-                  : null,
-            instruction:
-              "Variant profile: safest and most disciplined. Keep every claim tightly evidence-backed and understate weak areas rather than stretching them.",
-          },
-          {
-            name: "balanced",
-            coverLetterKind:
-              taskKind === "application_email"
-                ? "email"
-                : taskKind === "cover_letter" || taskKind === "mixed"
-                  ? "letter"
-                  : null,
-            instruction:
-              "Variant profile: balanced and practical. Prioritize the recommended angle and make the draft feel specific, useful, and employer-need driven.",
-          },
-          {
-            name: "evidence-heavy",
-            coverLetterKind:
-              taskKind === "application_email"
-                ? "email"
-                : taskKind === "cover_letter" || taskKind === "mixed"
-                  ? "letter"
-                  : null,
-            instruction:
-              "Variant profile: maximize concrete evidence density. Prefer stronger examples over broader motivation language and keep fluff close to zero.",
-          },
-        ];
-
-        const candidatePayloads: GhostwriterAssistantPayload[] = [];
-
-        for (const variant of variantDirectives) {
-          const variantResult = await llm.callJson<GhostwriterAssistantPayload>(
-            {
-              model: llmConfig.model,
-              messages: [
-                ...baseMessages,
-                {
-                  role: "system",
-                  content: `Approved Writing Strategy:\n${strategySnapshot}`,
-                },
-                {
-                  role: "system",
-                  content: variant.instruction,
-                },
-                {
-                  role: "user",
-                  content: options.prompt,
-                },
-              ],
-              jsonSchema: CHAT_RESPONSE_SCHEMA,
-              maxRetries: 1,
-              retryDelayMs: 300,
-              jobId: options.jobId,
-              signal: controller.signal,
-            },
-          );
-
-          if (!variantResult.success) {
-            if (controller.signal.aborted) {
-              throw requestTimeout("Chat generation was cancelled");
-            }
-            throw upstreamError(
-              `Ghostwriter ${variant.name} draft generation failed`,
-              {
-                reason: variantResult.error,
-              },
-            );
-          }
-
-          const candidate = finalizePayloadCandidate({
-            raw: variantResult.data,
-            prompt: options.prompt,
-            profile: context.profile,
-            knowledgeBase: context.knowledgeBase,
-            evidencePack: context.evidencePack,
-          });
-
-          candidatePayloads.push({
-            ...candidate,
-            coverLetterKind: candidate.coverLetterDraft
-              ? (candidate.coverLetterKind ?? variant.coverLetterKind)
-              : candidate.coverLetterKind,
-          });
-        }
-
-        structuredPayload = rankPayloadCandidates({
-          candidates: candidatePayloads,
-          evidencePackSnapshot: context.evidencePackSnapshot,
-          profile: context.profile,
-          knowledgeBase: context.knowledgeBase,
-        });
-      }
+      structuredPayload = structuredResult.structuredPayload;
+      selectionMeta = structuredResult.selectionMeta;
     }
+
+    await emitRunTimelineEvent({
+      createRunEvent: jobChatRepo.createRunEvent,
+      onTimeline: options.stream?.onTimeline,
+      run,
+      input: {
+        phase: "finalize",
+        eventType: "selection",
+        title: "Final response selected",
+        detail: "Ranked the generated candidate(s) and prepared the final structured assistant payload.",
+        payload: {
+          hasCoverLetterDraft: Boolean(structuredPayload.coverLetterDraft),
+          coverLetterKind: structuredPayload.coverLetterKind,
+          hasResumePatch: Boolean(structuredPayload.resumePatch),
+          fitBriefStrongPoints:
+            structuredPayload.fitBrief?.strongestPoints.slice(0, 3) ?? [],
+          selectedOutputMode: structuredPayload.coverLetterDraft
+            ? structuredPayload.coverLetterKind === "email"
+              ? "application_email"
+              : "cover_letter"
+            : structuredPayload.resumePatch
+              ? "resume_patch"
+              : "direct_response",
+          winnerReason:
+            selectionMeta?.winnerReason ??
+            "Selected the strongest available final response for this request.",
+          candidateCount: selectionMeta?.candidateCount,
+          winningVariant: selectionMeta?.winningVariant,
+          strongestEvidence: selectionMeta?.strongestEvidence,
+          coveredClaimIds: selectionMeta?.coveredClaimIds,
+        },
+      },
+    });
 
     await applyResumePatchToJob(options.jobId, structuredPayload, {
       profile: context.profile,
       knowledgeBase: context.knowledgeBase,
     });
 
-    const finalText = serializeGhostwriterAssistantPayload(structuredPayload);
-    const chunks = chunkText(finalText);
-
-    for (const chunk of chunks) {
-      if (controller.signal.aborted) {
-        const cancelled = await jobChatRepo.updateMessage(assistantMessage.id, {
-          content: accumulated,
-          status: "cancelled",
-          tokensIn: estimateTokenCount(options.prompt),
-          tokensOut: estimateTokenCount(accumulated),
-        });
-        await jobChatRepo.completeRun(run.id, {
-          status: "cancelled",
-          errorCode: "REQUEST_TIMEOUT",
-          errorMessage: "Generation cancelled by user",
-        });
-        options.stream?.onCancelled({ runId: run.id, message: cancelled });
-        return {
-          runId: run.id,
-          messageId: assistantMessage.id,
-          message: accumulated,
-        };
-      }
-
-      accumulated += chunk;
-      options.stream?.onDelta({
-        runId: run.id,
-        messageId: assistantMessage.id,
-        delta: chunk,
-      });
-    }
-
-    const completedMessage = await jobChatRepo.updateMessage(
-      assistantMessage.id,
-      {
-        content: accumulated,
-        status: "complete",
-        tokensIn: estimateTokenCount(options.prompt),
-        tokensOut: estimateTokenCount(accumulated),
+    const streamed = await streamStructuredPayload({
+      run,
+      assistantMessage,
+      prompt: options.prompt,
+      payload: structuredPayload,
+      signal: controller.signal,
+      updateMessage: jobChatRepo.updateMessage,
+      completeRun: jobChatRepo.completeRun,
+      emitTimeline,
+      stream: {
+        onDelta: options.stream?.onDelta,
+        onCompleted: options.stream?.onCompleted,
+        onCancelled: options.stream?.onCancelled,
       },
-    );
-
-    await jobChatRepo.completeRun(run.id, {
-      status: "completed",
-    });
-
-    options.stream?.onCompleted({
-      runId: run.id,
-      message: completedMessage,
     });
 
     return {
       runId: run.id,
       messageId: assistantMessage.id,
-      message: accumulated,
+      message: streamed.message,
     };
   } catch (error) {
-    const appError = error instanceof Error ? error : new Error(String(error));
-    const isCancelled =
-      controller.signal.aborted || appError.name === "AbortError";
-    const status = isCancelled ? "cancelled" : "failed";
-    const code = isCancelled ? "REQUEST_TIMEOUT" : "UPSTREAM_ERROR";
-    const message = isCancelled
-      ? "Generation cancelled by user"
-      : appError.message || "Generation failed";
-
-    const failedMessage = await jobChatRepo.updateMessage(assistantMessage.id, {
-      content: accumulated,
-      status: isCancelled ? "cancelled" : "failed",
-      tokensIn: estimateTokenCount(options.prompt),
-      tokensOut: estimateTokenCount(accumulated),
-    });
-
-    await jobChatRepo.completeRun(run.id, {
-      status,
-      errorCode: code,
-      errorMessage: message,
-    });
-
-    if (isCancelled) {
-      options.stream?.onCancelled({ runId: run.id, message: failedMessage });
-      return {
-        runId: run.id,
-        messageId: assistantMessage.id,
-        message: accumulated,
-      };
-    }
-
-    options.stream?.onError({
-      runId: run.id,
-      code,
-      message,
+    return handleRunFailure({
+      run,
+      assistantMessage,
+      prompt: options.prompt,
+      accumulated,
+      signal: controller.signal,
+      error,
       requestId,
+      updateMessage: jobChatRepo.updateMessage,
+      completeRun: jobChatRepo.completeRun,
+      emitTimeline,
+      stream: {
+        onCancelled: options.stream?.onCancelled,
+        onError: options.stream?.onError,
+      },
     });
-
-    throw upstreamError(message, { runId: run.id });
   } finally {
     abortControllers.delete(run.id);
-    logger.info("Job chat run finished", {
+    logRunFinished({
       jobId: options.jobId,
       threadId: options.threadId,
       runId: run.id,
@@ -1516,6 +929,20 @@ export async function editMessage(input: {
 
   if (target.role !== "user") {
     throw badRequest("Only user messages can be edited");
+  }
+
+  const currentKnowledgeBase = await getCandidateKnowledgeBase().catch(
+    () => null,
+  );
+  const learnedKnowledgeBase = currentKnowledgeBase
+    ? inferPreferenceFromEditedPrompt({
+        original: target.content,
+        edited: content,
+        knowledgeBase: currentKnowledgeBase,
+      })
+    : null;
+  if (learnedKnowledgeBase) {
+    await saveCandidateKnowledgeBase(learnedKnowledgeBase);
   }
 
   // Create a new sibling user message (same parent as the original)

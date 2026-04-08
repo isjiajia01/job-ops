@@ -16,7 +16,14 @@ function getProvidersRootCandidates(): string[] {
   ];
 }
 
-const MANIFEST_CANDIDATES = ["manifest.ts", "src/manifest.ts"] as const;
+const MANIFEST_CANDIDATES = [
+  "dist/manifest.mjs",
+  "dist/manifest.js",
+  "manifest.mjs",
+  "manifest.js",
+  "manifest.ts",
+  "src/manifest.ts",
+] as const;
 
 async function fileExists(path: string): Promise<boolean> {
   try {

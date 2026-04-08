@@ -96,6 +96,38 @@ vi.mock("@server/services/ghostwriter", () => ({
     },
     runId: "run-1",
   })),
+  listRunsForJob: vi.fn(async () => [
+    {
+      id: "run-1",
+      threadId: "thread-1",
+      jobId: "job-1",
+      status: "completed",
+      model: "model-a",
+      provider: "openrouter",
+      errorCode: null,
+      errorMessage: null,
+      startedAt: 1,
+      completedAt: 2,
+      requestId: "req-1",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+  ]),
+  listRunEventsForJob: vi.fn(async () => [
+    {
+      id: "event-1",
+      runId: "run-1",
+      threadId: "thread-1",
+      jobId: "job-1",
+      sequence: 1,
+      phase: "run",
+      eventType: "status",
+      title: "Run started",
+      detail: null,
+      payload: null,
+      createdAt: 1,
+    },
+  ]),
   cancelRun: vi.fn(async () => ({ cancelled: true, alreadyFinished: false })),
   regenerateMessage: vi.fn(async () => ({
     runId: "run-2",
@@ -189,6 +221,18 @@ describe.sequential("Ghostwriter API", () => {
     expect(messageBody.data.runId).toBe("run-1");
     expect(messageBody.data.assistantMessage.role).toBe("assistant");
     expect(typeof messageBody.meta.requestId).toBe("string");
+  });
+
+  it("lists persisted runs and run events", async () => {
+    const runsRes = await fetch(`${baseUrl}/api/jobs/job-1/chat/runs`);
+    const runsBody = await runsRes.json();
+    expect(runsRes.status).toBe(200);
+    expect(runsBody.data.runs).toHaveLength(1);
+
+    const eventsRes = await fetch(`${baseUrl}/api/jobs/job-1/chat/runs/run-1/events`);
+    const eventsBody = await eventsRes.json();
+    expect(eventsRes.status).toBe(200);
+    expect(eventsBody.data.events).toHaveLength(1);
   });
 
   it("edits a user message", async () => {

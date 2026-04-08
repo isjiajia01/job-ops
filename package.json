@@ -20,6 +20,7 @@
     "check:docs": "npm --workspace docs-site run build",
     "docs:serve": "npm --workspace docs-site run serve",
     "docs:version": "npm --workspace docs-site run docs:version",
+    "build:extractors": "node ./scripts/build-extractors.mjs",
     "release:set-version": "node ./scripts/set-workspace-version.mjs",
     "knip": "knip",
     "eval:tailoring": "tsx --tsconfig ./workspace/tsconfig.json ./scripts/run-tailoring-eval.ts"

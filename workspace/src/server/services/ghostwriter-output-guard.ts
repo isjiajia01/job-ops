@@ -1,10 +1,15 @@
 import type {
   CandidateKnowledgeBase,
   GhostwriterAssistantPayload,
+  GhostwriterEvidenceSelectionSummary,
   GhostwriterResumePatch,
   GhostwriterSkillGroup,
   ResumeProfile,
 } from "@shared/types";
+import {
+  diagnosticFromIssueCode,
+  normalizeDiagnostics,
+} from "./ghostwriter-diagnostics";
 
 const HIGH_RISK_PATCH_PATTERNS = [
   /\b(?:10\+|[1-9]\d+\+)\s+years?\b/i,
@@ -315,9 +320,15 @@ export function scoreGhostwriterCandidate(args: {
   evidencePackText?: string | null;
   profile: ResumeProfile;
   knowledgeBase: CandidateKnowledgeBase;
+  evidenceSelection?: GhostwriterEvidenceSelectionSummary | null;
 }): {
   score: number;
   reasons: string[];
+  coveredClaimIds: string[];
+  mustClaimCoverage: number;
+  evidenceCoverage: number;
+  penalties: string[];
+  diagnostics: import("@shared/types").GhostwriterDiagnostic[];
 } {
   const reasons: string[] = [];
   const profileEvidenceTokens = buildProfileEvidenceTokenSet(
@@ -331,6 +342,19 @@ export function scoreGhostwriterCandidate(args: {
   }
 
   let score = 0;
+  const coveredClaimIds: string[] = [];
+  const penalties: string[] = [];
+  const diagnostics: import("@shared/types").GhostwriterDiagnostic[] = [];
+  const renderedText = [
+    args.payload.response,
+    args.payload.coverLetterDraft,
+    args.payload.resumePatch?.tailoredSummary,
+    args.payload.resumePatch?.tailoredHeadline,
+    args.payload.resumePatch?.tailoredSkills?.map((skill) => [skill.name, ...(skill.keywords ?? [])].join(" ")).join(" "),
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .toLowerCase();
 
   if (args.payload.coverLetterDraft) {
     const draft = args.payload.coverLetterDraft;
@@ -357,11 +381,15 @@ export function scoreGhostwriterCandidate(args: {
     if (containsHighRiskPatchLanguage(draft)) {
       score -= 6;
       reasons.push("high-risk-language");
+      penalties.push("high-risk-language");
+      diagnostics.push(diagnosticFromIssueCode("high-risk-language"));
     }
 
     if (genericMatches > 0) {
       score -= genericMatches * 2;
       reasons.push(`generic-phrases:${genericMatches}`);
+      penalties.push(`generic-phrases:${genericMatches}`);
+      diagnostics.push(diagnosticFromIssueCode(`generic-phrases:${genericMatches}`));
     }
   }
 
@@ -398,7 +426,87 @@ export function scoreGhostwriterCandidate(args: {
     }
   }
 
+  if (args.payload.claimPlan?.claims?.length) {
+    for (const claim of args.payload.claimPlan.claims) {
+      const evidenceMatched = claim.evidenceSnippets.some((snippet) => {
+        const normalized = snippet.toLowerCase().trim();
+        return normalized.length >= 10 && renderedText.includes(normalized.slice(0, Math.min(normalized.length, 48)));
+      });
+      const claimMatched = renderedText.includes(claim.claim.toLowerCase().slice(0, Math.min(claim.claim.length, 48)));
+      const isGrounded = evidenceMatched && (claimMatched || claim.priority !== "must");
+
+      if (isGrounded) {
+        coveredClaimIds.push(claim.id);
+        score += claim.priority === "must" ? 7 : claim.priority === "high" ? 4 : 3;
+        reasons.push(`grounded-claim:${claim.id}`);
+      } else if (evidenceMatched || claimMatched) {
+        score += claim.priority === "must" ? 1 : 0;
+        score -= claim.priority === "must" ? 3 : 1;
+        penalties.push(`weakly-grounded-claim:${claim.id}`);
+        diagnostics.push(diagnosticFromIssueCode(`weakly-grounded-claim:${claim.id}`));
+      } else if (claim.priority === "must") {
+        score -= 5;
+        penalties.push(`missed-must-claim:${claim.id}`);
+        diagnostics.push(diagnosticFromIssueCode(`missed-must-claim:${claim.id}`));
+      }
+    }
+
+    for (const excluded of args.payload.claimPlan.excludedClaims ?? []) {
+      const normalized = excluded.toLowerCase().trim();
+      if (normalized.length >= 8 && renderedText.includes(normalized.slice(0, Math.min(normalized.length, 48)))) {
+        score -= 5;
+        penalties.push(`excluded-claim:${normalized.slice(0, 24)}`);
+        diagnostics.push(diagnosticFromIssueCode(`excluded-claim:${normalized.slice(0, 24)}`));
+      }
+    }
+  }
+
+  if (args.evidenceSelection) {
+    const approvedIds = new Set(args.evidenceSelection.allowedModuleIds);
+    const approvedLabelText = args.evidenceSelection.allowedModuleLabels
+      .join(" ")
+      .toLowerCase();
+    const unapprovedClaimHits = (args.payload.claimPlan?.claims ?? []).filter(
+      (claim) => claim.evidenceIds.some((id) => !approvedIds.has(id)),
+    );
+    if (unapprovedClaimHits.length > 0) {
+      score -= unapprovedClaimHits.length * 4;
+      penalties.push(`unapproved-evidence-ids:${unapprovedClaimHits.length}`);
+      diagnostics.push(diagnosticFromIssueCode(`unapproved-evidence-ids:${unapprovedClaimHits.length}`));
+    }
+
+    const suspiciousLabels = (args.knowledgeBase.projects ?? [])
+      .map((project) => project.name)
+      .filter((label) => {
+        const normalized = label.toLowerCase();
+        return (
+          normalized.length >= 8 &&
+          renderedText.includes(normalized) &&
+          !approvedLabelText.includes(normalized)
+        );
+      });
+    if (suspiciousLabels.length > 0) {
+      score -= Math.min(6, suspiciousLabels.length * 2);
+      penalties.push(`possible-unapproved-projects:${suspiciousLabels.length}`);
+      diagnostics.push(diagnosticFromIssueCode(`possible-unapproved-projects:${suspiciousLabels.length}`));
+    }
+  }
+
   score += Math.max(args.payload.response.trim().length > 0 ? 1 : 0, 0);
 
-  return { score, reasons };
+  const mustClaimCoverage = args.payload.claimPlan?.claims.filter((claim) => claim.priority === "must" && coveredClaimIds.includes(claim.id)).length ?? 0;
+  const evidenceCoverage = coveredClaimIds.length;
+
+  if (mustClaimCoverage > 0) reasons.push(`must-claims:${mustClaimCoverage}`);
+  if (evidenceCoverage > 0) reasons.push(`claim-coverage:${evidenceCoverage}`);
+
+  return {
+    score,
+    reasons,
+    coveredClaimIds,
+    mustClaimCoverage,
+    evidenceCoverage,
+    penalties,
+    diagnostics: normalizeDiagnostics(diagnostics),
+  };
 }

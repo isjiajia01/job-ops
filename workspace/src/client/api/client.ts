@@ -18,6 +18,8 @@ import type {
   JobActionResponse,
   JobActionStreamEvent,
   JobChatMessage,
+  JobChatRun,
+  JobChatRunEvent,
   JobChatStreamEvent,
   JobChatThread,
   JobListItem,
@@ -774,6 +776,29 @@ export async function sendJobGhostwriterMessage(
     messages: data.messages,
     branches: data.branches,
   };
+}
+
+export async function listApplicationGhostwriterRuns(
+  applicationId: string,
+  options?: { limit?: number },
+): Promise<{ runs: JobChatRun[] }> {
+  const params = new URLSearchParams();
+  if (typeof options?.limit === "number") {
+    params.set("limit", String(options.limit));
+  }
+  const query = params.toString();
+  return fetchApi<{ runs: JobChatRun[] }>(
+    `/applications/${applicationId}/chat/runs${query ? `?${query}` : ""}`,
+  );
+}
+
+export async function getApplicationGhostwriterRunEvents(
+  applicationId: string,
+  runId: string,
+): Promise<{ events: JobChatRunEvent[] }> {
+  return fetchApi<{ events: JobChatRunEvent[] }>(
+    `/applications/${applicationId}/chat/runs/${encodeURIComponent(runId)}/events`,
+  );
 }
 
 export async function cancelJobChatRun(

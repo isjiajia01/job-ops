@@ -1,9 +1,9 @@
 import type { BranchInfo, JobChatMessage } from "@shared/types";
+import { parseGhostwriterAssistantContent } from "@shared/utils/ghostwriter";
 import { Check, Copy, Pencil, RefreshCcw } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -89,7 +89,7 @@ export const MessageList: React.FC<MessageListProps> = ({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4 py-4">
       {messages.length > 0 &&
         messages.map((message) => {
           const isUser = message.role === "user";
@@ -108,14 +108,14 @@ export const MessageList: React.FC<MessageListProps> = ({
           return (
             <div
               key={message.id}
-              className={`group rounded-lg border p-3 ${
+              className={`group rounded-[24px] border p-4 shadow-sm transition ${
                 isUser
-                  ? "border-primary/30 bg-primary/5"
-                  : "border-border/60 bg-background"
+                  ? "ml-auto max-w-[92%] border-slate-700/80 bg-slate-800/90"
+                  : "mr-auto max-w-[96%] border-slate-800/80 bg-slate-900/75"
               }`}
             >
-              <div className="mb-1 flex items-center gap-2">
-                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              <div className="mb-2 flex items-center gap-2">
+                <span className={`rounded-full px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.18em] ${isUser ? "bg-slate-700 text-slate-100" : "bg-slate-800 text-slate-300"}`}>
                   {isUser ? "You" : "Ghostwriter"}
                 </span>
                 {branch && (
@@ -129,7 +129,7 @@ export const MessageList: React.FC<MessageListProps> = ({
                     <button
                       type="button"
                       onClick={() => startEditing(message)}
-                      className="rounded p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                      className="rounded-full p-1.5 text-slate-500 hover:bg-slate-700 hover:text-slate-100"
                       aria-label="Edit message"
                       title="Edit message"
                     >
@@ -144,7 +144,7 @@ export const MessageList: React.FC<MessageListProps> = ({
                           onClick={() =>
                             void copyMessage(message.id, message.content)
                           }
-                          className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                          className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-slate-400 hover:bg-slate-800 hover:text-slate-100"
                           aria-label="Copy response"
                           title="Copy response"
                         >
@@ -161,7 +161,7 @@ export const MessageList: React.FC<MessageListProps> = ({
                       <button
                         type="button"
                         onClick={() => onRegenerate(message.id)}
-                        className="rounded p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                        className="rounded-full p-1.5 text-slate-500 hover:bg-slate-800 hover:text-slate-100"
                         aria-label="Regenerate response"
                         title="Regenerate response"
                       >
@@ -182,7 +182,7 @@ export const MessageList: React.FC<MessageListProps> = ({
                         cancelEditing();
                       }
                     }}
-                    className="min-h-[60px]"
+                    className="min-h-[60px] rounded-2xl border-slate-700 bg-slate-900 text-slate-100"
                     autoFocus
                   />
                   <div className="flex items-center justify-end gap-1">
@@ -201,13 +201,16 @@ export const MessageList: React.FC<MessageListProps> = ({
               ) : isActiveStreaming ? (
                 <StreamingMessage content={message.content} />
               ) : message.role === "assistant" ? (
-                <div className="text-sm leading-relaxed text-foreground [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l [&_blockquote]:border-border [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-muted/40 [&_code]:px-1 [&_h1]:mt-4 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:mt-4 [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_li]:my-1 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-muted/40 [&_pre]:p-3 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {message.content || "..."}
-                  </ReactMarkdown>
-                </div>
+                (() => {
+                  const parsed = parseGhostwriterAssistantContent(message.content);
+                  return (
+                    <div className="text-[15px] leading-7 text-slate-100 [&_a]:text-emerald-300 [&_a]:underline [&_blockquote]:border-l [&_blockquote]:border-slate-600 [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-slate-800 [&_code]:px-1 [&_h1]:mt-4 [&_h1]:font-serif [&_h1]:text-xl [&_h1]:font-semibold [&_h2]:mt-4 [&_h2]:font-serif [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_li]:my-1 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded-2xl [&_pre]:bg-black/40 [&_pre]:p-3 [&_pre]:text-slate-100 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5">
+                      <ReactMarkdown>{parsed.response || "..."}</ReactMarkdown>
+                    </div>
+                  );
+                })()
               ) : (
-                <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-100">
                   {message.content}
                 </div>
               )}

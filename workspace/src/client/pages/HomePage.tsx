@@ -1,10 +1,7 @@
 import * as api from "@client/api";
 import {
-  ApplicationsPerDayChart,
-  ConversionAnalytics,
   DurationSelector,
   type DurationValue,
-  ResponseRateBySourceChart,
 } from "@client/components/charts";
 import { PageHeader, PageMain } from "@client/components/layout";
 import type {
@@ -15,9 +12,31 @@ import type {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChartColumn } from "lucide-react";
 import type React from "react";
-import { useCallback, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { queryKeys } from "@/client/lib/queryKeys";
+
+const ApplicationsPerDayChart = lazy(() =>
+  import("@client/components/charts/ApplicationsPerDayChart").then(
+    (module) => ({ default: module.ApplicationsPerDayChart }),
+  ),
+);
+const ConversionAnalytics = lazy(() =>
+  import("@client/components/charts/ConversionAnalytics").then((module) => ({
+    default: module.ConversionAnalytics,
+  })),
+);
+const ResponseRateBySourceChart = lazy(() =>
+  import("@client/components/charts/ResponseRateBySourceChart").then(
+    (module) => ({ default: module.ResponseRateBySourceChart }),
+  ),
+);
+
+const OverviewChartFallback: React.FC = () => (
+  <div className="rounded-lg border border-border/60 px-4 py-8 text-sm text-muted-foreground">
+    Loading chart…
+  </div>
+);
 
 type JobWithEvents = {
   id: string;
@@ -145,20 +164,26 @@ export const HomePage: React.FC = () => {
       />
 
       <PageMain>
-        <ApplicationsPerDayChart
-          appliedAt={appliedDates}
-          isLoading={isLoading}
-          error={error}
-          daysToShow={duration}
-        />
+        <Suspense fallback={<OverviewChartFallback />}>
+          <ApplicationsPerDayChart
+            appliedAt={appliedDates}
+            isLoading={isLoading}
+            error={error}
+            daysToShow={duration}
+          />
+        </Suspense>
 
-        <ConversionAnalytics
-          jobsWithEvents={jobsWithEvents}
-          error={error}
-          daysToShow={duration}
-        />
+        <Suspense fallback={<OverviewChartFallback />}>
+          <ConversionAnalytics
+            jobsWithEvents={jobsWithEvents}
+            error={error}
+            daysToShow={duration}
+          />
+        </Suspense>
 
-        <ResponseRateBySourceChart jobs={jobsWithEvents} error={error} />
+        <Suspense fallback={<OverviewChartFallback />}>
+          <ResponseRateBySourceChart jobs={jobsWithEvents} error={error} />
+        </Suspense>
       </PageMain>
     </>
   );

@@ -491,6 +491,9 @@ const migrations = [
   `CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)`,
   `CREATE INDEX IF NOT EXISTS idx_jobs_discovered_at ON jobs(discovered_at)`,
   `CREATE INDEX IF NOT EXISTS idx_jobs_status_discovered_at ON jobs(status, discovered_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_jobs_status_updated_at ON jobs(status, updated_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_jobs_status_applied_at ON jobs(status, applied_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_jobs_source_source_job_id ON jobs(source, source_job_id)`,
   `CREATE INDEX IF NOT EXISTS idx_pipeline_runs_started_at ON pipeline_runs(started_at)`,
   `CREATE INDEX IF NOT EXISTS idx_stage_events_application_id ON stage_events(application_id)`,
   `CREATE INDEX IF NOT EXISTS idx_stage_events_occurred_at ON stage_events(occurred_at)`,
@@ -657,6 +660,29 @@ const migrations = [
        ORDER BY se.occurred_at DESC, se.id DESC
        LIMIT 1
      ), 'applied') = 'closed'`,
+
+  `CREATE TABLE IF NOT EXISTS job_chat_run_events (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    thread_id TEXT NOT NULL,
+    job_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    phase TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    detail TEXT,
+    payload TEXT,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (run_id) REFERENCES job_chat_runs(id) ON DELETE CASCADE,
+    FOREIGN KEY (thread_id) REFERENCES job_chat_threads(id) ON DELETE CASCADE,
+    FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_job_chat_run_events_run_sequence
+   ON job_chat_run_events(run_id, sequence)`,
+  `CREATE INDEX IF NOT EXISTS idx_job_chat_run_events_run_created_at
+   ON job_chat_run_events(run_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_job_chat_run_events_job_created_at
+   ON job_chat_run_events(job_id, created_at)`,
 ];
 
 console.log("🔧 Running database migrations...");

@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
     getActiveRunForThread: vi.fn(),
     createMessage: vi.fn(),
     createRun: vi.fn(),
+    createRunEvent: vi.fn(),
+    listRunsForJob: vi.fn(),
+    listRunEvents: vi.fn(),
     updateMessage: vi.fn(),
     completeRun: vi.fn(),
     completeRunIfRunning: vi.fn(),
@@ -77,6 +80,9 @@ vi.mock("../repositories/ghostwriter", () => ({
   getActiveRunForThread: mocks.repo.getActiveRunForThread,
   createMessage: mocks.repo.createMessage,
   createRun: mocks.repo.createRun,
+  createRunEvent: mocks.repo.createRunEvent,
+  listRunsForJob: mocks.repo.listRunsForJob,
+  listRunEvents: mocks.repo.listRunEvents,
   updateMessage: mocks.repo.updateMessage,
   completeRun: mocks.repo.completeRun,
   completeRunIfRunning: mocks.repo.completeRunIfRunning,
@@ -100,6 +106,8 @@ vi.mock("./llm/service", () => ({
 import {
   cancelRun,
   cancelRunForJob,
+  listRunEventsForJob,
+  listRunsForJob,
   regenerateMessage,
   sendMessage,
   sendMessageForJob,
@@ -309,6 +317,19 @@ describe("ghostwriter service", () => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
+    mocks.repo.createRunEvent.mockImplementation(async (input) => ({
+      id: `event-${input.eventType}`,
+      runId: input.runId,
+      threadId: input.threadId,
+      jobId: input.jobId,
+      sequence: 1,
+      phase: input.phase,
+      eventType: input.eventType,
+      title: input.title,
+      detail: input.detail ?? null,
+      payload: input.payload ?? null,
+      createdAt: Date.now(),
+    }));
     mocks.repo.completeRun.mockResolvedValue(null);
     mocks.repo.completeRunIfRunning.mockResolvedValue({
       id: "run-1",
@@ -565,6 +586,128 @@ describe("ghostwriter service", () => {
       tailoredHeadline: "Demand Planner",
       tailoredSkills: [{ name: "Planning", keywords: ["forecasting"] }],
     });
+  });
+
+  it("runs an editorial sharpener pass when the winning draft is too generic", async () => {
+    const assistantPartial: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-editorial",
+      content: "",
+      status: "partial",
+    };
+    const assistantComplete: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-editorial",
+      status: "complete",
+      content: "",
+    };
+
+    mocks.repo.createMessage
+      .mockResolvedValueOnce(baseUserMessage)
+      .mockResolvedValueOnce(assistantPartial);
+    mocks.repo.updateMessage.mockImplementation(async (_id, update) => ({
+      ...assistantComplete,
+      content: update.content ?? "",
+      tokensIn: update.tokensIn ?? null,
+      tokensOut: update.tokensOut ?? null,
+    }));
+    mocks.repo.getMessageById.mockImplementation(async () => {
+      const [, update] = mocks.repo.updateMessage.mock.calls.at(-1) ?? [];
+      return {
+        ...assistantComplete,
+        content: update?.content ?? "",
+      };
+    });
+
+    mocks.llmCallJson
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          angle: "Lead with planning-oriented problem solving.",
+          strongestEvidence: ["DTU planning thesis"],
+          weakPoints: ["Avoid overstating seniority"],
+          paragraphPlan: ["Open from the work"],
+          tonePlan: "Direct and practical.",
+          requiresClarification: false,
+          clarifyingQuestions: [],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          response: "Short note.",
+          coverLetterDraft:
+            "I am writing to express my interest in this role. I am highly motivated and excited to apply. My background would make me a perfect fit for your dynamic team.",
+          coverLetterKind: "letter",
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          response: "Short note.",
+          coverLetterDraft:
+            "I am excited to apply for this role because I am highly motivated by planning work and believe I would be a strong fit for your dynamic team.",
+          coverLetterKind: "letter",
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          response: "Short note.",
+          coverLetterDraft:
+            "I am highly motivated to join your team and would welcome the opportunity to contribute my background in planning and analysis in a fast-paced environment.",
+          coverLetterKind: "letter",
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          response: "I tightened the draft.",
+          coverLetterDraft:
+            "This role stands out to me because it is close to the planning-focused work I have been doing in my DTU thesis with Mover, where I work on rolling-horizon decisions under real delivery constraints and translate them into practical decision support in a way that stays practical and grounded.",
+          coverLetterKind: "letter",
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          response: "I tightened the draft again.",
+          coverLetterDraft:
+            "The role stands out to me because it is close to the planning-focused work I have been doing in my DTU thesis with Mover, where I work with rolling-horizon decisions under real delivery constraints and turn that analysis into practical decision support.",
+          coverLetterKind: "letter",
+        },
+      });
+
+    const result = await sendMessageForJob({
+      jobId: "job-1",
+      content: "Write a cover letter for this role",
+    });
+
+    const parsed = parseGhostwriterAssistantContent(
+      result.assistantMessage?.content ?? "",
+    );
+    const renderedDraft = parsed.coverLetterDraft ?? parsed.response;
+    expect(renderedDraft.length).toBeGreaterThan(10);
+    expect(mocks.llmCallJson.mock.calls.length).toBeGreaterThanOrEqual(6);
+    expect(mocks.repo.createRunEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "editorial_rewrite_completed",
+      }),
+    );
+    expect(mocks.repo.createRunEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "review_completed",
+      }),
+    );
+    expect(parsed.review?.specificity).toBeGreaterThanOrEqual(1);
+    expect(mocks.repo.createRunEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "editorial_rewrite_requested",
+        payload: expect.objectContaining({
+          triggerReasons: expect.arrayContaining([expect.stringMatching(/generic-opening|long-sentences|dense-sentence-flow/)]),
+        }),
+      }),
+    );
   });
 
   it("drops obviously overclaiming resumePatch fields before updating the job", async () => {
@@ -1219,6 +1362,106 @@ describe("ghostwriter service", () => {
       "user-1",
       "assistant-regen",
     );
+  });
+
+  it("emits persisted timeline events while streaming a reply", async () => {
+    mocks.repo.createMessage
+      .mockResolvedValueOnce(baseUserMessage)
+      .mockResolvedValueOnce({
+        ...baseAssistantMessage,
+        id: "assistant-stream",
+        content: "",
+        status: "partial",
+      });
+    mocks.repo.updateMessage.mockResolvedValue({
+      ...baseAssistantMessage,
+      id: "assistant-stream",
+      content: '{"response":"Hello there"}',
+      status: "complete",
+    });
+    mocks.repo.getMessageById.mockResolvedValue({
+      ...baseAssistantMessage,
+      id: "assistant-stream",
+      content: '{"response":"Hello there"}',
+      status: "complete",
+    });
+    const onTimeline = vi.fn();
+
+    await sendMessageForJob({
+      jobId: "job-1",
+      content: "hello",
+      stream: {
+        onReady: vi.fn(),
+        onTimeline,
+        onDelta: vi.fn(),
+        onCompleted: vi.fn(),
+        onCancelled: vi.fn(),
+        onError: vi.fn(),
+      },
+    });
+
+    expect(mocks.repo.createRunEvent).toHaveBeenCalled();
+    expect(onTimeline).toHaveBeenCalled();
+    const emittedTypes = onTimeline.mock.calls.map((call) => call[0].event.eventType);
+    expect(emittedTypes).toContain("context_built");
+    expect(emittedTypes).toContain("runtime_planned");
+    expect(emittedTypes).toContain("completed");
+  });
+
+  it("lists runs and timeline events for a job", async () => {
+    mocks.repo.getOrCreateThreadForJob.mockResolvedValue(thread);
+    mocks.repo.listRunsForJob.mockResolvedValue([
+      {
+        id: "run-1",
+        threadId: "thread-1",
+        jobId: "job-1",
+        status: "completed",
+        model: "model-a",
+        provider: "openrouter",
+        errorCode: null,
+        errorMessage: null,
+        startedAt: 1,
+        completedAt: 2,
+        requestId: "req-123",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+    mocks.repo.getRunById.mockResolvedValue({
+      id: "run-1",
+      threadId: "thread-1",
+      jobId: "job-1",
+      status: "completed",
+      model: "model-a",
+      provider: "openrouter",
+      errorCode: null,
+      errorMessage: null,
+      startedAt: 1,
+      completedAt: 2,
+      requestId: "req-123",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    mocks.repo.listRunEvents.mockResolvedValue([
+      {
+        id: "event-1",
+        runId: "run-1",
+        threadId: "thread-1",
+        jobId: "job-1",
+        sequence: 1,
+        phase: "run",
+        eventType: "status",
+        title: "Run started",
+        detail: null,
+        payload: null,
+        createdAt: 1,
+      },
+    ]);
+
+    await expect(listRunsForJob({ jobId: "job-1" })).resolves.toHaveLength(1);
+    await expect(
+      listRunEventsForJob({ jobId: "job-1", runId: "run-1" }),
+    ).resolves.toHaveLength(1);
   });
 
   it("returns alreadyFinished when cancelling non-running run", async () => {
