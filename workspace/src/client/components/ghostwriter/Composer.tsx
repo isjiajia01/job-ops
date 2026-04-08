@@ -1,7 +1,6 @@
 import { getMetaShortcutLabel, isMetaKeyPressed } from "@client/lib/meta-key";
 import { Eraser, Send, Square } from "lucide-react";
 import type React from "react";
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -9,6 +8,8 @@ type ComposerProps = {
   disabled?: boolean;
   isStreaming: boolean;
   canReset: boolean;
+  value: string;
+  onValueChange: (value: string) => void;
   onStop: () => Promise<void>;
   onSend: (content: string) => Promise<void>;
   onReset: () => void;
@@ -18,16 +19,16 @@ export const Composer: React.FC<ComposerProps> = ({
   disabled,
   isStreaming,
   canReset,
+  value,
+  onValueChange,
   onStop,
   onSend,
   onReset,
 }) => {
-  const [value, setValue] = useState("");
-
   const submit = async () => {
     const content = value.trim();
     if (!content || disabled) return;
-    setValue("");
+    onValueChange("");
     await onSend(content);
   };
 
@@ -37,7 +38,7 @@ export const Composer: React.FC<ComposerProps> = ({
         <Textarea
           placeholder="Ask anything about this job, your fit, the CV angle, or the best next draft..."
           value={value}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => onValueChange(event.target.value)}
           disabled={disabled}
           onKeyDown={(event) => {
             if (isMetaKeyPressed(event) && event.key === "Enter") {

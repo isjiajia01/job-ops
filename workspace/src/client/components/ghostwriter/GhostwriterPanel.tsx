@@ -21,6 +21,7 @@ type GhostwriterPanelProps = {
 
 export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
+  const [composerValue, setComposerValue] = useState("");
 
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const {
@@ -50,6 +51,12 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
   const canReset = useMemo(() => {
     return !isStreaming && messages.length > 0;
   }, [isStreaming, messages]);
+
+  const suggestionPrompts = [
+    "Score my fit for this role",
+    "Rewrite my strongest bullets for this JD",
+    "Draft a sharper cover letter opening",
+  ];
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-border/60 bg-background shadow-sm">
@@ -85,17 +92,15 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
                 I already have this job description and your saved profile context. Ask me to draft a cover letter, rewrite CV bullets, or assess fit for this role.
               </p>
               <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                {[
-                  "Score my fit for this role",
-                  "Rewrite my strongest bullets for this JD",
-                  "Draft a sharper cover letter opening",
-                ].map((prompt) => (
-                  <span
+                {suggestionPrompts.map((prompt) => (
+                  <button
                     key={prompt}
-                    className="rounded-full border border-border/60 bg-muted/40 px-3 py-1.5"
+                    type="button"
+                    onClick={() => setComposerValue(prompt)}
+                    className="rounded-full border border-border/60 bg-muted/40 px-3 py-1.5 transition-colors hover:bg-muted"
                   >
                     {prompt}
-                  </span>
+                  </button>
                 ))}
               </div>
             </div>
@@ -118,6 +123,8 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
           disabled={isLoading || isStreaming}
           isStreaming={isStreaming}
           canReset={canReset}
+          value={composerValue}
+          onValueChange={setComposerValue}
           onStop={stopStreaming}
           onSend={sendMessage}
           onReset={() => setIsResetDialogOpen(true)}

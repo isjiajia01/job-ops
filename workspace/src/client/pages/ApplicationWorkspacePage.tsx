@@ -703,7 +703,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.95fr)]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.78fr)]">
         <div className="space-y-6">
           <Card className="overflow-hidden border-border/50 shadow-sm">
             <CardHeader className="border-b border-border/50 bg-muted/20 pb-5">
@@ -779,7 +779,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
           </Card>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-3 self-start lg:sticky lg:top-4">
           <Card className="border-border/50 shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
@@ -787,9 +787,9 @@ export const ApplicationWorkspacePage: React.FC = () => {
                 Application brief
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                <div className="rounded-lg border border-border/60 bg-muted/10 p-3">
+            <CardContent className="space-y-3">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+                <div className="rounded-lg border border-border/60 bg-muted/10 p-2.5">
                   <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                     Current stage
                   </div>
@@ -800,7 +800,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
                       : job?.status}
                   </div>
                 </div>
-                <div className="rounded-lg border border-border/60 bg-muted/10 p-3">
+                <div className="rounded-lg border border-border/60 bg-muted/10 p-2.5">
                   <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                     Outcome
                   </div>
@@ -811,7 +811,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
                 {quickFacts.map((fact) => (
                   <div
                     key={fact.label}
-                    className="rounded-lg border border-border/60 bg-muted/10 p-3"
+                    className="rounded-lg border border-border/60 bg-muted/10 p-2.5"
                   >
                     <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                       {fact.label}
@@ -822,7 +822,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
                   </div>
                 ))}
                 {job?.closedAt && (
-                  <div className="rounded-lg border border-border/60 bg-muted/10 p-3">
+                  <div className="rounded-lg border border-border/60 bg-muted/10 p-2.5">
                     <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                       Closed on
                     </div>
@@ -834,18 +834,18 @@ export const ApplicationWorkspacePage: React.FC = () => {
               </div>
 
               {referenceLinks.length > 0 && (
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                     Key links
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5">
                     {referenceLinks.map((link) => (
                       <Button
                         key={link.label}
                         asChild
                         size="sm"
                         variant="outline"
-                        className="h-8 border-border/60 bg-background/40"
+                        className="h-7 border-border/60 bg-background/40 px-2.5 text-xs"
                       >
                         <a href={link.href} target="_blank" rel="noreferrer">
                           <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
@@ -858,7 +858,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
               )}
 
               {job?.suitabilityReason && (
-                <div className="rounded-lg border border-border/60 bg-background/30 p-3">
+                <div className="rounded-lg border border-border/60 bg-background/30 p-2.5">
                   <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                     Match rationale
                   </div>
