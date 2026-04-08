@@ -112,10 +112,24 @@ export function reviewGhostwriterPayload(args: {
     /^the role/gm,
   ]);
 
-  const coveredClaimCount = args.claimPlan?.claims.filter((claim) => {
+  const groundedClaimResults = (args.claimPlan?.claims ?? []).map((claim) => {
     const claimSnippet = claim.claim.toLowerCase().slice(0, 36);
-    return normalized.includes(claimSnippet) || claim.evidenceSnippets.some((item) => normalized.includes(item.toLowerCase().slice(0, 24)));
-  }).length ?? 0;
+    const claimMatched = normalized.includes(claimSnippet);
+    const evidenceMatched = claim.evidenceSnippets.some((item) => normalized.includes(item.toLowerCase().slice(0, 24)));
+    return {
+      claim,
+      claimMatched,
+      evidenceMatched,
+      grounded: evidenceMatched && (claimMatched || claim.priority !== "must"),
+    };
+  });
+  const coveredClaimCount = groundedClaimResults.filter((item) => item.grounded).length;
+  const weaklyGroundedMustClaims = groundedClaimResults.filter(
+    (item) => item.claim.priority === "must" && !item.grounded && (item.claimMatched || item.evidenceMatched),
+  );
+  const unsupportedMustClaims = groundedClaimResults.filter(
+    (item) => item.claim.priority === "must" && !item.claimMatched && !item.evidenceMatched,
+  );
 
   const roleSpecificBoost =
     args.roleFamily === "planning-and-operations"
@@ -126,8 +140,24 @@ export function reviewGhostwriterPayload(args: {
           ? countMatches(normalized, [/optimization/g, /rolling-horizon/g, /model/g, /routing/g]) * 0.15
           : 0;
 
-  const specificity = clamp(2 + concreteEvidenceHits * 0.6 + coveredClaimCount * 0.5 + roleSpecificBoost - genericHits * 0.5);
-  const evidenceStrength = clamp(2 + concreteEvidenceHits * 0.6 + coveredClaimCount * 0.6 + roleSpecificBoost - overclaimHits * 0.4);
+  const specificity = clamp(
+    2 +
+      concreteEvidenceHits * 0.6 +
+      coveredClaimCount * 0.65 +
+      roleSpecificBoost -
+      genericHits * 0.5 -
+      weaklyGroundedMustClaims.length * 0.5 -
+      unsupportedMustClaims.length * 0.7,
+  );
+  const evidenceStrength = clamp(
+    2 +
+      concreteEvidenceHits * 0.6 +
+      coveredClaimCount * 0.8 +
+      roleSpecificBoost -
+      overclaimHits * 0.4 -
+      weaklyGroundedMustClaims.length * 0.7 -
+      unsupportedMustClaims.length,
+  );
   const overclaimRisk = clamp(4 - overclaimHits * 0.8 - genericHits * 0.2);
   const naturalness = clamp(
     3 -
@@ -169,6 +199,16 @@ export function reviewGhostwriterPayload(args: {
     issues.push(code);
     diagnostics.push(diagnosticFromIssueCode(code));
   }
+  if (weaklyGroundedMustClaims.length > 0) {
+    const code = `weakly-grounded-claim:${weaklyGroundedMustClaims[0]?.claim.id ?? "must"}`;
+    issues.push(code);
+    diagnostics.push(diagnosticFromIssueCode(code));
+  }
+  if (unsupportedMustClaims.length > 0) {
+    const code = `unsupported-claim:${unsupportedMustClaims[0]?.claim.id ?? "must"}`;
+    issues.push(code);
+    diagnostics.push(diagnosticFromIssueCode(code));
+  }
   if (concreteEvidenceHits < 2) {
     const code = "thin-evidence-signal";
     issues.push(code);
@@ -185,7 +225,9 @@ export function reviewGhostwriterPayload(args: {
     evidenceStrength <= 2 ||
     naturalness <= 2 ||
     overclaimRisk <= 2 ||
-    issues.includes("weak-claim-coverage");
+    issues.includes("weak-claim-coverage") ||
+    issues.some((issue) => issue.startsWith("unsupported-claim:")) ||
+    issues.some((issue) => issue.startsWith("weakly-grounded-claim:"));
 
   return {
     summary: `Specificity ${specificity}/5 · Evidence ${evidenceStrength}/5 · Overclaim risk ${overclaimRisk}/5 · Naturalness ${naturalness}/5`,

@@ -433,11 +433,19 @@ export function scoreGhostwriterCandidate(args: {
         return normalized.length >= 10 && renderedText.includes(normalized.slice(0, Math.min(normalized.length, 48)));
       });
       const claimMatched = renderedText.includes(claim.claim.toLowerCase().slice(0, Math.min(claim.claim.length, 48)));
-      if (evidenceMatched || claimMatched) {
+      const isGrounded = evidenceMatched && (claimMatched || claim.priority !== "must");
+
+      if (isGrounded) {
         coveredClaimIds.push(claim.id);
-        score += claim.priority === "must" ? 5 : claim.priority === "high" ? 3 : 2;
+        score += claim.priority === "must" ? 7 : claim.priority === "high" ? 4 : 3;
+        reasons.push(`grounded-claim:${claim.id}`);
+      } else if (evidenceMatched || claimMatched) {
+        score += claim.priority === "must" ? 1 : 0;
+        score -= claim.priority === "must" ? 3 : 1;
+        penalties.push(`weakly-grounded-claim:${claim.id}`);
+        diagnostics.push(diagnosticFromIssueCode(`weakly-grounded-claim:${claim.id}`));
       } else if (claim.priority === "must") {
-        score -= 4;
+        score -= 5;
         penalties.push(`missed-must-claim:${claim.id}`);
         diagnostics.push(diagnosticFromIssueCode(`missed-must-claim:${claim.id}`));
       }
