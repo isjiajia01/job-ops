@@ -366,37 +366,70 @@ export const ProfileHubPage: React.FC = () => {
     if (!files.length) return;
 
     try {
-      const supportedFiles = files.filter(
-        (file) =>
-          file.type.startsWith("text/") ||
-          /\.(md|txt|json|csv|tsv|tex|yaml|yml)$/i.test(file.name),
-      );
-      const skippedCount = files.length - supportedFiles.length;
+      const extractedParts = await Promise.all(
+        files.map(async (file) => {
+          const lowerName = file.name.toLowerCase();
 
-      if (!supportedFiles.length) {
-        toast.error("Only text-like files can be analyzed directly here right now.");
-        return;
-      }
+          if (
+            file.type.startsWith("text/") ||
+            /\.(md|txt|json|csv|tsv|tex|yaml|yml)$/i.test(file.name)
+          ) {
+            const text = (await file.text()).trim();
+            return text ? `# File: ${file.name}\n\n${text}` : `# File: ${file.name}\n\n[Empty file]`;
+          }
 
-      const contents = await Promise.all(
-        supportedFiles.map(async (file) => {
-          const text = (await file.text()).trim();
-          return text ? `# File: ${file.name}\n\n${text}` : `# File: ${file.name}\n\n[Empty file]`;
+          if (lowerName.endsWith(".docx")) {
+            const mammoth = await import("mammoth");
+            const arrayBuffer = await file.arrayBuffer();
+            const result = await mammoth.extractRawText({ arrayBuffer });
+            const text = result.value.trim();
+            return text ? `# File: ${file.name}\n\n${text}` : `# File: ${file.name}\n\n[No extractable DOCX text found]`;
+          }
+
+          if (lowerName.endsWith(".pdf") || file.type === "application/pdf") {
+            const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+            const arrayBuffer = await file.arrayBuffer();
+            const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
+            const pdf = await loadingTask.promise;
+            const pages: string[] = [];
+
+            for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+              const page = await pdf.getPage(pageNumber);
+              const content = await page.getTextContent();
+              const pageText = content.items
+                .map((item) => ("str" in item ? item.str : ""))
+                .join(" ")
+                .replace(/\s+/g, " ")
+                .trim();
+              if (pageText) pages.push(pageText);
+            }
+
+            const text = pages.join("\n\n").trim();
+            return text ? `# File: ${file.name}\n\n${text}` : `# File: ${file.name}\n\n[No extractable PDF text found]`;
+          }
+
+          return null;
         }),
       );
+
+      const contents = extractedParts.filter((part): part is string => Boolean(part));
+      const skippedCount = files.length - contents.length;
+
+      if (!contents.length) {
+        toast.error("No readable text found in the attached files.");
+        return;
+      }
 
       setCaptureText((current) => [current.trim(), ...contents].filter(Boolean).join("\n\n---\n\n"));
       if (!captureSource.trim()) {
         setCaptureSource(
-          supportedFiles.length === 1
-            ? supportedFiles[0]?.name ?? "Attached file"
-            : `${supportedFiles.length} attached files`,
+          files.length === 1 ? files[0]?.name ?? "Attached file" : `${files.length} attached files`,
         );
       }
       if (skippedCount > 0) {
-        toast.success(`Attached ${supportedFiles.length} file(s). Skipped ${skippedCount} unsupported file(s).`);
+        toast.success(`Attached ${contents.length} file(s). Skipped ${skippedCount} unsupported file(s).`);
       } else {
-        toast.success(`Attached ${supportedFiles.length} file(s) for AI analysis.`);
+        toast.success(`Attached ${contents.length} file(s) for AI analysis.`);
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to read attached files");
@@ -740,7 +773,7 @@ export const ProfileHubPage: React.FC = () => {
                 />
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="text-xs text-muted-foreground">
-                    Supported direct attachments here: txt, md, json, csv, tsv, tex, yaml.
+                    Supported direct attachments here: txt, md, json, csv, tsv, tex, yaml, PDF, DOCX.
                   </div>
                   <Button onClick={handleDigest} disabled={isDigesting || !captureText.trim()}>
                     {isDigesting ? (
