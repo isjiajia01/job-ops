@@ -379,7 +379,7 @@ export const ProfileHubPage: React.FC = () => {
           }
 
           if (lowerName.endsWith(".docx")) {
-            const mammoth = await import("mammoth/mammoth.browser");
+            const mammoth = await import("mammoth/mammoth.browser.js");
             const arrayBuffer = await file.arrayBuffer();
             const result = await mammoth.extractRawText({ arrayBuffer });
             const text = result.value.trim();
