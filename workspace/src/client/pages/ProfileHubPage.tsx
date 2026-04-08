@@ -10,7 +10,7 @@ import type {
   ResumeProfile,
 } from "@shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BriefcaseBusiness, ContactRound, Download, Loader2, Save, Sparkles, Trash2, Upload, Wand2 } from "lucide-react";
+import { ContactRound, Download, Loader2, Save, Trash2, Upload, Wand2 } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { ImportProfileDialog } from "./profile-hub/ImportProfileDialog";
@@ -19,7 +19,6 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 
 type FactItem = {
   id: string;
@@ -62,99 +61,6 @@ function formatRelativeDate(value: string): string {
   return `${Math.round(deltaHours / 24)}d ago`;
 }
 
-type RadarMetric = {
-  label: string;
-  value: number;
-};
-
-function ProfileBundleRadar({ metrics }: { metrics: RadarMetric[] }) {
-  const size = 220;
-  const center = size / 2;
-  const radius = 72;
-  const levels = [0.25, 0.5, 0.75, 1];
-  const angleStep = (Math.PI * 2) / metrics.length;
-  const startAngle = -Math.PI / 2;
-
-  const pointAt = (index: number, scale: number) => {
-    const angle = startAngle + index * angleStep;
-    return {
-      x: center + Math.cos(angle) * radius * scale,
-      y: center + Math.sin(angle) * radius * scale,
-    };
-  };
-
-  const polygonPoints = metrics
-    .map((metric, index) => {
-      const point = pointAt(index, Math.max(0.1, Math.min(1, metric.value)));
-      return `${point.x},${point.y}`;
-    })
-    .join(" ");
-
-  return (
-    <div className="rounded-xl border border-border/60 bg-background/30 p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <div className="text-sm font-medium">Profile shape</div>
-          <div className="text-xs text-muted-foreground">
-            Lightweight overview of your current bundle coverage.
-          </div>
-        </div>
-      </div>
-      <div className="flex flex-col items-center gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <svg viewBox={`0 0 ${size} ${size}`} className="h-[220px] w-[220px] shrink-0">
-          {levels.map((level) => (
-            <polygon
-              key={level}
-              points={metrics.map((_, index) => {
-                const point = pointAt(index, level);
-                return `${point.x},${point.y}`;
-              }).join(" ")}
-              fill="none"
-              stroke="currentColor"
-              className="text-border/50"
-              strokeWidth="1"
-            />
-          ))}
-          {metrics.map((_, index) => {
-            const point = pointAt(index, 1);
-            return (
-              <line
-                key={index}
-                x1={center}
-                y1={center}
-                x2={point.x}
-                y2={point.y}
-                stroke="currentColor"
-                className="text-border/50"
-                strokeWidth="1"
-              />
-            );
-          })}
-          <polygon
-            points={polygonPoints}
-            fill="currentColor"
-            className="text-primary/20"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
-          {metrics.map((metric, index) => {
-            const point = pointAt(index, Math.max(0.1, Math.min(1, metric.value)));
-            return <circle key={metric.label} cx={point.x} cy={point.y} r="3.5" fill="currentColor" className="text-primary" />;
-          })}
-        </svg>
-        <div className="grid flex-1 gap-2 sm:grid-cols-2">
-          {metrics.map((metric) => (
-            <div key={metric.label} className="rounded-lg border border-border/60 bg-card/40 px-3 py-2">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">{metric.label}</div>
-              <div className="mt-1 text-sm font-medium">{Math.round(metric.value * 100)}%</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function inferPreferenceKind(
   item: Pick<
@@ -453,32 +359,6 @@ export const ProfileHubPage: React.FC = () => {
     [facts, projects, preferences, inboxItems],
   );
 
-  const radarMetrics = useMemo(
-    () => [
-      {
-        label: "Positioning",
-        value: headline.trim().length > 0 ? 1 : 0.2,
-      },
-      {
-        label: "Projects",
-        value: Math.min(1, projects.length / 5),
-      },
-      {
-        label: "Facts",
-        value: Math.min(1, facts.length / 6),
-      },
-      {
-        label: "Rules",
-        value: Math.min(1, preferences.length / 8),
-      },
-      {
-        label: "Processed",
-        value: pendingInbox.length > 0 ? Math.max(0.15, 1 - pendingInbox.length / 6) : 1,
-      },
-    ],
-    [facts.length, headline, pendingInbox.length, preferences.length, projects.length],
-  );
-
   const handleDigest = async () => {
     const rawText = captureText.trim();
     if (!rawText) {
@@ -655,233 +535,125 @@ export const ProfileHubPage: React.FC = () => {
         {...pendingImportCounts}
       />
 
-      <PageMain className="space-y-5">
-        <section className="overflow-hidden rounded-[28px] border border-border/60 bg-[radial-gradient(circle_at_top_left,rgba(251,146,60,0.18),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.25)] md:p-7">
-          <div className="flex flex-col gap-5 xl:grid xl:grid-cols-[280px_minmax(0,1fr)] xl:items-stretch">
-            <div className="rounded-[24px] border border-border/60 bg-background/45 p-4 backdrop-blur-sm">
-              <ProfileBundleRadar metrics={radarMetrics} />
-              <div className="mt-4 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-emerald-200">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_16px_rgba(74,222,128,0.8)]" />
-                  AI ready
+      <PageMain className="space-y-4">
+        <section className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm md:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border/60 bg-background/70">
+                  <Upload className="h-4 w-4 text-muted-foreground" />
                 </div>
-                <div className="mt-1 text-xs text-emerald-100/70">
-                  Ghostwriter can draft from this bundle immediately.
+                <div>
+                  <h2 className="text-lg font-semibold tracking-tight">Profile JSON</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Import, export, and save the single profile file Ghostwriter should use.
+                  </p>
                 </div>
               </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline">{projects.length} projects</Badge>
+                <Badge variant="outline">{facts.length} facts</Badge>
+                <Badge variant="outline">{preferences.length} rules</Badge>
+              </div>
             </div>
-
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)]">
-              <section className="rounded-[24px] border border-border/60 bg-card/40 p-5 backdrop-blur-sm">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="text-xs uppercase tracking-[0.26em] text-muted-foreground">
-                      Career Brain Console
-                    </div>
-                    <h2 className="mt-3 max-w-4xl text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-                      {headline.trim() || "Define the career identity Ghostwriter should lead with."}
-                    </h2>
-                    <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-                      A calmer command surface for identity, proof points, positioning facts, and AI drafting guardrails.
-                    </p>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <Badge variant="outline" className="rounded-full border-border/70 bg-background/25 px-3 py-1.5">
-                        <BriefcaseBusiness className="mr-1.5 h-3.5 w-3.5" />
-                        {projects.length} proof points
-                      </Badge>
-                      <Badge variant="outline" className="rounded-full border-border/70 bg-background/25 px-3 py-1.5">
-                        <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                        {facts.length} positioning signals
-                      </Badge>
-                      <Badge variant="outline" className="rounded-full border-border/70 bg-background/25 px-3 py-1.5">
-                        {preferences.length} AI directives
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" size="sm" asChild>
-                      <label className="cursor-pointer">
-                        <Upload className="mr-2 h-4 w-4" />
-                        Import
-                        <input
-                          type="file"
-                          accept="application/json"
-                          className="sr-only"
-                          onChange={handleImportFile}
-                        />
-                      </label>
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={handleDownloadJson}>
-                      <Download className="mr-2 h-4 w-4" />
-                      Export
-                    </Button>
-                    <Button size="sm" onClick={handleSave} disabled={isSaving}>
-                      {isSaving ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Save className="mr-2 h-4 w-4" />
-                      )}
-                      Save
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="mt-6 rounded-2xl border border-border/60 bg-background/35 p-3">
-                  <div className="mb-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-                    Core identity
-                  </div>
-                  <Input
-                    value={headline}
-                    onChange={(event) => setHeadline(event.target.value)}
-                    className="border-0 bg-transparent px-0 text-xl font-medium shadow-none focus-visible:ring-0"
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" asChild>
+                <label className="cursor-pointer">
+                  <Upload className="mr-2 h-4 w-4" />
+                  Import JSON
+                  <input
+                    type="file"
+                    accept="application/json"
+                    className="sr-only"
+                    onChange={handleImportFile}
                   />
-                </div>
-              </section>
-
-              <section className="rounded-[24px] border border-border/60 bg-card/35 p-5 backdrop-blur-sm">
-                <div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-                  Profile health
-                </div>
-                <div className="mt-3 text-3xl font-semibold tracking-tight">
-                  {projects.length + facts.length + preferences.length}
-                </div>
-                <div className="mt-1 text-sm text-muted-foreground">
-                  saved bundle signals
-                </div>
-                <div className="mt-5 space-y-3">
-                  {radarMetrics.map((metric) => (
-                    <div key={metric.label}>
-                      <div className="mb-1 flex items-center justify-between text-xs uppercase tracking-wide text-muted-foreground">
-                        <span>{metric.label}</span>
-                        <span>{Math.round(metric.value * 100)}%</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-background/70">
-                        <div
-                          className="h-2 rounded-full bg-gradient-to-r from-orange-400 via-amber-300 to-orange-200"
-                          style={{ width: `${Math.max(10, metric.value * 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section className="rounded-[24px] border border-border/60 bg-card/35 p-5 backdrop-blur-sm">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Fact book</div>
-                    <div className="mt-1 text-sm text-muted-foreground">Positioning notes Ghostwriter can reuse.</div>
-                  </div>
-                  <Badge variant="outline">{facts.length} facts</Badge>
-                </div>
-                <div className="space-y-3">
-                  {facts.length > 0 ? (
-                    facts.slice(0, 6).map((fact) => (
-                      <div key={fact.id} className="flex items-start gap-3 rounded-2xl border border-border/60 bg-background/30 px-4 py-3 transition-colors hover:border-orange-300/30 hover:bg-background/45">
-                        <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-orange-300" />
-                        <div className="min-w-0 flex-1">
-                          <div className="font-medium leading-5">{fact.title}</div>
-                          <div className="mt-1 line-clamp-2 text-sm leading-5 text-muted-foreground">{fact.detail}</div>
-                        </div>
-                        <button
-                          type="button"
-                          className="inline-flex items-center text-muted-foreground hover:text-foreground"
-                          onClick={() => setFacts((current) => current.filter((row) => row.id !== fact.id))}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-border/60 px-4 py-6 text-sm text-muted-foreground">
-                      No facts saved yet.
-                    </div>
-                  )}
-                </div>
-              </section>
-
-              <section className="rounded-[24px] border border-border/60 bg-card/35 p-5 backdrop-blur-sm">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Project portfolio</div>
-                    <div className="mt-1 text-sm text-muted-foreground">Primary proof points that should anchor drafting.</div>
-                  </div>
-                  <Badge variant="outline">{projects.length} projects</Badge>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {projects.length > 0 ? (
-                    projects.slice(0, 4).map((project) => (
-                      <div key={project.id} className="group rounded-2xl border border-border/60 bg-background/30 p-4 transition-colors hover:border-orange-300/40 hover:bg-background/50">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-orange-300/25 bg-orange-400/10 text-orange-200">
-                                <BriefcaseBusiness className="h-3.5 w-3.5" />
-                              </span>
-                              <div className="font-medium leading-5">{project.name}</div>
-                            </div>
-                            <div className="mt-3 text-sm leading-5 text-muted-foreground line-clamp-3">
-                              {project.summary || project.impact || project.roleRelevance || "Saved project evidence."}
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            className="inline-flex items-center text-muted-foreground opacity-70 transition-opacity group-hover:opacity-100 hover:text-foreground"
-                            onClick={() => setProjects((current) => current.filter((row) => row.id !== project.id))}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-border/60 px-4 py-6 text-sm text-muted-foreground sm:col-span-2">
-                      No projects saved yet.
-                    </div>
-                  )}
-                </div>
-              </section>
+                </label>
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleDownloadJson}>
+                <Download className="mr-2 h-4 w-4" />
+                Export JSON
+              </Button>
+              <Button size="sm" onClick={handleSave} disabled={isSaving}>
+                {isSaving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
+                Save
+              </Button>
             </div>
           </div>
         </section>
 
-        <section className="rounded-[24px] border border-border/60 bg-card/35 p-5 backdrop-blur-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Identity persona</div>
-              <div className="mt-1 text-sm text-muted-foreground">
-                AI-facing guardrails compressed into a lighter persona rail.
+        <section className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm md:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-3xl space-y-3">
+              <div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Profile overview</div>
+                <h2 className="mt-1 text-2xl font-semibold tracking-tight">
+                  {headline.trim() || "Define the professional identity Ghostwriter should lead with."}
+                </h2>
+              </div>
+              <p className="text-sm leading-6 text-muted-foreground">
+                {summary.trim() ||
+                  "A compact candidate profile with core positioning, reusable proof points, and lightweight AI writing preferences."}
+              </p>
+            </div>
+            <div className="grid min-w-[220px] grid-cols-2 gap-2 self-start">
+              <div className="rounded-lg border border-border/60 bg-background/50 px-3 py-2">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Projects</div>
+                <div className="mt-1 text-lg font-semibold">{projects.length}</div>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-background/50 px-3 py-2">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Facts</div>
+                <div className="mt-1 text-lg font-semibold">{facts.length}</div>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-background/50 px-3 py-2">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Rules</div>
+                <div className="mt-1 text-lg font-semibold">{preferences.length}</div>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-background/50 px-3 py-2">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Status</div>
+                <div className="mt-1 text-sm font-medium text-muted-foreground">Ready for Ghostwriter</div>
               </div>
             </div>
-            <Badge variant="outline">{preferences.length} directives</Badge>
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {preferences.length > 0 ? (
-              preferences.map((rule) => {
-                const label =
-                  rule.kind === "tone"
-                    ? "Tone"
-                    : rule.kind === "positioning"
-                      ? "Positioning"
-                      : rule.kind === "priority"
-                        ? "Priority"
-                        : rule.kind === "phrase"
-                          ? "Phrase"
-                          : "Guardrail";
-                return (
-                  <Badge
-                    key={rule.id}
-                    variant="outline"
-                    className="rounded-full border-border/70 bg-background/25 px-3 py-1.5 text-[12px] font-normal"
-                  >
-                    <span className="mr-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{label}</span>
-                    <span className="max-w-[320px] truncate">{rule.label}</span>
+
+          <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)]">
+            <div className="space-y-3 rounded-xl border border-border/60 bg-background/30 p-4">
+              <div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Core identity</div>
+                <div className="mt-1 text-sm text-muted-foreground">Short headline used as the default career framing.</div>
+              </div>
+              <Input value={headline} onChange={(event) => setHeadline(event.target.value)} />
+            </div>
+
+            <div className="space-y-3 rounded-xl border border-border/60 bg-background/30 p-4">
+              <div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Persona snapshot</div>
+                <div className="mt-1 text-sm text-muted-foreground">A quick human-readable picture of the profile bundle.</div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {projects.slice(0, 3).map((project) => (
+                  <Badge key={project.id} variant="secondary" className="px-3 py-1">
+                    {project.name}
                   </Badge>
-                );
-              })
-            ) : (
-              <div className="text-sm text-muted-foreground">No AI guardrails saved yet.</div>
-            )}
+                ))}
+                {facts.slice(0, 3).map((fact) => (
+                  <Badge key={fact.id} variant="outline" className="px-3 py-1">
+                    {fact.title}
+                  </Badge>
+                ))}
+                {preferences.slice(0, 2).map((rule) => (
+                  <Badge key={rule.id} variant="outline" className="px-3 py-1 text-muted-foreground">
+                    {rule.label}
+                  </Badge>
+                ))}
+                {projects.length + facts.length + preferences.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">No profile signals saved yet.</div>
+                ) : null}
+              </div>
+            </div>
           </div>
         </section>
       </PageMain>
