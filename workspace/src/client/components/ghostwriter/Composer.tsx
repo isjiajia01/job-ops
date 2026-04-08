@@ -34,7 +34,7 @@ export const Composer: React.FC<ComposerProps> = ({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
+      <div className="rounded-2xl border border-border/60 bg-background/80 shadow-sm">
         <Textarea
           placeholder="Ask anything about this job, your fit, the CV angle, or the best next draft..."
           value={value}
@@ -46,11 +46,11 @@ export const Composer: React.FC<ComposerProps> = ({
               void submit();
             }
           }}
-          className="min-h-[108px] rounded-[24px] border-0 bg-transparent px-5 py-4 text-[15px] leading-7 text-slate-700 shadow-none focus-visible:ring-0"
+          className="min-h-[108px] rounded-2xl border-0 bg-transparent px-4 py-3 text-[15px] leading-7 text-foreground shadow-none focus-visible:ring-0"
         />
       </div>
       <div className="flex items-center justify-between">
-        <div className="text-[11px] text-slate-400">
+        <div className="text-[11px] text-muted-foreground">
           {getMetaShortcutLabel("Enter")} to send · Shift+Enter for newline
         </div>
         <div className="flex items-center gap-2">
@@ -61,7 +61,7 @@ export const Composer: React.FC<ComposerProps> = ({
             disabled={disabled || !canReset}
             aria-label="Start over"
             title="Start over"
-            className="rounded-full border-slate-200 text-slate-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+            className="rounded-full border-border/60 text-muted-foreground hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
           >
             <Eraser className="h-3.5 w-3.5" />
           </Button>
@@ -73,7 +73,7 @@ export const Composer: React.FC<ComposerProps> = ({
               onClick={() => void onStop()}
               aria-label="Stop generating"
               title="Stop generating"
-            className="rounded-full border-slate-200 text-slate-500 hover:bg-slate-50"
+            className="rounded-full border-border/60 text-muted-foreground hover:bg-muted"
             >
               <Square className="h-3.5 w-3.5" />
             </Button>
