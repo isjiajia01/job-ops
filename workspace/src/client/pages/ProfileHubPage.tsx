@@ -10,7 +10,7 @@ import type {
   ResumeProfile,
 } from "@shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ContactRound, Download, Loader2, Save, Trash2, Upload, Wand2 } from "lucide-react";
+import { BriefcaseBusiness, ContactRound, Download, Loader2, Save, Sparkles, Trash2, Upload, Wand2 } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { ImportProfileDialog } from "./profile-hub/ImportProfileDialog";
@@ -682,8 +682,21 @@ export const ProfileHubPage: React.FC = () => {
                       {headline.trim() || "Define the career identity Ghostwriter should lead with."}
                     </h2>
                     <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-                      Your compact application intelligence layer: identity, proof points, positioning facts, and AI guardrails in one place.
+                      A calmer command surface for identity, proof points, positioning facts, and AI drafting guardrails.
                     </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Badge variant="outline" className="rounded-full border-border/70 bg-background/25 px-3 py-1.5">
+                        <BriefcaseBusiness className="mr-1.5 h-3.5 w-3.5" />
+                        {projects.length} proof points
+                      </Badge>
+                      <Badge variant="outline" className="rounded-full border-border/70 bg-background/25 px-3 py-1.5">
+                        <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                        {facts.length} positioning signals
+                      </Badge>
+                      <Badge variant="outline" className="rounded-full border-border/70 bg-background/25 px-3 py-1.5">
+                        {preferences.length} AI directives
+                      </Badge>
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button variant="outline" size="sm" asChild>
@@ -763,12 +776,12 @@ export const ProfileHubPage: React.FC = () => {
                 </div>
                 <div className="space-y-3">
                   {facts.length > 0 ? (
-                    facts.slice(0, 8).map((fact) => (
-                      <div key={fact.id} className="flex items-start gap-3 rounded-2xl border border-border/60 bg-background/30 px-4 py-3">
+                    facts.slice(0, 6).map((fact) => (
+                      <div key={fact.id} className="flex items-start gap-3 rounded-2xl border border-border/60 bg-background/30 px-4 py-3 transition-colors hover:border-orange-300/30 hover:bg-background/45">
                         <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-orange-300" />
                         <div className="min-w-0 flex-1">
                           <div className="font-medium leading-5">{fact.title}</div>
-                          <div className="mt-1 text-sm leading-5 text-muted-foreground">{fact.detail}</div>
+                          <div className="mt-1 line-clamp-2 text-sm leading-5 text-muted-foreground">{fact.detail}</div>
                         </div>
                         <button
                           type="button"
@@ -797,12 +810,17 @@ export const ProfileHubPage: React.FC = () => {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {projects.length > 0 ? (
-                    projects.slice(0, 6).map((project) => (
+                    projects.slice(0, 4).map((project) => (
                       <div key={project.id} className="group rounded-2xl border border-border/60 bg-background/30 p-4 transition-colors hover:border-orange-300/40 hover:bg-background/50">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <div className="font-medium leading-5">{project.name}</div>
-                            <div className="mt-2 text-sm leading-5 text-muted-foreground line-clamp-3">
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-orange-300/25 bg-orange-400/10 text-orange-200">
+                                <BriefcaseBusiness className="h-3.5 w-3.5" />
+                              </span>
+                              <div className="font-medium leading-5">{project.name}</div>
+                            </div>
+                            <div className="mt-3 text-sm leading-5 text-muted-foreground line-clamp-3">
                               {project.summary || project.impact || project.roleRelevance || "Saved project evidence."}
                             </div>
                           </div>
@@ -839,11 +857,28 @@ export const ProfileHubPage: React.FC = () => {
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             {preferences.length > 0 ? (
-              preferences.map((rule) => (
-                <Badge key={rule.id} variant="outline" className="rounded-full border-border/70 bg-background/25 px-3 py-1.5 text-[12px]">
-                  [{rule.kind === "tone" ? "Tone" : rule.kind === "positioning" ? "Positioning" : rule.kind === "priority" ? "Priority" : rule.kind === "phrase" ? "Phrase" : "Guardrail"}: {rule.label}]
-                </Badge>
-              ))
+              preferences.map((rule) => {
+                const label =
+                  rule.kind === "tone"
+                    ? "Tone"
+                    : rule.kind === "positioning"
+                      ? "Positioning"
+                      : rule.kind === "priority"
+                        ? "Priority"
+                        : rule.kind === "phrase"
+                          ? "Phrase"
+                          : "Guardrail";
+                return (
+                  <Badge
+                    key={rule.id}
+                    variant="outline"
+                    className="rounded-full border-border/70 bg-background/25 px-3 py-1.5 text-[12px] font-normal"
+                  >
+                    <span className="mr-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{label}</span>
+                    <span className="max-w-[320px] truncate">{rule.label}</span>
+                  </Badge>
+                );
+              })
             ) : (
               <div className="text-sm text-muted-foreground">No AI guardrails saved yet.</div>
             )}
