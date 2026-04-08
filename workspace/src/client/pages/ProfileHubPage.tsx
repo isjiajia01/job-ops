@@ -359,6 +359,52 @@ export const ProfileHubPage: React.FC = () => {
     [facts, projects, preferences, inboxItems],
   );
 
+  const handleAttachFiles = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const files = Array.from(event.target.files ?? []);
+    if (!files.length) return;
+
+    try {
+      const supportedFiles = files.filter(
+        (file) =>
+          file.type.startsWith("text/") ||
+          /\.(md|txt|json|csv|tsv|tex|yaml|yml)$/i.test(file.name),
+      );
+      const skippedCount = files.length - supportedFiles.length;
+
+      if (!supportedFiles.length) {
+        toast.error("Only text-like files can be analyzed directly here right now.");
+        return;
+      }
+
+      const contents = await Promise.all(
+        supportedFiles.map(async (file) => {
+          const text = (await file.text()).trim();
+          return text ? `# File: ${file.name}\n\n${text}` : `# File: ${file.name}\n\n[Empty file]`;
+        }),
+      );
+
+      setCaptureText((current) => [current.trim(), ...contents].filter(Boolean).join("\n\n---\n\n"));
+      if (!captureSource.trim()) {
+        setCaptureSource(
+          supportedFiles.length === 1
+            ? supportedFiles[0]?.name ?? "Attached file"
+            : `${supportedFiles.length} attached files`,
+        );
+      }
+      if (skippedCount > 0) {
+        toast.success(`Attached ${supportedFiles.length} file(s). Skipped ${skippedCount} unsupported file(s).`);
+      } else {
+        toast.success(`Attached ${supportedFiles.length} file(s) for AI analysis.`);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to read attached files");
+    } finally {
+      event.target.value = "";
+    }
+  };
+
   const handleDigest = async () => {
     const rawText = captureText.trim();
     if (!rawText) {
@@ -537,8 +583,8 @@ export const ProfileHubPage: React.FC = () => {
 
       <PageMain className="space-y-4">
         <section className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm md:p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="space-y-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border/60 bg-background/70">
                   <Upload className="h-4 w-4 text-muted-foreground" />
@@ -586,72 +632,125 @@ export const ProfileHubPage: React.FC = () => {
         </section>
 
         <section className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm md:p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-3xl space-y-3">
+          <div className="space-y-4">
+            <div className="space-y-3">
               <div>
                 <div className="text-xs uppercase tracking-wide text-muted-foreground">Profile overview</div>
                 <h2 className="mt-1 text-2xl font-semibold tracking-tight">
                   {headline.trim() || "Define the professional identity Ghostwriter should lead with."}
                 </h2>
               </div>
-              <p className="text-sm leading-6 text-muted-foreground">
+              <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
                 {summary.trim() ||
                   "A compact candidate profile with core positioning, reusable proof points, and lightweight AI writing preferences."}
               </p>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline">{projects.length} projects</Badge>
+                <Badge variant="outline">{facts.length} facts</Badge>
+                <Badge variant="outline">{preferences.length} rules</Badge>
+                <Badge variant="outline" className="text-muted-foreground">Ready for Ghostwriter</Badge>
+              </div>
             </div>
-            <div className="grid min-w-[220px] grid-cols-2 gap-2 self-start">
-              <div className="rounded-lg border border-border/60 bg-background/50 px-3 py-2">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Projects</div>
-                <div className="mt-1 text-lg font-semibold">{projects.length}</div>
+
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+              <div className="space-y-3 rounded-lg border border-border/60 bg-background/40 p-4">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Core identity</div>
+                  <div className="mt-1 text-sm text-muted-foreground">Short headline used as the default career framing.</div>
+                </div>
+                <Input value={headline} onChange={(event) => setHeadline(event.target.value)} />
               </div>
-              <div className="rounded-lg border border-border/60 bg-background/50 px-3 py-2">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Facts</div>
-                <div className="mt-1 text-lg font-semibold">{facts.length}</div>
-              </div>
-              <div className="rounded-lg border border-border/60 bg-background/50 px-3 py-2">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Rules</div>
-                <div className="mt-1 text-lg font-semibold">{preferences.length}</div>
-              </div>
-              <div className="rounded-lg border border-border/60 bg-background/50 px-3 py-2">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Status</div>
-                <div className="mt-1 text-sm font-medium text-muted-foreground">Ready for Ghostwriter</div>
+
+              <div className="space-y-3 rounded-lg border border-border/60 bg-background/40 p-4">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Persona snapshot</div>
+                  <div className="mt-1 text-sm text-muted-foreground">A quick human-readable picture of the profile bundle.</div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {projects.slice(0, 3).map((project) => (
+                    <Badge key={project.id} variant="secondary" className="px-3 py-1">
+                      {project.name}
+                    </Badge>
+                  ))}
+                  {facts.slice(0, 3).map((fact) => (
+                    <Badge key={fact.id} variant="outline" className="px-3 py-1">
+                      {fact.title}
+                    </Badge>
+                  ))}
+                  {preferences.slice(0, 2).map((rule) => (
+                    <Badge key={rule.id} variant="outline" className="px-3 py-1 text-muted-foreground">
+                      {rule.label}
+                    </Badge>
+                  ))}
+                  {projects.length + facts.length + preferences.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No profile signals saved yet.</div>
+                  ) : null}
+                </div>
               </div>
             </div>
           </div>
+        </section>
 
-          <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)]">
-            <div className="space-y-3 rounded-xl border border-border/60 bg-background/30 p-4">
+        <section className="rounded-xl border border-border/60 bg-card/50 p-4 shadow-sm md:p-5">
+          <div className="space-y-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Core identity</div>
-                <div className="mt-1 text-sm text-muted-foreground">Short headline used as the default career framing.</div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">AI profile assistant</div>
+                <h3 className="mt-1 text-lg font-semibold tracking-tight">Talk to your profile and let AI file things for you</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Paste notes or attach text-like files. AI will analyze them, classify them, and write the result directly into your profile bundle.
+                </p>
               </div>
-              <Input value={headline} onChange={(event) => setHeadline(event.target.value)} />
+              <Button variant="outline" size="sm" asChild>
+                <label className="cursor-pointer">
+                  <Upload className="mr-2 h-4 w-4" />
+                  Attach files
+                  <input
+                    type="file"
+                    multiple
+                    className="sr-only"
+                    onChange={handleAttachFiles}
+                  />
+                </label>
+              </Button>
             </div>
 
-            <div className="space-y-3 rounded-xl border border-border/60 bg-background/30 p-4">
-              <div>
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Persona snapshot</div>
-                <div className="mt-1 text-sm text-muted-foreground">A quick human-readable picture of the profile bundle.</div>
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,180px)_minmax(0,1fr)]">
+              <div className="rounded-lg border border-border/60 bg-background/40 p-4">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Wand2 className="h-4 w-4 text-muted-foreground" />
+                  AI organizer
+                </div>
+                <div className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Give it raw material like resumes, thesis notes, project README text, brag bullets, or writing preferences.
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {projects.slice(0, 3).map((project) => (
-                  <Badge key={project.id} variant="secondary" className="px-3 py-1">
-                    {project.name}
-                  </Badge>
-                ))}
-                {facts.slice(0, 3).map((fact) => (
-                  <Badge key={fact.id} variant="outline" className="px-3 py-1">
-                    {fact.title}
-                  </Badge>
-                ))}
-                {preferences.slice(0, 2).map((rule) => (
-                  <Badge key={rule.id} variant="outline" className="px-3 py-1 text-muted-foreground">
-                    {rule.label}
-                  </Badge>
-                ))}
-                {projects.length + facts.length + preferences.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No profile signals saved yet.</div>
-                ) : null}
+
+              <div className="space-y-3 rounded-lg border border-border/60 bg-background/40 p-4">
+                <Input
+                  value={captureSource}
+                  onChange={(event) => setCaptureSource(event.target.value)}
+                  placeholder="Source label, e.g. thesis README or old CV"
+                />
+                <textarea
+                  value={captureText}
+                  onChange={(event) => setCaptureText(event.target.value)}
+                  placeholder="Paste free-form notes or attach files above. Example: project README, internship bullets, work authorization note, preferred tone examples..."
+                  className="min-h-[180px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring"
+                />
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-xs text-muted-foreground">
+                    Supported direct attachments here: txt, md, json, csv, tsv, tex, yaml.
+                  </div>
+                  <Button onClick={handleDigest} disabled={isDigesting || !captureText.trim()}>
+                    {isDigesting ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Wand2 className="mr-2 h-4 w-4" />
+                    )}
+                    Analyze and update profile
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
