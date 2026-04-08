@@ -31,7 +31,7 @@ export const GhostwriterDrawer: React.FC<GhostwriterDrawerProps> = ({
         <Button
           size="sm"
           variant="outline"
-          className={cn("h-9 gap-1.5 rounded-full border-slate-200 bg-white px-4 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50", triggerClassName)}
+          className={cn("h-9 gap-1.5 rounded-full border-slate-700 bg-slate-900 px-4 text-xs font-medium text-slate-100 shadow-sm hover:bg-slate-800", triggerClassName)}
           disabled={!job}
         >
           <PanelRightOpen className="h-3.5 w-3.5" />
