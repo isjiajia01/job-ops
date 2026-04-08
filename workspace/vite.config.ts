@@ -57,6 +57,10 @@ export default defineConfig({
       "@server": path.resolve(__dirname, "./src/server"),
       "@infra": path.resolve(__dirname, "./src/server/infra"),
       "@shared": path.resolve(__dirname, "../shared/src"),
+      "mammoth-browser": path.resolve(
+        __dirname,
+        "../node_modules/mammoth/mammoth.browser.js",
+      ),
     },
   },
   server: {
