@@ -26,7 +26,7 @@ import {
   Sparkles,
   XCircle,
 } from "lucide-react";
-import React from "react";
+import React, { Suspense } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { invalidateApplicationData } from "@/client/hooks/queries/invalidateApplicationData";
@@ -61,12 +61,27 @@ import * as api from "../api";
 import { ApplicationDetailsEditDrawer } from "../components/ApplicationDetailsEditDrawer";
 import { ApplicationHeader } from "../components/ApplicationHeader";
 import { ConfirmDelete } from "../components/ConfirmDelete";
-import { GhostwriterDrawer, GhostwriterPanel } from "../components/ghostwriter";
+const GhostwriterDrawer = React.lazy(() =>
+  import("../components/ghostwriter/GhostwriterDrawer").then((module) => ({
+    default: module.GhostwriterDrawer,
+  })),
+);
+const GhostwriterPanel = React.lazy(() =>
+  import("../components/ghostwriter/GhostwriterPanel").then((module) => ({
+    default: module.GhostwriterPanel,
+  })),
+);
 import {
   type LogEventFormValues,
   LogEventModal,
 } from "../components/LogEventModal";
 import { ApplicationTimeline } from "./application/Timeline";
+
+const GhostwriterLoadingFallback: React.FC = () => (
+  <div className="flex h-full min-h-[320px] items-center justify-center text-sm text-muted-foreground">
+    Loading Ghostwriter…
+  </div>
+);
 
 export const ApplicationWorkspacePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -719,12 +734,16 @@ export const ApplicationWorkspacePage: React.FC = () => {
                     here.
                   </p>
                 </div>
-                <GhostwriterDrawer job={job} />
+                <Suspense fallback={null}>
+                  <GhostwriterDrawer job={job} />
+                </Suspense>
               </div>
             </CardHeader>
             <CardContent className="p-0">
               <div className="h-[620px] min-h-[520px] p-4">
-                {job ? <GhostwriterPanel job={job} /> : null}
+                <Suspense fallback={<GhostwriterLoadingFallback />}>
+                  {job ? <GhostwriterPanel job={job} /> : null}
+                </Suspense>
               </div>
             </CardContent>
           </Card>

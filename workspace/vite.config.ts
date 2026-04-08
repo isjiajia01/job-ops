@@ -63,6 +63,9 @@ export default defineConfig({
       ),
     },
   },
+  worker: {
+    format: "es",
+  },
   server: {
     port: 5173,
     proxy: {
@@ -83,6 +86,32 @@ export default defineConfig({
   build: {
     outDir: "dist/client",
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+
+          if (id.includes("pdfjs-dist")) return "pdf";
+          if (id.includes("mammoth")) return "mammoth-browser";
+          if (id.includes("react-markdown") || id.includes("remark-gfm")) {
+            return "markdown";
+          }
+          if (
+            id.includes("react-router") ||
+            id.includes("@tanstack/react-query")
+          ) {
+            return "app-core";
+          }
+          if (id.includes("@radix-ui")) return "radix";
+          if (id.includes("zod") || id.includes("react-hook-form")) {
+            return "forms";
+          }
+          if (id.includes("lucide-react") || id.includes("sonner")) {
+            return "ui-vendor";
+          }
+        },
+      },
+    },
   },
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),

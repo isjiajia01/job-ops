@@ -1,6 +1,7 @@
 import * as api from "@client/api";
 import { PageHeader, PageMain } from "@client/components/layout";
 import { useProfile } from "@client/hooks/useProfile";
+import { extractTextFromFiles } from "@client/lib/profile-file-extraction";
 import { queryKeys } from "@client/lib/queryKeys";
 import type {
   CandidateKnowledgeBase,
@@ -366,54 +367,8 @@ export const ProfileHubPage: React.FC = () => {
     if (!files.length) return;
 
     try {
-      const extractedParts = await Promise.all(
-        files.map(async (file) => {
-          const lowerName = file.name.toLowerCase();
-
-          if (
-            file.type.startsWith("text/") ||
-            /\.(md|txt|json|csv|tsv|tex|yaml|yml)$/i.test(file.name)
-          ) {
-            const text = (await file.text()).trim();
-            return text ? `# File: ${file.name}\n\n${text}` : `# File: ${file.name}\n\n[Empty file]`;
-          }
-
-          if (lowerName.endsWith(".docx")) {
-            const mammoth = await import("mammoth-browser");
-            const arrayBuffer = await file.arrayBuffer();
-            const result = await mammoth.extractRawText({ arrayBuffer });
-            const text = result.value.trim();
-            return text ? `# File: ${file.name}\n\n${text}` : `# File: ${file.name}\n\n[No extractable DOCX text found]`;
-          }
-
-          if (lowerName.endsWith(".pdf") || file.type === "application/pdf") {
-            const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-            const arrayBuffer = await file.arrayBuffer();
-            const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
-            const pdf = await loadingTask.promise;
-            const pages: string[] = [];
-
-            for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-              const page = await pdf.getPage(pageNumber);
-              const content = await page.getTextContent();
-              const pageText = content.items
-                .map((item) => ("str" in item ? item.str : ""))
-                .join(" ")
-                .replace(/\s+/g, " ")
-                .trim();
-              if (pageText) pages.push(pageText);
-            }
-
-            const text = pages.join("\n\n").trim();
-            return text ? `# File: ${file.name}\n\n${text}` : `# File: ${file.name}\n\n[No extractable PDF text found]`;
-          }
-
-          return null;
-        }),
-      );
-
-      const contents = extractedParts.filter((part): part is string => Boolean(part));
-      const skippedCount = files.length - contents.length;
+      const { extractedParts: contents, skippedCount } =
+        await extractTextFromFiles(files);
 
       if (!contents.length) {
         toast.error("No readable text found in the attached files.");

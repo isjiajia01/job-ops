@@ -3,7 +3,7 @@
  */
 
 import { X } from "lucide-react";
-import React, { useRef, useState } from "react";
+import React, { Suspense, lazy, useRef, useState } from "react";
 import {
   Navigate,
   Route,
@@ -19,18 +19,67 @@ import { Toaster } from "@/components/ui/sonner";
 import { BasicAuthPrompt } from "./components/BasicAuthPrompt";
 import { OnboardingGate } from "./components/OnboardingGate";
 import { useDemoInfo } from "./hooks/useDemoInfo";
-import { ApplicationsPage } from "./pages/ApplicationsPage";
-import { ApplicationWorkspacePage } from "./pages/ApplicationWorkspacePage";
-import { CoverLetterPage } from "./pages/CoverLetterPage";
-import { CvPage } from "./pages/CvPage";
-import { GmailOauthCallbackPage } from "./pages/GmailOauthCallbackPage";
-import { HomePage } from "./pages/HomePage";
-import { InProgressBoardPage } from "./pages/InProgressBoardPage";
-import { ProfileHubPage } from "./pages/ProfileHubPage";
-import { SettingsPage } from "./pages/SettingsPage";
-import { TracerLinksPage } from "./pages/TracerLinksPage";
-import { TrackingInboxPage } from "./pages/TrackingInboxPage";
-import { VisaSponsorsPage } from "./pages/VisaSponsorsPage";
+
+const ApplicationsPage = lazy(() =>
+  import("./pages/ApplicationsPage").then((module) => ({
+    default: module.ApplicationsPage,
+  })),
+);
+const ApplicationWorkspacePage = lazy(() =>
+  import("./pages/ApplicationWorkspacePage").then((module) => ({
+    default: module.ApplicationWorkspacePage,
+  })),
+);
+const CoverLetterPage = lazy(() =>
+  import("./pages/CoverLetterPage").then((module) => ({
+    default: module.CoverLetterPage,
+  })),
+);
+const CvPage = lazy(() =>
+  import("./pages/CvPage").then((module) => ({
+    default: module.CvPage,
+  })),
+);
+const GmailOauthCallbackPage = lazy(() =>
+  import("./pages/GmailOauthCallbackPage").then((module) => ({
+    default: module.GmailOauthCallbackPage,
+  })),
+);
+const HomePage = lazy(() =>
+  import("./pages/HomePage").then((module) => ({
+    default: module.HomePage,
+  })),
+);
+const InProgressBoardPage = lazy(() =>
+  import("./pages/InProgressBoardPage").then((module) => ({
+    default: module.InProgressBoardPage,
+  })),
+);
+const ProfileHubPage = lazy(() =>
+  import("./pages/ProfileHubPage").then((module) => ({
+    default: module.ProfileHubPage,
+  })),
+);
+const SettingsPage = lazy(() =>
+  import("./pages/SettingsPage").then((module) => ({
+    default: module.SettingsPage,
+  })),
+);
+const TracerLinksPage = lazy(() =>
+  import("./pages/TracerLinksPage").then((module) => ({
+    default: module.TracerLinksPage,
+  })),
+);
+const TrackingInboxPage = lazy(() =>
+  import("./pages/TrackingInboxPage").then((module) => ({
+    default: module.TrackingInboxPage,
+  })),
+);
+const VisaSponsorsPage = lazy(() =>
+  import("./pages/VisaSponsorsPage").then((module) => ({
+    default: module.VisaSponsorsPage,
+  })),
+);
 
 /** Backwards-compatibility redirects: old URL paths -> new URL paths */
 const REDIRECTS: Array<{ from: string; to: string }> = [
@@ -65,10 +114,18 @@ const DEMO_WAITLIST_BANNER_DISMISSED_KEY = "jobops.demoWaitlistBannerDismissed";
 const LegacyJobRouteRedirect: React.FC = () => {
   const { jobId } = useParams<{ tab?: string; jobId?: string }>();
   if (jobId) {
-    return <Navigate to={generatePath("/applications/:id", { id: jobId })} replace />;
+    return (
+      <Navigate to={generatePath("/applications/:id", { id: jobId })} replace />
+    );
   }
   return <Navigate to="/applications" replace />;
 };
+
+const RouteLoadingFallback: React.FC = () => (
+  <div className="flex min-h-[40vh] items-center justify-center px-6 py-16 text-sm text-muted-foreground">
+    Loading page…
+  </div>
+);
 
 export const App: React.FC = () => {
   const location = useLocation();
@@ -144,60 +201,65 @@ export const App: React.FC = () => {
             unmountOnExit
           >
             <div ref={nodeRef}>
-              <Routes location={location}>
-                {/* Backwards-compatibility redirects */}
-                {REDIRECTS.map(({ from, to }) => (
-                  <Route
-                    key={from}
-                    path={from}
-                    element={<Navigate to={to} replace />}
-                  />
-                ))}
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <Routes location={location}>
+                  {/* Backwards-compatibility redirects */}
+                  {REDIRECTS.map(({ from, to }) => (
+                    <Route
+                      key={from}
+                      path={from}
+                      element={<Navigate to={to} replace />}
+                    />
+                  ))}
 
-                {/* Application routes */}
-                <Route path="/overview" element={<HomePage />} />
-                <Route path="/applications" element={<ApplicationsPage />} />
-                <Route path="/applications/new" element={<ApplicationsPage />} />
-                <Route
-                  path="/applications/:id"
-                  element={<ApplicationWorkspacePage />}
-                />
-                <Route
-                  path="/applications/:id/cover-letter"
-                  element={<CoverLetterPage />}
-                />
-                <Route path="/applications/:id/cv" element={<CvPage />} />
-                <Route
-                  path="/oauth/gmail/callback"
-                  element={<GmailOauthCallbackPage />}
-                />
-                <Route
-                  path="/job/:id/cover-letter"
-                  element={<CoverLetterPage />}
-                />
-                <Route path="/job/:id/cv" element={<CvPage />} />
-                <Route
-                  path="/job/:id"
-                  element={<ApplicationWorkspacePage />}
-                />
-                <Route
-                  path="/applications/in-progress"
-                  element={<InProgressBoardPage />}
-                />
-                <Route path="/profile-hub" element={<ProfileHubPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/tracer-links" element={<TracerLinksPage />} />
-                <Route path="/visa-sponsors" element={<VisaSponsorsPage />} />
-                <Route path="/tracking-inbox" element={<TrackingInboxPage />} />
-                <Route
-                  path="/legacy/jobs/:tab"
-                  element={<LegacyJobRouteRedirect />}
-                />
-                <Route
-                  path="/legacy/jobs/:tab/:jobId"
-                  element={<LegacyJobRouteRedirect />}
-                />
-              </Routes>
+                  {/* Application routes */}
+                  <Route path="/overview" element={<HomePage />} />
+                  <Route path="/applications" element={<ApplicationsPage />} />
+                  <Route path="/applications/new" element={<ApplicationsPage />} />
+                  <Route
+                    path="/applications/:id"
+                    element={<ApplicationWorkspacePage />}
+                  />
+                  <Route
+                    path="/applications/:id/cover-letter"
+                    element={<CoverLetterPage />}
+                  />
+                  <Route path="/applications/:id/cv" element={<CvPage />} />
+                  <Route
+                    path="/oauth/gmail/callback"
+                    element={<GmailOauthCallbackPage />}
+                  />
+                  <Route
+                    path="/job/:id/cover-letter"
+                    element={<CoverLetterPage />}
+                  />
+                  <Route path="/job/:id/cv" element={<CvPage />} />
+                  <Route
+                    path="/job/:id"
+                    element={<ApplicationWorkspacePage />}
+                  />
+                  <Route
+                    path="/applications/in-progress"
+                    element={<InProgressBoardPage />}
+                  />
+                  <Route path="/profile-hub" element={<ProfileHubPage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/tracer-links" element={<TracerLinksPage />} />
+                  <Route path="/visa-sponsors" element={<VisaSponsorsPage />} />
+                  <Route
+                    path="/tracking-inbox"
+                    element={<TrackingInboxPage />}
+                  />
+                  <Route
+                    path="/legacy/jobs/:tab"
+                    element={<LegacyJobRouteRedirect />}
+                  />
+                  <Route
+                    path="/legacy/jobs/:tab/:jobId"
+                    element={<LegacyJobRouteRedirect />}
+                  />
+                </Routes>
+              </Suspense>
             </div>
           </CSSTransition>
         </SwitchTransition>

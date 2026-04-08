@@ -28,93 +28,120 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
-export const jobs = sqliteTable("jobs", {
-  id: text("id").primaryKey(),
+export const jobs = sqliteTable(
+  "jobs",
+  {
+    id: text("id").primaryKey(),
 
-  // From crawler
-  source: text("source").notNull().default("gradcracker"),
-  sourceJobId: text("source_job_id"),
-  jobUrlDirect: text("job_url_direct"),
-  datePosted: text("date_posted"),
-  title: text("title").notNull(),
-  employer: text("employer").notNull(),
-  employerUrl: text("employer_url"),
-  jobUrl: text("job_url").notNull().unique(),
-  applicationLink: text("application_link"),
-  disciplines: text("disciplines"),
-  deadline: text("deadline"),
-  salary: text("salary"),
-  location: text("location"),
-  degreeRequired: text("degree_required"),
-  starting: text("starting"),
-  jobDescription: text("job_description"),
+    // From crawler
+    source: text("source").notNull().default("gradcracker"),
+    sourceJobId: text("source_job_id"),
+    jobUrlDirect: text("job_url_direct"),
+    datePosted: text("date_posted"),
+    title: text("title").notNull(),
+    employer: text("employer").notNull(),
+    employerUrl: text("employer_url"),
+    jobUrl: text("job_url").notNull().unique(),
+    applicationLink: text("application_link"),
+    disciplines: text("disciplines"),
+    deadline: text("deadline"),
+    salary: text("salary"),
+    location: text("location"),
+    degreeRequired: text("degree_required"),
+    starting: text("starting"),
+    jobDescription: text("job_description"),
 
-  // JobSpy fields (nullable for other sources)
-  jobType: text("job_type"),
-  salarySource: text("salary_source"),
-  salaryInterval: text("salary_interval"),
-  salaryMinAmount: real("salary_min_amount"),
-  salaryMaxAmount: real("salary_max_amount"),
-  salaryCurrency: text("salary_currency"),
-  isRemote: integer("is_remote", { mode: "boolean" }),
-  jobLevel: text("job_level"),
-  jobFunction: text("job_function"),
-  listingType: text("listing_type"),
-  emails: text("emails"),
-  companyIndustry: text("company_industry"),
-  companyLogo: text("company_logo"),
-  companyUrlDirect: text("company_url_direct"),
-  companyAddresses: text("company_addresses"),
-  companyNumEmployees: text("company_num_employees"),
-  companyRevenue: text("company_revenue"),
-  companyDescription: text("company_description"),
-  skills: text("skills"),
-  experienceRange: text("experience_range"),
-  companyRating: real("company_rating"),
-  companyReviewsCount: integer("company_reviews_count"),
-  vacancyCount: integer("vacancy_count"),
-  workFromHomeType: text("work_from_home_type"),
+    // JobSpy fields (nullable for other sources)
+    jobType: text("job_type"),
+    salarySource: text("salary_source"),
+    salaryInterval: text("salary_interval"),
+    salaryMinAmount: real("salary_min_amount"),
+    salaryMaxAmount: real("salary_max_amount"),
+    salaryCurrency: text("salary_currency"),
+    isRemote: integer("is_remote", { mode: "boolean" }),
+    jobLevel: text("job_level"),
+    jobFunction: text("job_function"),
+    listingType: text("listing_type"),
+    emails: text("emails"),
+    companyIndustry: text("company_industry"),
+    companyLogo: text("company_logo"),
+    companyUrlDirect: text("company_url_direct"),
+    companyAddresses: text("company_addresses"),
+    companyNumEmployees: text("company_num_employees"),
+    companyRevenue: text("company_revenue"),
+    companyDescription: text("company_description"),
+    skills: text("skills"),
+    experienceRange: text("experience_range"),
+    companyRating: real("company_rating"),
+    companyReviewsCount: integer("company_reviews_count"),
+    vacancyCount: integer("vacancy_count"),
+    workFromHomeType: text("work_from_home_type"),
 
-  // Application workspace enrichments
-  status: text("status", {
-    enum: [
-      "discovered",
-      "processing",
-      "ready",
-      "applied",
-      "in_progress",
-      "skipped",
-      "expired",
-    ],
-  })
-    .notNull()
-    .default("discovered"),
-  outcome: text("outcome", { enum: APPLICATION_OUTCOMES }),
-  closedAt: integer("closed_at", { mode: "number" }),
-  suitabilityScore: real("suitability_score"),
-  suitabilityReason: text("suitability_reason"),
-  tailoredSummary: text("tailored_summary"),
-  tailoredHeadline: text("tailored_headline"),
-  tailoredSkills: text("tailored_skills"),
-  tailoredExperienceEdits: text("tailored_experience_edits"),
-  tailoredLayoutDirectives: text("tailored_layout_directives"),
-  tailoredSectionRationale: text("tailored_section_rationale"),
-  tailoredOmissionRationale: text("tailored_omission_rationale"),
-  selectedProjectIds: text("selected_project_ids"),
-  pdfPath: text("pdf_path"),
-  tracerLinksEnabled: integer("tracer_links_enabled", { mode: "boolean" })
-    .notNull()
-    .default(false),
-  sponsorMatchScore: real("sponsor_match_score"),
-  sponsorMatchNames: text("sponsor_match_names"),
+    // Application workspace enrichments
+    status: text("status", {
+      enum: [
+        "discovered",
+        "processing",
+        "ready",
+        "applied",
+        "in_progress",
+        "skipped",
+        "expired",
+      ],
+    })
+      .notNull()
+      .default("discovered"),
+    outcome: text("outcome", { enum: APPLICATION_OUTCOMES }),
+    closedAt: integer("closed_at", { mode: "number" }),
+    suitabilityScore: real("suitability_score"),
+    suitabilityReason: text("suitability_reason"),
+    tailoredSummary: text("tailored_summary"),
+    tailoredHeadline: text("tailored_headline"),
+    tailoredSkills: text("tailored_skills"),
+    tailoredExperienceEdits: text("tailored_experience_edits"),
+    tailoredLayoutDirectives: text("tailored_layout_directives"),
+    tailoredSectionRationale: text("tailored_section_rationale"),
+    tailoredOmissionRationale: text("tailored_omission_rationale"),
+    selectedProjectIds: text("selected_project_ids"),
+    pdfPath: text("pdf_path"),
+    tracerLinksEnabled: integer("tracer_links_enabled", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    sponsorMatchScore: real("sponsor_match_score"),
+    sponsorMatchNames: text("sponsor_match_names"),
 
-  // Timestamps
-  discoveredAt: text("discovered_at").notNull().default(sql`(datetime('now'))`),
-  processedAt: text("processed_at"),
-  appliedAt: text("applied_at"),
-  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
-  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
-});
+    // Timestamps
+    discoveredAt: text("discovered_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    processedAt: text("processed_at"),
+    appliedAt: text("applied_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => ({
+    statusDiscoveredAtIndex: index("idx_jobs_status_discovered_at").on(
+      table.status,
+      table.discoveredAt,
+    ),
+    statusUpdatedAtIndex: index("idx_jobs_status_updated_at").on(
+      table.status,
+      table.updatedAt,
+    ),
+    statusAppliedAtIndex: index("idx_jobs_status_applied_at").on(
+      table.status,
+      table.appliedAt,
+    ),
+    sourceSourceJobIdIndex: index("idx_jobs_source_source_job_id").on(
+      table.source,
+      table.sourceJobId,
+    ),
+  }),
+);
 
 export const stageEvents = sqliteTable("stage_events", {
   id: text("id").primaryKey(),
