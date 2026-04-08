@@ -1,5 +1,4 @@
 import type { Job } from "@shared/types";
-import { parseGhostwriterAssistantContent } from "@shared/utils/ghostwriter";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -14,7 +13,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
-import { RuntimeInspector } from "./RuntimeInspector";
 import { useConversationActions } from "./useConversationActions";
 
 type GhostwriterPanelProps = {
@@ -26,7 +24,6 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
 
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const {
-    activeRunId,
     branches,
     editMessage,
     isLoading,
@@ -34,10 +31,6 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
     messages,
     regenerate,
     resetConversation,
-    runTimeline,
-    runs,
-    selectRun,
-    selectedRunId,
     sendMessage,
     stopStreaming,
     streamingMessageId,
@@ -58,71 +51,53 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
     return !isStreaming && messages.length > 0;
   }, [isStreaming, messages]);
 
-  const currentRuntime = useMemo(() => {
-    const latestAssistant = [...messages]
-      .reverse()
-      .find(
-        (message) => message.role === "assistant" && message.status === "complete",
-      );
-    if (!latestAssistant) return null;
-    const parsed = parseGhostwriterAssistantContent(latestAssistant.content);
-    if (!parsed.runtimePlan && !parsed.fitBrief && !parsed.executionTrace) return null;
-    return parsed;
-  }, [messages]);
-
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#f8fbfa_0%,#f4f7f6_100%)] shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
-      <div className="border-b border-slate-200/80 px-5 py-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-700">
-              Application writer
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-border/60 bg-background shadow-sm">
+      <div className="border-b border-border/60 bg-background/95 px-5 py-4 backdrop-blur">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-foreground">
+              Ghostwriter
             </div>
-            <h3 className="mt-2 font-serif text-2xl text-slate-900">
-              {job.title}
-            </h3>
-            <p className="mt-1 text-sm text-slate-500">{job.employer} · Ghostwriter keeps fit analysis, runtime decisions, and drafting in one workspace.</p>
+            <div className="truncate text-xs text-muted-foreground">
+              {job.title} · {job.employer}
+            </div>
           </div>
-          <div className="rounded-2xl border border-emerald-200 bg-white/80 px-4 py-3 text-right shadow-sm">
-            <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Current mode</div>
-            <div className="mt-1 text-sm font-medium text-slate-700">{isStreaming ? "Live drafting" : messages.length ? "Conversation loaded" : "Ready for a new brief"}</div>
+          <div className="text-xs text-muted-foreground">
+            {isStreaming
+              ? "Drafting…"
+              : messages.length
+                ? "Conversation loaded"
+                : "Ready"}
           </div>
         </div>
       </div>
 
-      <div className="px-5 pt-4">
-        <RuntimeInspector
-          activeRunId={activeRunId}
-          currentRuntime={currentRuntime}
-          isStreaming={isStreaming}
-          runTimeline={runTimeline}
-          runs={runs}
-          selectedRunId={selectedRunId}
-          onSelectRun={selectRun}
-        />
-      </div>
-
       <div
         ref={messageListRef}
-        className="min-h-0 flex-1 overflow-y-auto px-5 pb-4 pr-4"
+        className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
       >
         {messages.length === 0 && !isLoading ? (
-          <div className="flex min-h-[320px] flex-col justify-center rounded-[24px] border border-dashed border-emerald-200 bg-white/80 px-6 py-8 text-left shadow-sm">
-            <div className="w-fit rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-emerald-700">Tailored drafting</div>
-            <h4 className="mt-4 font-serif text-3xl text-slate-900">
-              Start from the job, not from a blank page.
-            </h4>
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-500">
-              Ghostwriter already has this job description, your resume, candidate memory, and writing preferences. Ask for fit scoring, bullet rewrites, cover letters, emails, or sharper CV positioning and it will carry the runtime rationale with it.
-            </p>
-            <div className="mt-5 flex flex-wrap gap-2 text-xs text-slate-600">
-              {[
-                "Score my fit for this role",
-                "Rewrite my strongest bullets for this JD",
-                "Draft a sharper cover letter opening",
-              ].map((prompt) => (
-                <span key={prompt} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">{prompt}</span>
-              ))}
+          <div className="flex min-h-[320px] flex-col justify-center rounded-2xl border border-dashed border-border/70 bg-muted/20 px-5 py-6 text-left">
+            <div className="max-w-2xl rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm">
+              <div className="text-sm font-medium text-foreground">Ghostwriter</div>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                I already have this job description and your saved profile context. Ask me to draft a cover letter, rewrite CV bullets, or assess fit for this role.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                {[
+                  "Score my fit for this role",
+                  "Rewrite my strongest bullets for this JD",
+                  "Draft a sharper cover letter opening",
+                ].map((prompt) => (
+                  <span
+                    key={prompt}
+                    className="rounded-full border border-border/60 bg-muted/40 px-3 py-1.5"
+                  >
+                    {prompt}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
         ) : (
@@ -138,7 +113,7 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
         )}
       </div>
 
-      <div className="border-t border-slate-200/80 bg-white/70 px-5 py-4 backdrop-blur">
+      <div className="border-t border-border/60 bg-background/95 px-4 py-4 backdrop-blur">
         <Composer
           disabled={isLoading || isStreaming}
           isStreaming={isStreaming}
