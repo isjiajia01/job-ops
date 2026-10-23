@@ -3,12 +3,12 @@
  */
 
 import { X } from "lucide-react";
-import React, { Suspense, lazy, useRef, useState } from "react";
+import React, { lazy, Suspense, useRef, useState } from "react";
 import {
+  generatePath,
   Navigate,
   Route,
   Routes,
-  generatePath,
   useLocation,
   useParams,
 } from "react-router-dom";
@@ -53,6 +53,11 @@ const HomePage = lazy(() =>
 const InProgressBoardPage = lazy(() =>
   import("./pages/InProgressBoardPage").then((module) => ({
     default: module.InProgressBoardPage,
+  })),
+);
+const PilotPage = lazy(() =>
+  import("./pages/PilotPage").then((module) => ({
+    default: module.PilotPage,
   })),
 );
 const ProfileHubPage = lazy(() =>
@@ -109,7 +114,7 @@ const REDIRECTS: Array<{ from: string; to: string }> = [
   { from: "/all/:jobId", to: "/applications/:jobId" },
 ];
 
-const DEMO_WAITLIST_BANNER_DISMISSED_KEY = "jobops.demoWaitlistBannerDismissed";
+const DEMO_WAITLIST_BANNER_DISMISSED_KEY = "jobops.demoPilotBannerDismissed";
 
 const LegacyJobRouteRedirect: React.FC = () => {
   const { jobId } = useParams<{ tab?: string; jobId?: string }>();
@@ -154,16 +159,9 @@ export const App: React.FC = () => {
         <div className="sticky top-0 z-50 w-full border-b border-orange-400/60 bg-orange-500 px-4 py-2 text-xs text-orange-950 shadow-sm">
           <div className="mx-auto flex max-w-7xl items-center justify-center gap-3">
             <p className="flex-1 text-center font-medium">
-              This is a read-only demo. Want JobOps without the Docker setup? ☁️{" "}
-              Cloud version coming soon — join the waitlist at{" "}
-              <a
-                className="font-semibold underline underline-offset-2 hover:text-orange-900"
-                href="https://try.jobops.app?utm_source=demo&utm_medium=banner&utm_campaign=waitlist"
-                target="_blank"
-                rel="noreferrer"
-              >
-                try.jobops.app
-              </a>
+              Demo-safe sample data only. JobOps is being shaped as a private,
+              invite-only career-ops pilot: human-reviewed outputs, local-first
+              deployments, and no automatic applications.
             </p>
             <Button
               type="button"
@@ -215,7 +213,10 @@ export const App: React.FC = () => {
                   {/* Application routes */}
                   <Route path="/overview" element={<HomePage />} />
                   <Route path="/applications" element={<ApplicationsPage />} />
-                  <Route path="/applications/new" element={<ApplicationsPage />} />
+                  <Route
+                    path="/applications/new"
+                    element={<ApplicationsPage />}
+                  />
                   <Route
                     path="/applications/:id"
                     element={<ApplicationWorkspacePage />}
@@ -243,6 +244,7 @@ export const App: React.FC = () => {
                     element={<InProgressBoardPage />}
                   />
                   <Route path="/profile-hub" element={<ProfileHubPage />} />
+                  <Route path="/pilot" element={<PilotPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                   <Route path="/tracer-links" element={<TracerLinksPage />} />
                   <Route path="/visa-sponsors" element={<VisaSponsorsPage />} />

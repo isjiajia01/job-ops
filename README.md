@@ -1,159 +1,92 @@
-# JobOps: Your Ironman Suit for Job Hunting
+# JobOps — Private AI Job-Search Operations Pilot
 
+JobOps is my private, invite-only AI job-search operations tool for structuring job discovery, fit triage, tailored-material workflows, application tracking, and rejection-feedback learning.
 
-<a href="https://trendshift.io/repositories/22756" target="_blank"><img src="https://trendshift.io/api/badge/repositories/22756" alt="DaKheera47%2Fjob-ops | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+This repository is **not positioned as a commercial SaaS**. My current use case is a local-first pilot: I run it for my own job-search workflow and help a small peer group deploy/use it locally when useful. The product goal is trust and workflow quality, not growth-at-all-costs.
 
-[![Stars](https://img.shields.io/github/stars/DaKheera47/job-ops?style=social)](https://github.com/DaKheera47/job-ops)
-[![GHCR](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker&logoColor=white)](https://github.com/DaKheera47/job-ops/pkgs/container/job-ops)
-[![Release](https://github.com/DaKheera47/job-ops/actions/workflows/ghcr.yml/badge.svg)](https://github.com/DaKheera47/job-ops/actions/workflows/ghcr.yml)
-[![Contributors](https://img.shields.io/github/contributors-anon/dakheera47/job-ops)](Contributors)
-[![Cloud Waitlist](https://img.shields.io/badge/☁️_Cloud-Join_Waitlist-orange?style=flat-square)](https://try.jobops.app?utm_source=github&utm_medium=badge&utm_campaign=waitlist)
+## What this project demonstrates
 
-<img width="1200" height="600" alt="2k" src="https://github.com/user-attachments/assets/14fdc392-0e96-43be-bc1f-cf819ab2afc4" />
+- Adapting a substantial open-source codebase into a practical workflow product instead of building a toy greenfield demo.
+- Operating a Docker/SQLite/LLM-assisted application with deployment, configuration, backups, and docs.
+- Designing human-reviewed AI workflows where fit assessment, CV/cover-letter drafting, and post-application tracking are auditable rather than automatic.
+- Handling sensitive career data with explicit privacy boundaries, local-first deployment, and anonymized feedback notes.
+- Turning real usage signals from a small peer pilot into product decisions: profile setup, application statuses, role-fit labels, do-not-claim guardrails, and rejection-feedback loops.
 
-Stop applying blind.
+## Positioning boundary
 
-Scrapes major job boards (LinkedIn, Indeed, Glassdoor & more), AI-scores suitability, tailors resumes (RxResume), and tracks application emails automatically.
+JobOps should be understood as:
 
-You still apply to every job yourself. JobOps just finds jobs, makes sure you're applying to the right ones with a tailored CV, and not losing track of where you're at.
+- **Private pilot / portfolio-grade operations tool**
+- **Self-hosted and local-first by default**
+- **Human-in-the-loop**: users review every generated claim and submit applications themselves
+- **Privacy-aware**: peer usage can be tracked as anonymized feedback without importing personal CV data into a shared database
 
-Self-hosted. Docker-based.
+JobOps should **not** be described as:
 
-## Portfolio Context
+- a commercial SaaS
+- an autonomous job-application bot
+- an enterprise hiring platform
+- proof of large-scale commercial AI product ownership
 
-This repository is included in my public portfolio as a **product and operations engineering example**.
+## Current pilot layer
 
-It is based on the open-source JobOps project, but my interest here is not just using it as-is. The value is in adapting, deploying, and operating it for a concrete workflow: a Denmark/EU-focused job-search system with self-hosting, scoring, tailoring, and tracking integrated into one practical pipeline.
+The local fork adds a Private Pilot workspace:
 
-What I want this repository to signal:
+- pilot user registry for friends/local deployments
+- lightweight profile metadata and completeness tracking
+- target-role and do-not-claim guardrail fields
+- anonymized feedback notes
+- explicit non-commercial/privacy boundary copy
 
-- ability to evaluate and adapt an existing open-source system instead of only building toy greenfield demos
-- comfort with real deployment workflows, Docker-based operations, and production-minded setup
-- judgment around workflow design: search, ranking, tailoring, export, and post-application tracking as one usable system
-- product thinking about how LLM components fit into a larger operational process
+See [`docs/private-pilot-plan.md`](./docs/private-pilot-plan.md) for the implementation roadmap and the interview/CV story this project is meant to support.
 
-If you are reviewing this repository as part of my portfolio, the key point is not authorship of the original upstream alone, but my ability to understand a substantial codebase, customize it for a target use case, run it end-to-end, and position it as a usable operational tool.
+## Core workflow
 
-## 40s Demo: Crawl → Score → PDF → Track
+1. **Capture roles** from job boards or pasted job descriptions.
+2. **Score and triage fit** against a candidate profile.
+3. **Tailor materials** with human-reviewed evidence selection and claim boundaries.
+4. **Track applications** through applied, interview, rejection, offer, or follow-up states.
+5. **Learn from outcomes** by recording rejection reasons, recruiter feedback, and targeting lessons.
 
-<details>
-<summary>
-Pipeline Demo
-</summary>
-  
-  https://github.com/user-attachments/assets/5b9157a9-13b0-4ec6-9bd2-a39dbc2b11c5
-</details>
+## Technical stack
 
+- TypeScript monorepo
+- React + Vite frontend
+- Express backend
+- Drizzle ORM + SQLite
+- Docker-based self-hosting
+- LLM provider configuration for scoring/tailoring workflows
+- Docusaurus docs site
 
-<details>
-<summary>
-Apply & Track
-</summary>
-  
-  https://github.com/user-attachments/assets/06e5e782-47f5-42d0-8b28-b89102d7ea1b
-</details>
-
-## Documentation (Start Here)
-
-JobOps ships with full docs for setup, architecture, extractors, and troubleshooting.
-
-If you want the serious view of the project, start here:
-
-- [Documentation Home](https://jobops.dakheera47.com/docs/)
-- [Self-Hosting Guide](https://jobops.dakheera47.com/docs/getting-started/self-hosting)
-- [Feature Overview](https://jobops.dakheera47.com/docs/features/overview)
-- [Application Workspace](https://jobops.dakheera47.com/docs/next/features/application-workspace)
-- [Extractor System](https://jobops.dakheera47.com/docs/extractors/overview)
-- [Troubleshooting](https://jobops.dakheera47.com/docs/troubleshooting/common-problems)
-
-## Quick Start (10 Min)
-
-Prefer guided setup? Follow the [Self-Hosting Guide](https://jobops.dakheera47.com/docs/getting-started/self-hosting).
+## Quick start
 
 ```bash
-# 1. Download
-git clone https://github.com/DaKheera47/job-ops.git
-cd job-ops
-
-# 2. Start (Pulls pre-built image)
-docker compose up -d
-
-# 3. Launch Dashboard
-# Open http://localhost:3005 to start the onboarding wizard
-
+# From repository root
+npm install
+npm --workspace workspace run db:migrate
+npm --workspace workspace run dev
 ```
 
-## Why JobOps?
+For Docker-based local deployment, use the existing compose setup and configure credentials in `.env`.
 
-* **Universal Scraping**: Supports **LinkedIn, Indeed, Glassdoor, Adzuna, Hiring Café, Gradcracker, UK Visa Jobs**.
-* **AI Scoring**: Ranks jobs by fit against *your* profile using your preferred LLM (OpenAI, OpenRouter, `openai-compatible` endpoints such as LM Studio/Ollama, Gemini).
-* **Auto-Tailoring**: Generates custom resumes (PDFs) for every application using RxResume v4.
-* **Email Tracking**: Connect Gmail to auto-detect interviews, offers, and rejections.
-* **Self-Hosted**: Your data stays with you. SQLite database. No SaaS fees.
+```bash
+cp .env.example .env
+# edit BASIC_AUTH_USER / BASIC_AUTH_PASSWORD and LLM settings
+docker compose up -d
+```
 
-## Workflow
+Then open the local dashboard and complete onboarding.
 
-1. **Search**: Scrapes job boards for roles matching your criteria.
-2. **Score**: AI ranks jobs (0-100) based on your resume/profile.
-3. **Tailor**: Generates a custom resume summary & keyword optimization for top matches.
-4. **Export**: Uses [RxResume v4](https://v4.rxresu.me) to create tailored PDFs.
-5. **Track**: "Smart Router" AI watches your inbox for recruiter replies.
+## Privacy defaults for peer use
 
-## Supported Extractors
+When helping friends use JobOps, prefer:
 
-| Platform | Focus |
-| --- | --- |
-| **LinkedIn** | Global / General |
-| **Indeed** | Global / General |
-| **Glassdoor** | Global / General |
-| **Adzuna** | Multi-country API source |
-| **Hiring Café** | Global / General |
-| **Gradcracker** | STEM / Grads (UK) |
-| **UK Visa Jobs** | Sponsorship (UK) |
+- local deployment on their machine or a dedicated private instance
+- no shared import of their full CV/application data into my own database
+- anonymized feedback notes only
+- explicit consent before storing contact details or profile metadata
+- human review before generated text is copied into real applications
 
-*(More extractors can be added via TypeScript - see [extractors documentation](https://jobops.dakheera47.com/docs/extractors/overview))*
+## Upstream basis and license
 
-## Post-App Tracking (Killer Feature)
-
-Connect Gmail → AI routes emails to your applied jobs.
-
-* "We'd like to interview you..." → **Status: Interviewing** (Auto-updated)
-* "Unfortunately..." → **Status: Rejected** (Auto-updated)
-
-See [post-application tracking docs](https://jobops.dakheera47.com/docs/features/post-application-tracking) for setup.
-
-**Note on Analytics**: The alpha version includes anonymous analytics (Umami) to help debug performance. To opt-out, block `umami.dakheera47.com` in your firewall/DNS.
-
-## ☁️ Cloud Version (Coming Soon)
-
-Self-hosting not your thing? A hosted version of JobOps is coming.
-
-- No Docker required
-- Up and running in 2 minutes
-- Managed updates
-- Self-hosted will always be free and open source
-
-👉 Join the waitlist at [https://try.jobops.app](https://try.jobops.app?utm_source=github&utm_medium=readme&utm_campaign=waitlist)
-<br>
-Support me on [kofi](https://ko-fi.com/shaheersarfaraz)
-
-## Contributing
-
-Want to contribute code, docs, or extractors? Start with [`CONTRIBUTING.md`](./CONTRIBUTING.md).
-
-
-## Star History
-
-<a href="https://www.star-history.com/#DaKheera47/job-ops&type=date&legend=top-left">
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=DaKheera47/job-ops&type=date&theme=dark&legend=top-left" />
-<source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=DaKheera47/job-ops&type=date&legend=top-left" />
-<img alt="Star History Chart" src="https://api.star-history.com/svg?repos=DaKheera47/job-ops&type=date&legend=top-left" />
-</picture>
-</a>
-
-## License
-
-**AGPLv3 + Commons Clause** - You can self-host, use, and modify JobOps, but
-you cannot sell the software itself or offer paid hosted/support services whose
-value substantially comes from JobOps. See [LICENSE](LICENSE).
+This fork is based on the open-source JobOps project by DaKheera47. The original project remains licensed under **AGPLv3 + Commons Clause**. This local fork preserves that licensing context and is used as a private/portfolio adaptation rather than a paid hosted product.

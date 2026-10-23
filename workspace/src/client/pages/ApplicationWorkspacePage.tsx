@@ -3,10 +3,11 @@ import {
   type ApplicationStage,
   type ApplicationTask,
   type JobOutcome,
+  type PilotFitLabel,
   STAGE_LABELS,
   type StageEvent,
 } from "@shared/types.js";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import confetti from "canvas-confetti";
 import {
   ArrowLeft,
@@ -23,6 +24,7 @@ import {
   MoreHorizontal,
   PlusCircle,
   RefreshCcw,
+  ShieldCheck,
   Sparkles,
   XCircle,
 } from "lucide-react";
@@ -52,6 +54,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   copyTextToClipboard,
   formatJobForWebhook,
@@ -61,6 +66,7 @@ import * as api from "../api";
 import { ApplicationDetailsEditDrawer } from "../components/ApplicationDetailsEditDrawer";
 import { ApplicationHeader } from "../components/ApplicationHeader";
 import { ConfirmDelete } from "../components/ConfirmDelete";
+
 const GhostwriterDrawer = React.lazy(() =>
   import("../components/ghostwriter/GhostwriterDrawer").then((module) => ({
     default: module.GhostwriterDrawer,
@@ -71,6 +77,7 @@ const GhostwriterPanel = React.lazy(() =>
     default: module.GhostwriterPanel,
   })),
 );
+
 import {
   type LogEventFormValues,
   LogEventModal,
@@ -82,6 +89,18 @@ const GhostwriterLoadingFallback: React.FC = () => (
     Loading Ghostwriter…
   </div>
 );
+
+function splitPilotList(value: string): string[] {
+  return value
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+function formatPilotLabel(value: string): string {
+  return value.replaceAll("_", " ");
+}
 
 export const ApplicationWorkspacePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -95,6 +114,12 @@ export const ApplicationWorkspacePage: React.FC = () => {
   const [editingEvent, setEditingEvent] = React.useState<StageEvent | null>(
     null,
   );
+  const [pilotFitLabel, setPilotFitLabel] = React.useState<PilotFitLabel>(
+    "moderate_stretch_worth_applying",
+  );
+  const [pilotRationale, setPilotRationale] = React.useState("");
+  const [pilotRisks, setPilotRisks] = React.useState("");
+  const [pilotClaimText, setPilotClaimText] = React.useState("");
   const pendingEventRef = React.useRef<StageEvent | null>(null);
 
   const jobQuery = useQuery<Application | null>({
@@ -115,6 +140,16 @@ export const ApplicationWorkspacePage: React.FC = () => {
       ? queryKeys.applications.tasks(id)
       : (["applications", "tasks", null] as const),
     queryFn: () => (id ? api.getApplicationTasks(id) : Promise.resolve([])),
+    enabled: Boolean(id),
+  });
+  const pilotWorkflowQuery = useQuery({
+    queryKey: id
+      ? (["pilot", "application-workflow", id] as const)
+      : (["pilot", "application-workflow", null] as const),
+    queryFn: () =>
+      id
+        ? api.getPilotApplicationWorkflow(id)
+        : Promise.resolve({ reviews: [], claimChecks: [] }),
     enabled: Boolean(id),
   });
 
@@ -138,10 +173,49 @@ export const ApplicationWorkspacePage: React.FC = () => {
   const rescoreJobMutation = useRescoreApplicationMutation();
   const generatePdfMutation = useGenerateApplicationPdfMutation();
   const checkSponsorMutation = useCheckApplicationSponsorMutation();
+  const createPilotReviewMutation = useMutation({
+    mutationFn: api.createPilotApplicationReview,
+    onSuccess: () => {
+      toast.success("Fit review saved");
+      setPilotRationale("");
+      setPilotRisks("");
+      if (id) {
+        void queryClient.invalidateQueries({
+          queryKey: ["pilot", "application-workflow", id] as const,
+        });
+      }
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save fit review",
+      );
+    },
+  });
+  const createPilotClaimCheckMutation = useMutation({
+    mutationFn: api.createPilotClaimCheck,
+    onSuccess: () => {
+      toast.success("Claim check saved");
+      setPilotClaimText("");
+      if (id) {
+        void queryClient.invalidateQueries({
+          queryKey: ["pilot", "application-workflow", id] as const,
+        });
+      }
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save claim check",
+      );
+    },
+  });
 
   const job = jobQuery.data ?? null;
   const events = mergeEvents(eventsQuery.data ?? [], pendingEventRef.current);
   const tasks = tasksQuery.data ?? [];
+  const pilotWorkflow = pilotWorkflowQuery.data ?? {
+    reviews: [],
+    claimChecks: [],
+  };
   const isLoading =
     jobQuery.isLoading || eventsQuery.isLoading || tasksQuery.isLoading;
 
@@ -744,6 +818,199 @@ export const ApplicationWorkspacePage: React.FC = () => {
                 <Suspense fallback={<GhostwriterLoadingFallback />}>
                   {job ? <GhostwriterPanel job={job} /> : null}
                 </Suspense>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/50 shadow-sm">
+            <CardHeader>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ShieldCheck className="h-4 w-4" />
+                  Fit and claim guardrails
+                </CardTitle>
+                <Badge
+                  variant="outline"
+                  className="text-[10px] uppercase tracking-wide"
+                >
+                  private pilot layer
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-4 xl:grid-cols-2">
+                <div className="space-y-3 rounded-lg border border-border/60 p-3">
+                  <div>
+                    <div className="text-sm font-medium">
+                      Fit-triage decision
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Save why this role is worth applying, a stretch, or a skip
+                      before writing materials.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Fit label</Label>
+                    <select
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={pilotFitLabel}
+                      onChange={(event) =>
+                        setPilotFitLabel(event.target.value as PilotFitLabel)
+                      }
+                    >
+                      <option value="strong_worth_applying">
+                        Strong / worth applying
+                      </option>
+                      <option value="moderate_stretch_worth_applying">
+                        Moderate-stretch / worth applying
+                      </option>
+                      <option value="low_probability_usually_skip">
+                        Low-probability stretch / usually skip
+                      </option>
+                      <option value="not_suitable_do_not_apply">
+                        Not suitable / do not apply
+                      </option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Rationale</Label>
+                    <Textarea
+                      value={pilotRationale}
+                      onChange={(event) =>
+                        setPilotRationale(event.target.value)
+                      }
+                      placeholder="JD fit, evidence angle, seniority/language/stack risk"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Risks</Label>
+                    <Input
+                      value={pilotRisks}
+                      onChange={(event) => setPilotRisks(event.target.value)}
+                      placeholder="commercial AI gap, Danish, senior platform scope"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={
+                      !job ||
+                      !pilotRationale.trim() ||
+                      createPilotReviewMutation.isPending
+                    }
+                    onClick={() =>
+                      job &&
+                      createPilotReviewMutation.mutate({
+                        applicationId: job.id,
+                        company: job.employer,
+                        roleTitle: job.title,
+                        fitLabel: pilotFitLabel,
+                        rationale: pilotRationale,
+                        risks: splitPilotList(pilotRisks),
+                        recommendedAction:
+                          "Use this decision before tailoring materials.",
+                      })
+                    }
+                  >
+                    Save fit review
+                  </Button>
+                </div>
+
+                <div className="space-y-3 rounded-lg border border-border/60 p-3">
+                  <div>
+                    <div className="text-sm font-medium">
+                      Claim-boundary check
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Paste draft CV, cover-letter, or outreach text and store a
+                      guardrail check before use.
+                    </p>
+                  </div>
+                  <Textarea
+                    value={pilotClaimText}
+                    onChange={(event) => setPilotClaimText(event.target.value)}
+                    placeholder="Paste AI-generated wording here…"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={
+                      !job ||
+                      !pilotClaimText.trim() ||
+                      createPilotClaimCheckMutation.isPending
+                    }
+                    onClick={() =>
+                      job &&
+                      createPilotClaimCheckMutation.mutate({
+                        applicationId: job.id,
+                        sourceLabel: `${job.employer} ${job.title} draft`,
+                        checkedText: pilotClaimText,
+                      })
+                    }
+                  >
+                    Run claim check
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid gap-3 xl:grid-cols-2">
+                <div className="space-y-2">
+                  <div className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                    Latest fit reviews
+                  </div>
+                  {pilotWorkflow.reviews.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-border/60 p-3 text-sm text-muted-foreground">
+                      No fit review saved for this application yet.
+                    </p>
+                  ) : (
+                    pilotWorkflow.reviews.slice(0, 3).map((review) => (
+                      <div
+                        key={review.id}
+                        className="rounded-lg border border-border/60 p-3 text-sm"
+                      >
+                        <Badge variant="outline">
+                          {formatPilotLabel(review.fitLabel)}
+                        </Badge>
+                        <p className="mt-2">{review.rationale}</p>
+                        {review.risks.length > 0 && (
+                          <p className="mt-1 text-muted-foreground">
+                            Risks: {review.risks.join(", ")}
+                          </p>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <div className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                    Latest claim checks
+                  </div>
+                  {pilotWorkflow.claimChecks.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-border/60 p-3 text-sm text-muted-foreground">
+                      No claim-boundary check saved for this application yet.
+                    </p>
+                  ) : (
+                    pilotWorkflow.claimChecks.slice(0, 3).map((check) => (
+                      <div
+                        key={check.id}
+                        className="rounded-lg border border-border/60 p-3 text-sm"
+                      >
+                        <Badge
+                          variant={
+                            check.severity === "blocker"
+                              ? "destructive"
+                              : check.severity === "warning"
+                                ? "secondary"
+                                : "outline"
+                          }
+                        >
+                          {check.severity}
+                        </Badge>
+                        <p className="mt-2">{check.summary}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>

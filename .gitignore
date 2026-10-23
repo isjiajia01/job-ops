@@ -20,3 +20,8 @@ extractors/ukvisajobs/storage/
 # OS files
 .DS_Store
 Thumbs.db
+
+# --- Agent runtime state (Pi / OMP / ASC) ---
+.pi/
+.asc/
+.omp_probe.txt

@@ -4,6 +4,7 @@ import {
   Home,
   Inbox,
   Settings,
+  UsersRound,
 } from "lucide-react";
 
 export type NavLink = {
@@ -27,6 +28,7 @@ export const NAV_LINKS: NavLink[] = [
     icon: ContactRound,
     activePaths: ["/profile-hub"],
   },
+  { to: "/pilot", label: "Private Pilot", icon: UsersRound },
   { to: "/tracking-inbox", label: "Tracking Inbox", icon: Inbox },
   { to: "/settings", label: "Settings", icon: Settings },
 ];

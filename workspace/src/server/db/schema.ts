@@ -116,12 +116,8 @@ export const jobs = sqliteTable(
       .default(sql`(datetime('now'))`),
     processedAt: text("processed_at"),
     appliedAt: text("applied_at"),
-    createdAt: text("created_at")
-      .notNull()
-      .default(sql`(datetime('now'))`),
-    updatedAt: text("updated_at")
-      .notNull()
-      .default(sql`(datetime('now'))`),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
   },
   (table) => ({
     statusDiscoveredAtIndex: index("idx_jobs_status_discovered_at").on(
@@ -471,6 +467,154 @@ export const tracerLinks = sqliteTable(
   }),
 );
 
+export const pilotUsers = sqliteTable(
+  "pilot_users",
+  {
+    id: text("id").primaryKey(),
+    displayName: text("display_name").notNull(),
+    email: text("email"),
+    status: text("status", {
+      enum: ["invited", "active", "paused", "archived"],
+    })
+      .notNull()
+      .default("invited"),
+    usageMode: text("usage_mode", {
+      enum: ["local_deploy", "guided_session", "demo_only"],
+    })
+      .notNull()
+      .default("local_deploy"),
+    privacyMode: text("privacy_mode", {
+      enum: ["local_only", "anonymized_notes", "shared_with_consent"],
+    })
+      .notNull()
+      .default("local_only"),
+    targetRoles: text("target_roles", { mode: "json" }),
+    notes: text("notes"),
+    invitedAt: integer("invited_at", { mode: "number" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    lastActiveAt: integer("last_active_at", { mode: "number" }),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => ({
+    statusIndex: index("idx_pilot_users_status").on(table.status),
+    usageModeIndex: index("idx_pilot_users_usage_mode").on(table.usageMode),
+  }),
+);
+
+export const pilotUserProfiles = sqliteTable(
+  "pilot_user_profiles",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => pilotUsers.id, { onDelete: "cascade" }),
+    headline: text("headline"),
+    location: text("location"),
+    targetRoles: text("target_roles", { mode: "json" }),
+    coreSkills: text("core_skills", { mode: "json" }),
+    hardConstraints: text("hard_constraints", { mode: "json" }),
+    doNotClaim: text("do_not_claim", { mode: "json" }),
+    evidenceSummary: text("evidence_summary"),
+    profileCompleteness: integer("profile_completeness").notNull().default(0),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => ({
+    userIndex: uniqueIndex("idx_pilot_user_profiles_user_id").on(table.userId),
+  }),
+);
+
+export const pilotFeedbackNotes = sqliteTable(
+  "pilot_feedback_notes",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").references(() => pilotUsers.id, {
+      onDelete: "set null",
+    }),
+    noteType: text("note_type", {
+      enum: ["feedback", "observation", "rejection_signal", "product_decision"],
+    })
+      .notNull()
+      .default("feedback"),
+    summary: text("summary").notNull(),
+    actionTaken: text("action_taken"),
+    isAnonymized: integer("is_anonymized", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => ({
+    userIndex: index("idx_pilot_feedback_notes_user_id").on(table.userId),
+    typeIndex: index("idx_pilot_feedback_notes_type").on(table.noteType),
+  }),
+);
+
+export const pilotApplicationReviews = sqliteTable(
+  "pilot_application_reviews",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").references(() => pilotUsers.id, {
+      onDelete: "set null",
+    }),
+    applicationId: text("application_id").references(() => jobs.id, {
+      onDelete: "set null",
+    }),
+    company: text("company").notNull(),
+    roleTitle: text("role_title").notNull(),
+    fitLabel: text("fit_label", {
+      enum: [
+        "strong_worth_applying",
+        "moderate_stretch_worth_applying",
+        "low_probability_usually_skip",
+        "not_suitable_do_not_apply",
+      ],
+    }).notNull(),
+    rationale: text("rationale").notNull(),
+    risks: text("risks", { mode: "json" }),
+    recommendedAction: text("recommended_action"),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => ({
+    userIndex: index("idx_pilot_application_reviews_user_id").on(table.userId),
+    applicationIndex: index("idx_pilot_application_reviews_application_id").on(
+      table.applicationId,
+    ),
+    fitIndex: index("idx_pilot_application_reviews_fit_label").on(
+      table.fitLabel,
+    ),
+  }),
+);
+
+export const pilotClaimChecks = sqliteTable(
+  "pilot_claim_checks",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").references(() => pilotUsers.id, {
+      onDelete: "set null",
+    }),
+    applicationId: text("application_id").references(() => jobs.id, {
+      onDelete: "set null",
+    }),
+    sourceLabel: text("source_label").notNull(),
+    checkedText: text("checked_text").notNull(),
+    severity: text("severity", { enum: ["pass", "warning", "blocker"] })
+      .notNull()
+      .default("pass"),
+    summary: text("summary").notNull(),
+    flaggedClaims: text("flagged_claims", { mode: "json" }),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => ({
+    userIndex: index("idx_pilot_claim_checks_user_id").on(table.userId),
+    applicationIndex: index("idx_pilot_claim_checks_application_id").on(
+      table.applicationId,
+    ),
+    severityIndex: index("idx_pilot_claim_checks_severity").on(table.severity),
+  }),
+);
+
 export const tracerClickEvents = sqliteTable(
   "tracer_click_events",
   {
@@ -538,6 +682,18 @@ export type PostApplicationMessageRow =
   typeof postApplicationMessages.$inferSelect;
 export type NewPostApplicationMessageRow =
   typeof postApplicationMessages.$inferInsert;
+export type PilotUserRow = typeof pilotUsers.$inferSelect;
+export type NewPilotUserRow = typeof pilotUsers.$inferInsert;
+export type PilotUserProfileRow = typeof pilotUserProfiles.$inferSelect;
+export type NewPilotUserProfileRow = typeof pilotUserProfiles.$inferInsert;
+export type PilotFeedbackNoteRow = typeof pilotFeedbackNotes.$inferSelect;
+export type NewPilotFeedbackNoteRow = typeof pilotFeedbackNotes.$inferInsert;
+export type PilotApplicationReviewRow =
+  typeof pilotApplicationReviews.$inferSelect;
+export type NewPilotApplicationReviewRow =
+  typeof pilotApplicationReviews.$inferInsert;
+export type PilotClaimCheckRow = typeof pilotClaimChecks.$inferSelect;
+export type NewPilotClaimCheckRow = typeof pilotClaimChecks.$inferInsert;
 export type TracerLinkRow = typeof tracerLinks.$inferSelect;
 export type NewTracerLinkRow = typeof tracerLinks.$inferInsert;
 export type TracerClickEventRow = typeof tracerClickEvents.$inferSelect;

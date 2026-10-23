@@ -23,7 +23,8 @@
     "build:extractors": "node ./scripts/build-extractors.mjs",
     "release:set-version": "node ./scripts/set-workspace-version.mjs",
     "knip": "knip",
-    "eval:tailoring": "tsx --tsconfig ./workspace/tsconfig.json ./scripts/run-tailoring-eval.ts"
+    "eval:tailoring": "tsx --tsconfig ./workspace/tsconfig.json ./scripts/run-tailoring-eval.ts",
+    "pilot:seed-demo": "tsx --tsconfig ./workspace/tsconfig.json ./scripts/seed-pilot-demo.ts"
   },
   "devDependencies": {
     "@types/node": "^25.2.3",
