@@ -255,6 +255,92 @@ const migrations = [
     UNIQUE(provider, account_key, external_message_id)
   )`,
 
+  `CREATE TABLE IF NOT EXISTS pilot_users (
+    id TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL,
+    email TEXT,
+    status TEXT NOT NULL DEFAULT 'invited' CHECK(status IN ('invited', 'active', 'paused', 'archived')),
+    usage_mode TEXT NOT NULL DEFAULT 'local_deploy' CHECK(usage_mode IN ('local_deploy', 'guided_session', 'demo_only')),
+    privacy_mode TEXT NOT NULL DEFAULT 'local_only' CHECK(privacy_mode IN ('local_only', 'anonymized_notes', 'shared_with_consent')),
+    target_roles TEXT,
+    notes TEXT,
+    invited_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+    last_active_at INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS pilot_user_profiles (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL UNIQUE,
+    headline TEXT,
+    location TEXT,
+    target_roles TEXT,
+    core_skills TEXT,
+    hard_constraints TEXT,
+    do_not_claim TEXT,
+    evidence_summary TEXT,
+    profile_completeness INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES pilot_users(id) ON DELETE CASCADE
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS pilot_feedback_notes (
+    id TEXT PRIMARY KEY,
+    user_id TEXT,
+    note_type TEXT NOT NULL DEFAULT 'feedback' CHECK(note_type IN ('feedback', 'observation', 'rejection_signal', 'product_decision')),
+    summary TEXT NOT NULL,
+    action_taken TEXT,
+    is_anonymized INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES pilot_users(id) ON DELETE SET NULL
+  )`,
+
+  `CREATE INDEX IF NOT EXISTS idx_pilot_users_status ON pilot_users(status)`,
+  `CREATE INDEX IF NOT EXISTS idx_pilot_users_usage_mode ON pilot_users(usage_mode)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_pilot_user_profiles_user_id ON pilot_user_profiles(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_pilot_feedback_notes_user_id ON pilot_feedback_notes(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_pilot_feedback_notes_type ON pilot_feedback_notes(note_type)`,
+
+  `CREATE TABLE IF NOT EXISTS pilot_application_reviews (
+    id TEXT PRIMARY KEY,
+    user_id TEXT,
+    application_id TEXT,
+    company TEXT NOT NULL,
+    role_title TEXT NOT NULL,
+    fit_label TEXT NOT NULL CHECK(fit_label IN ('strong_worth_applying', 'moderate_stretch_worth_applying', 'low_probability_usually_skip', 'not_suitable_do_not_apply')),
+    rationale TEXT NOT NULL,
+    risks TEXT,
+    recommended_action TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES pilot_users(id) ON DELETE SET NULL,
+    FOREIGN KEY (application_id) REFERENCES jobs(id) ON DELETE SET NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS pilot_claim_checks (
+    id TEXT PRIMARY KEY,
+    user_id TEXT,
+    application_id TEXT,
+    source_label TEXT NOT NULL,
+    checked_text TEXT NOT NULL,
+    severity TEXT NOT NULL DEFAULT 'pass' CHECK(severity IN ('pass', 'warning', 'blocker')),
+    summary TEXT NOT NULL,
+    flagged_claims TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES pilot_users(id) ON DELETE SET NULL,
+    FOREIGN KEY (application_id) REFERENCES jobs(id) ON DELETE SET NULL
+  )`,
+
+  `ALTER TABLE pilot_application_reviews ADD COLUMN application_id TEXT`,
+  `ALTER TABLE pilot_claim_checks ADD COLUMN application_id TEXT`,
+  `CREATE INDEX IF NOT EXISTS idx_pilot_application_reviews_user_id ON pilot_application_reviews(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_pilot_application_reviews_application_id ON pilot_application_reviews(application_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_pilot_application_reviews_fit_label ON pilot_application_reviews(fit_label)`,
+  `CREATE INDEX IF NOT EXISTS idx_pilot_claim_checks_user_id ON pilot_claim_checks(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_pilot_claim_checks_application_id ON pilot_claim_checks(application_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_pilot_claim_checks_severity ON pilot_claim_checks(severity)`,
+
   `CREATE TABLE IF NOT EXISTS tracer_links (
     id TEXT PRIMARY KEY,
     token TEXT NOT NULL UNIQUE,
@@ -491,6 +577,9 @@ const migrations = [
   `CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)`,
   `CREATE INDEX IF NOT EXISTS idx_jobs_discovered_at ON jobs(discovered_at)`,
   `CREATE INDEX IF NOT EXISTS idx_jobs_status_discovered_at ON jobs(status, discovered_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_jobs_status_updated_at ON jobs(status, updated_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_jobs_status_applied_at ON jobs(status, applied_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_jobs_source_source_job_id ON jobs(source, source_job_id)`,
   `CREATE INDEX IF NOT EXISTS idx_pipeline_runs_started_at ON pipeline_runs(started_at)`,
   `CREATE INDEX IF NOT EXISTS idx_stage_events_application_id ON stage_events(application_id)`,
   `CREATE INDEX IF NOT EXISTS idx_stage_events_occurred_at ON stage_events(occurred_at)`,
@@ -657,6 +746,29 @@ const migrations = [
        ORDER BY se.occurred_at DESC, se.id DESC
        LIMIT 1
      ), 'applied') = 'closed'`,
+
+  `CREATE TABLE IF NOT EXISTS job_chat_run_events (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    thread_id TEXT NOT NULL,
+    job_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    phase TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    detail TEXT,
+    payload TEXT,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (run_id) REFERENCES job_chat_runs(id) ON DELETE CASCADE,
+    FOREIGN KEY (thread_id) REFERENCES job_chat_threads(id) ON DELETE CASCADE,
+    FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_job_chat_run_events_run_sequence
+   ON job_chat_run_events(run_id, sequence)`,
+  `CREATE INDEX IF NOT EXISTS idx_job_chat_run_events_run_created_at
+   ON job_chat_run_events(run_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_job_chat_run_events_job_created_at
+   ON job_chat_run_events(job_id, created_at)`,
 ];
 
 console.log("🔧 Running database migrations...");

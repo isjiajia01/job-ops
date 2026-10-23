@@ -3,10 +3,11 @@ import {
   type ApplicationStage,
   type ApplicationTask,
   type JobOutcome,
+  type PilotFitLabel,
   STAGE_LABELS,
   type StageEvent,
 } from "@shared/types.js";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import confetti from "canvas-confetti";
 import {
   ArrowLeft,
@@ -23,10 +24,11 @@ import {
   MoreHorizontal,
   PlusCircle,
   RefreshCcw,
+  ShieldCheck,
   Sparkles,
   XCircle,
 } from "lucide-react";
-import React from "react";
+import React, { Suspense } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { invalidateApplicationData } from "@/client/hooks/queries/invalidateApplicationData";
@@ -52,6 +54,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   copyTextToClipboard,
   formatJobForWebhook,
@@ -61,13 +66,41 @@ import * as api from "../api";
 import { ApplicationDetailsEditDrawer } from "../components/ApplicationDetailsEditDrawer";
 import { ApplicationHeader } from "../components/ApplicationHeader";
 import { ConfirmDelete } from "../components/ConfirmDelete";
-import { GhostwriterDrawer } from "../components/ghostwriter/GhostwriterDrawer";
-import { GhostwriterPanel } from "../components/ghostwriter/GhostwriterPanel";
+
+const GhostwriterDrawer = React.lazy(() =>
+  import("../components/ghostwriter/GhostwriterDrawer").then((module) => ({
+    default: module.GhostwriterDrawer,
+  })),
+);
+const GhostwriterPanel = React.lazy(() =>
+  import("../components/ghostwriter/GhostwriterPanel").then((module) => ({
+    default: module.GhostwriterPanel,
+  })),
+);
+
 import {
   type LogEventFormValues,
   LogEventModal,
 } from "../components/LogEventModal";
 import { ApplicationTimeline } from "./application/Timeline";
+
+const GhostwriterLoadingFallback: React.FC = () => (
+  <div className="flex h-full min-h-[320px] items-center justify-center text-sm text-muted-foreground">
+    Loading Ghostwriter…
+  </div>
+);
+
+function splitPilotList(value: string): string[] {
+  return value
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+function formatPilotLabel(value: string): string {
+  return value.replaceAll("_", " ");
+}
 
 export const ApplicationWorkspacePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -81,6 +114,12 @@ export const ApplicationWorkspacePage: React.FC = () => {
   const [editingEvent, setEditingEvent] = React.useState<StageEvent | null>(
     null,
   );
+  const [pilotFitLabel, setPilotFitLabel] = React.useState<PilotFitLabel>(
+    "moderate_stretch_worth_applying",
+  );
+  const [pilotRationale, setPilotRationale] = React.useState("");
+  const [pilotRisks, setPilotRisks] = React.useState("");
+  const [pilotClaimText, setPilotClaimText] = React.useState("");
   const pendingEventRef = React.useRef<StageEvent | null>(null);
 
   const jobQuery = useQuery<Application | null>({
@@ -101,6 +140,16 @@ export const ApplicationWorkspacePage: React.FC = () => {
       ? queryKeys.applications.tasks(id)
       : (["applications", "tasks", null] as const),
     queryFn: () => (id ? api.getApplicationTasks(id) : Promise.resolve([])),
+    enabled: Boolean(id),
+  });
+  const pilotWorkflowQuery = useQuery({
+    queryKey: id
+      ? (["pilot", "application-workflow", id] as const)
+      : (["pilot", "application-workflow", null] as const),
+    queryFn: () =>
+      id
+        ? api.getPilotApplicationWorkflow(id)
+        : Promise.resolve({ reviews: [], claimChecks: [] }),
     enabled: Boolean(id),
   });
 
@@ -124,10 +173,49 @@ export const ApplicationWorkspacePage: React.FC = () => {
   const rescoreJobMutation = useRescoreApplicationMutation();
   const generatePdfMutation = useGenerateApplicationPdfMutation();
   const checkSponsorMutation = useCheckApplicationSponsorMutation();
+  const createPilotReviewMutation = useMutation({
+    mutationFn: api.createPilotApplicationReview,
+    onSuccess: () => {
+      toast.success("Fit review saved");
+      setPilotRationale("");
+      setPilotRisks("");
+      if (id) {
+        void queryClient.invalidateQueries({
+          queryKey: ["pilot", "application-workflow", id] as const,
+        });
+      }
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save fit review",
+      );
+    },
+  });
+  const createPilotClaimCheckMutation = useMutation({
+    mutationFn: api.createPilotClaimCheck,
+    onSuccess: () => {
+      toast.success("Claim check saved");
+      setPilotClaimText("");
+      if (id) {
+        void queryClient.invalidateQueries({
+          queryKey: ["pilot", "application-workflow", id] as const,
+        });
+      }
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save claim check",
+      );
+    },
+  });
 
   const job = jobQuery.data ?? null;
   const events = mergeEvents(eventsQuery.data ?? [], pendingEventRef.current);
   const tasks = tasksQuery.data ?? [];
+  const pilotWorkflow = pilotWorkflowQuery.data ?? {
+    reviews: [],
+    claimChecks: [],
+  };
   const isLoading =
     jobQuery.isLoading || eventsQuery.isLoading || tasksQuery.isLoading;
 
@@ -425,7 +513,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
 
   return (
     <main className="container mx-auto max-w-6xl space-y-6 px-4 py-6 pb-12">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-4 rounded-lg border border-border/40 bg-background/70 px-3 py-2 shadow-sm backdrop-blur-sm">
         <Button
           variant="ghost"
           size="sm"
@@ -475,7 +563,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
               </div>
 
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)]">
-                <div className="rounded-xl border border-border/60 bg-background/30 p-4">
+                <div className="rounded-xl border border-border/60 bg-background/40 p-4 shadow-sm">
                   <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                     Workspace focus
                   </div>
@@ -491,7 +579,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
                   {quickFacts.slice(0, 3).map((fact) => (
                     <div
                       key={fact.label}
-                      className="rounded-xl border border-border/60 bg-background/20 p-3"
+                      className="rounded-xl border border-border/60 bg-background/30 p-3 shadow-sm"
                     >
                       <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                         {fact.label}
@@ -505,7 +593,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
               </div>
 
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-                <div className="rounded-xl border border-border/60 bg-background/20 p-3">
+                <div className="rounded-xl border border-border/60 bg-background/30 p-3 shadow-sm">
                   <div className="mb-2 text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
                     Do next
                   </div>
@@ -600,7 +688,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-border/60 bg-background/20 p-3">
+                <div className="rounded-xl border border-border/60 bg-background/30 p-3 shadow-sm">
                   <div className="mb-2 text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
                     Documents
                   </div>
@@ -704,10 +792,10 @@ export const ApplicationWorkspacePage: React.FC = () => {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.95fr)]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.78fr)]">
         <div className="space-y-6">
-          <Card className="border-border/50 overflow-hidden">
-            <CardHeader className="border-b border-border/50 bg-muted/20">
+          <Card className="overflow-hidden border-border/50 shadow-sm">
+            <CardHeader className="border-b border-border/50 bg-muted/20 pb-5">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <CardTitle className="flex items-center gap-2 text-base">
@@ -720,17 +808,214 @@ export const ApplicationWorkspacePage: React.FC = () => {
                     here.
                   </p>
                 </div>
-                <GhostwriterDrawer job={job} />
+                <Suspense fallback={null}>
+                  <GhostwriterDrawer job={job} />
+                </Suspense>
               </div>
             </CardHeader>
             <CardContent className="p-0">
               <div className="h-[620px] min-h-[520px] p-4">
-                {job ? <GhostwriterPanel job={job} /> : null}
+                <Suspense fallback={<GhostwriterLoadingFallback />}>
+                  {job ? <GhostwriterPanel job={job} /> : null}
+                </Suspense>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-border/50">
+          <Card className="border-border/50 shadow-sm">
+            <CardHeader>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ShieldCheck className="h-4 w-4" />
+                  Fit and claim guardrails
+                </CardTitle>
+                <Badge
+                  variant="outline"
+                  className="text-[10px] uppercase tracking-wide"
+                >
+                  private pilot layer
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-4 xl:grid-cols-2">
+                <div className="space-y-3 rounded-lg border border-border/60 p-3">
+                  <div>
+                    <div className="text-sm font-medium">
+                      Fit-triage decision
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Save why this role is worth applying, a stretch, or a skip
+                      before writing materials.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Fit label</Label>
+                    <select
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={pilotFitLabel}
+                      onChange={(event) =>
+                        setPilotFitLabel(event.target.value as PilotFitLabel)
+                      }
+                    >
+                      <option value="strong_worth_applying">
+                        Strong / worth applying
+                      </option>
+                      <option value="moderate_stretch_worth_applying">
+                        Moderate-stretch / worth applying
+                      </option>
+                      <option value="low_probability_usually_skip">
+                        Low-probability stretch / usually skip
+                      </option>
+                      <option value="not_suitable_do_not_apply">
+                        Not suitable / do not apply
+                      </option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Rationale</Label>
+                    <Textarea
+                      value={pilotRationale}
+                      onChange={(event) =>
+                        setPilotRationale(event.target.value)
+                      }
+                      placeholder="JD fit, evidence angle, seniority/language/stack risk"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Risks</Label>
+                    <Input
+                      value={pilotRisks}
+                      onChange={(event) => setPilotRisks(event.target.value)}
+                      placeholder="commercial AI gap, Danish, senior platform scope"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={
+                      !job ||
+                      !pilotRationale.trim() ||
+                      createPilotReviewMutation.isPending
+                    }
+                    onClick={() =>
+                      job &&
+                      createPilotReviewMutation.mutate({
+                        applicationId: job.id,
+                        company: job.employer,
+                        roleTitle: job.title,
+                        fitLabel: pilotFitLabel,
+                        rationale: pilotRationale,
+                        risks: splitPilotList(pilotRisks),
+                        recommendedAction:
+                          "Use this decision before tailoring materials.",
+                      })
+                    }
+                  >
+                    Save fit review
+                  </Button>
+                </div>
+
+                <div className="space-y-3 rounded-lg border border-border/60 p-3">
+                  <div>
+                    <div className="text-sm font-medium">
+                      Claim-boundary check
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Paste draft CV, cover-letter, or outreach text and store a
+                      guardrail check before use.
+                    </p>
+                  </div>
+                  <Textarea
+                    value={pilotClaimText}
+                    onChange={(event) => setPilotClaimText(event.target.value)}
+                    placeholder="Paste AI-generated wording here…"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={
+                      !job ||
+                      !pilotClaimText.trim() ||
+                      createPilotClaimCheckMutation.isPending
+                    }
+                    onClick={() =>
+                      job &&
+                      createPilotClaimCheckMutation.mutate({
+                        applicationId: job.id,
+                        sourceLabel: `${job.employer} ${job.title} draft`,
+                        checkedText: pilotClaimText,
+                      })
+                    }
+                  >
+                    Run claim check
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid gap-3 xl:grid-cols-2">
+                <div className="space-y-2">
+                  <div className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                    Latest fit reviews
+                  </div>
+                  {pilotWorkflow.reviews.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-border/60 p-3 text-sm text-muted-foreground">
+                      No fit review saved for this application yet.
+                    </p>
+                  ) : (
+                    pilotWorkflow.reviews.slice(0, 3).map((review) => (
+                      <div
+                        key={review.id}
+                        className="rounded-lg border border-border/60 p-3 text-sm"
+                      >
+                        <Badge variant="outline">
+                          {formatPilotLabel(review.fitLabel)}
+                        </Badge>
+                        <p className="mt-2">{review.rationale}</p>
+                        {review.risks.length > 0 && (
+                          <p className="mt-1 text-muted-foreground">
+                            Risks: {review.risks.join(", ")}
+                          </p>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <div className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                    Latest claim checks
+                  </div>
+                  {pilotWorkflow.claimChecks.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-border/60 p-3 text-sm text-muted-foreground">
+                      No claim-boundary check saved for this application yet.
+                    </p>
+                  ) : (
+                    pilotWorkflow.claimChecks.slice(0, 3).map((check) => (
+                      <div
+                        key={check.id}
+                        className="rounded-lg border border-border/60 p-3 text-sm"
+                      >
+                        <Badge
+                          variant={
+                            check.severity === "blocker"
+                              ? "destructive"
+                              : check.severity === "warning"
+                                ? "secondary"
+                                : "outline"
+                          }
+                        >
+                          {check.severity}
+                        </Badge>
+                        <p className="mt-2">{check.summary}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/50 shadow-sm">
             <CardHeader>
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <CardTitle className="flex items-center gap-2 text-base">
@@ -780,17 +1065,17 @@ export const ApplicationWorkspacePage: React.FC = () => {
           </Card>
         </div>
 
-        <div className="space-y-4">
-          <Card className="border-border/50">
+        <div className="space-y-3 self-start lg:sticky lg:top-4">
+          <Card className="border-border/50 shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <CalendarClock className="h-4 w-4" />
                 Application brief
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                <div className="rounded-lg border border-border/60 bg-muted/10 p-3">
+            <CardContent className="space-y-3">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+                <div className="rounded-lg border border-border/60 bg-muted/10 p-2.5">
                   <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                     Current stage
                   </div>
@@ -801,7 +1086,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
                       : job?.status}
                   </div>
                 </div>
-                <div className="rounded-lg border border-border/60 bg-muted/10 p-3">
+                <div className="rounded-lg border border-border/60 bg-muted/10 p-2.5">
                   <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                     Outcome
                   </div>
@@ -812,7 +1097,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
                 {quickFacts.map((fact) => (
                   <div
                     key={fact.label}
-                    className="rounded-lg border border-border/60 bg-muted/10 p-3"
+                    className="rounded-lg border border-border/60 bg-muted/10 p-2.5"
                   >
                     <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                       {fact.label}
@@ -823,7 +1108,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
                   </div>
                 ))}
                 {job?.closedAt && (
-                  <div className="rounded-lg border border-border/60 bg-muted/10 p-3">
+                  <div className="rounded-lg border border-border/60 bg-muted/10 p-2.5">
                     <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                       Closed on
                     </div>
@@ -835,18 +1120,18 @@ export const ApplicationWorkspacePage: React.FC = () => {
               </div>
 
               {referenceLinks.length > 0 && (
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                     Key links
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5">
                     {referenceLinks.map((link) => (
                       <Button
                         key={link.label}
                         asChild
                         size="sm"
                         variant="outline"
-                        className="h-8 border-border/60 bg-background/40"
+                        className="h-7 border-border/60 bg-background/40 px-2.5 text-xs"
                       >
                         <a href={link.href} target="_blank" rel="noreferrer">
                           <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
@@ -859,7 +1144,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
               )}
 
               {job?.suitabilityReason && (
-                <div className="rounded-lg border border-border/60 bg-background/30 p-3">
+                <div className="rounded-lg border border-border/60 bg-background/30 p-2.5">
                   <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                     Match rationale
                   </div>
@@ -872,7 +1157,7 @@ export const ApplicationWorkspacePage: React.FC = () => {
           </Card>
 
           {tasks.length > 0 && (
-            <Card className="border-border/50">
+            <Card className="border-border/50 shadow-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <CalendarClock className="h-4 w-4" />

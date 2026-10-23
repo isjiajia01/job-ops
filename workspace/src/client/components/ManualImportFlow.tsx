@@ -104,27 +104,85 @@ const normalizeDraft = (
   starting: draft?.starting ?? "",
 });
 
+const API_FIELD_LIMITS = {
+  title: 500,
+  employer: 500,
+  jobUrl: 2000,
+  applicationLink: 2000,
+  location: 200,
+  salary: 200,
+  deadline: 100,
+  jobDescription: 40000,
+  jobType: 200,
+  jobLevel: 200,
+  jobFunction: 200,
+  disciplines: 200,
+  degreeRequired: 200,
+  starting: 200,
+} as const;
+
+type LimitedDraftField = keyof typeof API_FIELD_LIMITS;
+
+const API_FIELD_LABELS: Record<LimitedDraftField, string> = {
+  title: "Title",
+  employer: "Employer",
+  jobUrl: "Job URL",
+  applicationLink: "Application URL",
+  location: "Location",
+  salary: "Salary",
+  deadline: "Deadline",
+  jobDescription: "Job description",
+  jobType: "Job type",
+  jobLevel: "Job level",
+  jobFunction: "Job function",
+  disciplines: "Disciplines",
+  degreeRequired: "Degree required",
+  starting: "Starting",
+};
+
+const getFieldOverflow = (value: string, maxLength: number) => {
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length <= maxLength) return null;
+  return {
+    currentLength: trimmed.length,
+    maxLength,
+    overflowBy: trimmed.length - maxLength,
+  };
+};
+
 const toPayload = (draft: ManualJobDraftState): ManualJobDraft => {
-  const clean = (value: string) => {
+  const clean = (value: string, maxLength?: number) => {
     const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
+    if (trimmed.length === 0) return undefined;
+    return typeof maxLength === "number"
+      ? trimmed.slice(0, maxLength)
+      : trimmed;
   };
 
   return {
-    title: clean(draft.title),
-    employer: clean(draft.employer),
-    jobUrl: clean(draft.jobUrl),
-    applicationLink: clean(draft.applicationLink),
-    location: clean(draft.location),
-    salary: clean(draft.salary),
-    deadline: clean(draft.deadline),
-    jobDescription: clean(draft.jobDescription),
-    jobType: clean(draft.jobType),
-    jobLevel: clean(draft.jobLevel),
-    jobFunction: clean(draft.jobFunction),
-    disciplines: clean(draft.disciplines),
-    degreeRequired: clean(draft.degreeRequired),
-    starting: clean(draft.starting),
+    title: clean(draft.title, API_FIELD_LIMITS.title),
+    employer: clean(draft.employer, API_FIELD_LIMITS.employer),
+    jobUrl: clean(draft.jobUrl, API_FIELD_LIMITS.jobUrl),
+    applicationLink: clean(
+      draft.applicationLink,
+      API_FIELD_LIMITS.applicationLink,
+    ),
+    location: clean(draft.location, API_FIELD_LIMITS.location),
+    salary: clean(draft.salary, API_FIELD_LIMITS.salary),
+    deadline: clean(draft.deadline, API_FIELD_LIMITS.deadline),
+    jobDescription: clean(
+      draft.jobDescription,
+      API_FIELD_LIMITS.jobDescription,
+    ),
+    jobType: clean(draft.jobType, API_FIELD_LIMITS.jobType),
+    jobLevel: clean(draft.jobLevel, API_FIELD_LIMITS.jobLevel),
+    jobFunction: clean(draft.jobFunction, API_FIELD_LIMITS.jobFunction),
+    disciplines: clean(draft.disciplines, API_FIELD_LIMITS.disciplines),
+    degreeRequired: clean(
+      draft.degreeRequired,
+      API_FIELD_LIMITS.degreeRequired,
+    ),
+    starting: clean(draft.starting, API_FIELD_LIMITS.starting),
   };
 };
 
@@ -182,6 +240,41 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
         (preset) => preset.id === selectedCoverLetterPromptId,
       ) ?? COVER_LETTER_PROMPTS[0],
     [selectedCoverLetterPromptId],
+  );
+
+  const overflowingFields = useMemo(
+    () =>
+      (Object.entries(API_FIELD_LIMITS) as Array<[LimitedDraftField, number]>)
+        .map(([field, maxLength]) => {
+          const overflow = getFieldOverflow(draft[field], maxLength);
+          if (!overflow) return null;
+          return {
+            field,
+            label: API_FIELD_LABELS[field],
+            ...overflow,
+          };
+        })
+        .filter((value): value is NonNullable<typeof value> => Boolean(value)),
+    [draft],
+  );
+
+  const overflowByField = useMemo(
+    () =>
+      Object.fromEntries(
+        overflowingFields.map((item) => [item.field, item]),
+      ) as Partial<
+        Record<
+          LimitedDraftField,
+          {
+            field: LimitedDraftField;
+            label: string;
+            currentLength: number;
+            maxLength: number;
+            overflowBy: number;
+          }
+        >
+      >,
+    [overflowingFields],
   );
 
   const canAnalyze = rawDescription.trim().length > 0 && step !== "loading";
@@ -563,6 +656,22 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
               </div>
             )}
 
+            {overflowingFields.length > 0 ? (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                <div className="font-medium text-amber-100">
+                  Some fields exceed API limits and will be trimmed on import.
+                </div>
+                <ul className="mt-2 space-y-1">
+                  {overflowingFields.map((item) => (
+                    <li key={item.field}>
+                      {item.label}: {item.currentLength} / {item.maxLength} characters
+                      (will trim {item.overflowBy})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
             <div className="flex items-center justify-between">
               <Button
                 type="button"
@@ -606,6 +715,12 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
                   setDraft((prev) => ({ ...prev, location: value }))
                 }
                 placeholder="e.g. London, UK"
+                helperText={
+                  overflowByField.location
+                    ? `${overflowByField.location.currentLength}/${overflowByField.location.maxLength} characters — will trim ${overflowByField.location.overflowBy}`
+                    : null
+                }
+                helperTone={overflowByField.location ? "warning" : "muted"}
               />
               <FieldInput
                 id="draft-salary"
@@ -615,6 +730,12 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
                   setDraft((prev) => ({ ...prev, salary: value }))
                 }
                 placeholder="e.g. GBP 45k-55k"
+                helperText={
+                  overflowByField.salary
+                    ? `${overflowByField.salary.currentLength}/${overflowByField.salary.maxLength} characters — will trim ${overflowByField.salary.overflowBy}`
+                    : null
+                }
+                helperTone={overflowByField.salary ? "warning" : "muted"}
               />
               <FieldInput
                 id="draft-deadline"
@@ -624,6 +745,12 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
                   setDraft((prev) => ({ ...prev, deadline: value }))
                 }
                 placeholder="e.g. 30 Sep 2025"
+                helperText={
+                  overflowByField.deadline
+                    ? `${overflowByField.deadline.currentLength}/${overflowByField.deadline.maxLength} characters — will trim ${overflowByField.deadline.overflowBy}`
+                    : null
+                }
+                helperTone={overflowByField.deadline ? "warning" : "muted"}
               />
               <FieldInput
                 id="draft-jobType"
@@ -633,6 +760,12 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
                   setDraft((prev) => ({ ...prev, jobType: value }))
                 }
                 placeholder="e.g. Full-time"
+                helperText={
+                  overflowByField.jobType
+                    ? `${overflowByField.jobType.currentLength}/${overflowByField.jobType.maxLength} characters — will trim ${overflowByField.jobType.overflowBy}`
+                    : null
+                }
+                helperTone={overflowByField.jobType ? "warning" : "muted"}
               />
               <FieldInput
                 id="draft-jobLevel"
@@ -642,6 +775,12 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
                   setDraft((prev) => ({ ...prev, jobLevel: value }))
                 }
                 placeholder="e.g. Graduate"
+                helperText={
+                  overflowByField.jobLevel
+                    ? `${overflowByField.jobLevel.currentLength}/${overflowByField.jobLevel.maxLength} characters — will trim ${overflowByField.jobLevel.overflowBy}`
+                    : null
+                }
+                helperTone={overflowByField.jobLevel ? "warning" : "muted"}
               />
               <FieldInput
                 id="draft-jobFunction"
@@ -651,6 +790,12 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
                   setDraft((prev) => ({ ...prev, jobFunction: value }))
                 }
                 placeholder="e.g. Software Engineering"
+                helperText={
+                  overflowByField.jobFunction
+                    ? `${overflowByField.jobFunction.currentLength}/${overflowByField.jobFunction.maxLength} characters — will trim ${overflowByField.jobFunction.overflowBy}`
+                    : null
+                }
+                helperTone={overflowByField.jobFunction ? "warning" : "muted"}
               />
               <FieldInput
                 id="draft-disciplines"
@@ -660,6 +805,12 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
                   setDraft((prev) => ({ ...prev, disciplines: value }))
                 }
                 placeholder="e.g. Computer Science"
+                helperText={
+                  overflowByField.disciplines
+                    ? `${overflowByField.disciplines.currentLength}/${overflowByField.disciplines.maxLength} characters — will trim ${overflowByField.disciplines.overflowBy}`
+                    : null
+                }
+                helperTone={overflowByField.disciplines ? "warning" : "muted"}
               />
               <FieldInput
                 id="draft-degreeRequired"
@@ -669,6 +820,12 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
                   setDraft((prev) => ({ ...prev, degreeRequired: value }))
                 }
                 placeholder="e.g. BSc or MSc"
+                helperText={
+                  overflowByField.degreeRequired
+                    ? `${overflowByField.degreeRequired.currentLength}/${overflowByField.degreeRequired.maxLength} characters — will trim ${overflowByField.degreeRequired.overflowBy}`
+                    : null
+                }
+                helperTone={overflowByField.degreeRequired ? "warning" : "muted"}
               />
               <FieldInput
                 id="draft-starting"
@@ -678,6 +835,12 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
                   setDraft((prev) => ({ ...prev, starting: value }))
                 }
                 placeholder="e.g. September 2026"
+                helperText={
+                  overflowByField.starting
+                    ? `${overflowByField.starting.currentLength}/${overflowByField.starting.maxLength} characters — will trim ${overflowByField.starting.overflowBy}`
+                    : null
+                }
+                helperTone={overflowByField.starting ? "warning" : "muted"}
               />
               <FieldInput
                 id="draft-jobUrl"
@@ -718,6 +881,13 @@ export const ManualImportFlow: React.FC<ManualImportFlowProps> = ({
                 placeholder="Paste the job description..."
                 className="min-h-[180px] font-mono text-sm leading-relaxed"
               />
+              {overflowByField.jobDescription ? (
+                <p className="text-[11px] text-amber-300">
+                  {overflowByField.jobDescription.currentLength}/
+                  {overflowByField.jobDescription.maxLength} characters — will
+                  trim {overflowByField.jobDescription.overflowBy} on import.
+                </p>
+              ) : null}
             </div>
 
             <div className="space-y-3 rounded-lg border border-border/50 bg-muted/10 p-4">
@@ -982,7 +1152,17 @@ const FieldInput: React.FC<{
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
-}> = ({ id, label, value, onChange, placeholder }) => (
+  helperText?: string | null;
+  helperTone?: "muted" | "warning";
+}> = ({
+  id,
+  label,
+  value,
+  onChange,
+  placeholder,
+  helperText,
+  helperTone = "muted",
+}) => (
   <div className="space-y-1">
     <label htmlFor={id} className="text-xs font-medium text-muted-foreground">
       {label}
@@ -993,5 +1173,16 @@ const FieldInput: React.FC<{
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
     />
+    {helperText ? (
+      <p
+        className={
+          helperTone === "warning"
+            ? "text-[11px] text-amber-300"
+            : "text-[11px] text-muted-foreground"
+        }
+      >
+        {helperText}
+      </p>
+    ) : null}
   </div>
 );

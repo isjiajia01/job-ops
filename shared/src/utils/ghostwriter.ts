@@ -1,8 +1,17 @@
 import { z } from "zod";
 import type {
   GhostwriterAssistantPayload,
+  GhostwriterClaimPlan,
+  GhostwriterExecutionStage,
+  GhostwriterDiagnostic,
+  GhostwriterDiagnosticSummaryItem,
+  GhostwriterEvidenceSelectionSummary,
+  GhostwriterFitBrief,
   GhostwriterResumePatch,
+  GhostwriterReviewSummary,
+  GhostwriterRuntimePlanSummary,
   GhostwriterSkillGroup,
+  GhostwriterToolTraceEntry,
 } from "../types";
 
 const ghostwriterSkillGroupSchema = z.object({
@@ -110,11 +119,115 @@ export const candidateKnowledgeBaseSchema = z.object({
   inboxItems: z.array(candidateKnowledgeInboxItemSchema).max(400).default([]),
 });
 
+const ghostwriterFitBriefSchema = z.object({
+  strongestPoints: z.array(z.string().trim().min(1).max(400)).max(8),
+  risks: z.array(z.string().trim().min(1).max(400)).max(8),
+  recommendedAngle: z.string().trim().max(500).nullable().optional(),
+});
+
+const ghostwriterDiagnosticSchema = z.object({
+  code: z.string().trim().min(1).max(120),
+  category: z.enum([
+    "generic-language",
+    "structure",
+    "claim-coverage",
+    "evidence-boundary",
+    "overclaim",
+    "role-fit",
+    "style",
+    "quality",
+  ]),
+  severity: z.enum(["low", "medium", "high"]),
+  detail: z.string().trim().min(1).max(300),
+});
+
+const ghostwriterDiagnosticSummaryItemSchema = z.object({
+  category: z.enum([
+    "generic-language",
+    "structure",
+    "claim-coverage",
+    "evidence-boundary",
+    "overclaim",
+    "role-fit",
+    "style",
+    "quality",
+  ]),
+  severity: z.enum(["low", "medium", "high"]),
+  count: z.number().int().min(1).max(99),
+});
+
+const ghostwriterReviewSummarySchema = z.object({
+  summary: z.string().trim().min(1).max(600),
+  specificity: z.number().min(1).max(5),
+  evidenceStrength: z.number().min(1).max(5),
+  overclaimRisk: z.number().min(1).max(5),
+  naturalness: z.number().min(1).max(5),
+  issues: z.array(z.string().trim().min(1).max(200)).max(12),
+  diagnostics: z.array(ghostwriterDiagnosticSchema).max(16).optional(),
+  diagnosticSummary: z.array(ghostwriterDiagnosticSummaryItemSchema).max(16).optional(),
+});
+
+const ghostwriterEvidenceSelectionSummarySchema = z.object({
+  leadModuleId: z.string().trim().max(120).nullable().optional(),
+  leadModuleLabel: z.string().trim().max(240).nullable().optional(),
+  allowedModuleIds: z.array(z.string().trim().min(1).max(120)).max(8),
+  allowedModuleLabels: z.array(z.string().trim().min(1).max(240)).max(8),
+  blockedClaims: z.array(z.string().trim().min(1).max(600)).max(10),
+  requiredEvidenceSnippets: z.array(z.string().trim().min(1).max(600)).max(10),
+  selectionRationale: z.array(z.string().trim().min(1).max(600)).max(8),
+});
+
+const ghostwriterRuntimePlanSummarySchema = z.object({
+  role: z.string().trim().min(1).max(200),
+  taskKind: z.string().trim().min(1).max(80),
+  deliverable: z.string().trim().min(1).max(1000),
+  responseMode: z.enum(["draft", "brief", "mixed", "memory_update"]),
+  executionNotes: z.array(z.string().trim().min(1).max(400)).max(12),
+  selectedTools: z.array(z.string().trim().min(1).max(120)).max(12),
+});
+
+const ghostwriterClaimPlanItemSchema = z.object({
+  id: z.string().trim().min(1).max(120),
+  claim: z.string().trim().min(1).max(600),
+  jdRequirement: z.string().trim().max(600).nullable().optional(),
+  evidenceIds: z.array(z.string().trim().min(1).max(120)).max(8),
+  evidenceSnippets: z.array(z.string().trim().min(1).max(600)).max(8),
+  priority: z.enum(["must", "high", "medium"]),
+  riskLevel: z.enum(["low", "medium", "high"]),
+  guidance: z.string().trim().max(600).nullable().optional(),
+});
+
+const ghostwriterClaimPlanSchema = z.object({
+  targetRoleAngle: z.string().trim().min(1).max(600),
+  openingStrategy: z.string().trim().min(1).max(600),
+  claims: z.array(ghostwriterClaimPlanItemSchema).max(8),
+  excludedClaims: z.array(z.string().trim().min(1).max(600)).max(8),
+  reviewerFocus: z.array(z.string().trim().min(1).max(600)).max(8),
+});
+
+const ghostwriterToolTraceEntrySchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  purpose: z.string().trim().min(1).max(240),
+  output: z.string().trim().min(1).max(2400),
+});
+
+const ghostwriterExecutionStageSchema = z.object({
+  stage: z.string().trim().min(1).max(120),
+  summary: z.string().trim().min(1).max(500),
+});
+
 export const ghostwriterAssistantPayloadSchema = z.object({
   response: z.string(),
   coverLetterDraft: z.string().trim().max(12000).nullable().optional(),
   coverLetterKind: z.enum(["letter", "email"]).nullable().optional(),
   resumePatch: ghostwriterResumePatchSchema.nullable().optional(),
+  fitBrief: ghostwriterFitBriefSchema.nullable().optional(),
+  claimPlan: ghostwriterClaimPlanSchema.nullable().optional(),
+  evidenceSelection: ghostwriterEvidenceSelectionSummarySchema.nullable().optional(),
+  review: ghostwriterReviewSummarySchema.nullable().optional(),
+  runtimePlan: ghostwriterRuntimePlanSummarySchema.nullable().optional(),
+  toolTrace: z.array(ghostwriterToolTraceEntrySchema).max(12).nullable().optional(),
+  executionTrace: z.array(ghostwriterExecutionStageSchema).max(12).nullable().optional(),
 });
 
 function toNonEmptyString(value: unknown): string | null {
@@ -224,6 +337,217 @@ function normalizeResumePatch(
   return normalized;
 }
 
+function normalizeFitBrief(value: unknown): GhostwriterFitBrief | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const strongestPoints = Array.isArray(record.strongestPoints)
+    ? record.strongestPoints.map((item) => toNonEmptyString(item)).filter((item): item is string => Boolean(item))
+    : [];
+  const risks = Array.isArray(record.risks)
+    ? record.risks.map((item) => toNonEmptyString(item)).filter((item): item is string => Boolean(item))
+    : [];
+  const recommendedAngle = toNonEmptyString(record.recommendedAngle);
+  if (!strongestPoints.length && !risks.length && !recommendedAngle) return null;
+  return { strongestPoints, risks, recommendedAngle };
+}
+
+function normalizeClaimPlan(value: unknown): GhostwriterClaimPlan | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const targetRoleAngle = toNonEmptyString(record.targetRoleAngle);
+  const openingStrategy = toNonEmptyString(record.openingStrategy);
+  const claims = Array.isArray(record.claims)
+    ? record.claims
+        .map((item) => {
+          if (!item || typeof item !== "object") return null;
+          const claimRecord = item as Record<string, unknown>;
+          const id = toNonEmptyString(claimRecord.id);
+          const claim = toNonEmptyString(claimRecord.claim);
+          const priority = toNonEmptyString(claimRecord.priority);
+          const riskLevel = toNonEmptyString(claimRecord.riskLevel);
+          if (!id || !claim) return null;
+          if (priority !== "must" && priority !== "high" && priority !== "medium") return null;
+          if (riskLevel !== "low" && riskLevel !== "medium" && riskLevel !== "high") return null;
+          const evidenceIds = Array.isArray(claimRecord.evidenceIds)
+            ? claimRecord.evidenceIds.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => Boolean(entry))
+            : [];
+          const evidenceSnippets = Array.isArray(claimRecord.evidenceSnippets)
+            ? claimRecord.evidenceSnippets.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => Boolean(entry))
+            : [];
+          return {
+            id,
+            claim,
+            jdRequirement: toNonEmptyString(claimRecord.jdRequirement),
+            evidenceIds,
+            evidenceSnippets,
+            priority,
+            riskLevel,
+            guidance: toNonEmptyString(claimRecord.guidance),
+          };
+        })
+        .filter((item): item is GhostwriterClaimPlan["claims"][number] => Boolean(item))
+    : [];
+  const excludedClaims = Array.isArray(record.excludedClaims)
+    ? record.excludedClaims.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => Boolean(entry))
+    : [];
+  const reviewerFocus = Array.isArray(record.reviewerFocus)
+    ? record.reviewerFocus.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => Boolean(entry))
+    : [];
+  if (!targetRoleAngle || !openingStrategy || claims.length === 0) return null;
+  return { targetRoleAngle, openingStrategy, claims, excludedClaims, reviewerFocus };
+}
+
+function normalizeDiagnostics(value: unknown): GhostwriterDiagnostic[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const record = item as Record<string, unknown>;
+      const code = toNonEmptyString(record.code);
+      const category = toNonEmptyString(record.category);
+      const severity = toNonEmptyString(record.severity);
+      const detail = toNonEmptyString(record.detail);
+      if (!code || !detail) return null;
+      if (
+        category !== "generic-language" &&
+        category !== "structure" &&
+        category !== "claim-coverage" &&
+        category !== "evidence-boundary" &&
+        category !== "overclaim" &&
+        category !== "role-fit" &&
+        category !== "style" &&
+        category !== "quality"
+      ) {
+        return null;
+      }
+      if (severity !== "low" && severity !== "medium" && severity !== "high") {
+        return null;
+      }
+      return { code, category, severity, detail };
+    })
+    .filter((item): item is GhostwriterDiagnostic => Boolean(item));
+}
+
+function normalizeDiagnosticSummary(value: unknown): GhostwriterDiagnosticSummaryItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const record = item as Record<string, unknown>;
+      const category = toNonEmptyString(record.category);
+      const severity = toNonEmptyString(record.severity);
+      const count = typeof record.count === "number" ? record.count : null;
+      if (
+        (category !== "generic-language" &&
+          category !== "structure" &&
+          category !== "claim-coverage" &&
+          category !== "evidence-boundary" &&
+          category !== "overclaim" &&
+          category !== "role-fit" &&
+          category !== "style" &&
+          category !== "quality") ||
+        (severity !== "low" && severity !== "medium" && severity !== "high") ||
+        count == null
+      ) {
+        return null;
+      }
+      return { category, severity, count };
+    })
+    .filter((item): item is GhostwriterDiagnosticSummaryItem => Boolean(item));
+}
+
+function normalizeReview(value: unknown): GhostwriterReviewSummary | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const summary = toNonEmptyString(record.summary);
+  const specificity = typeof record.specificity === "number" ? record.specificity : null;
+  const evidenceStrength = typeof record.evidenceStrength === "number" ? record.evidenceStrength : null;
+  const overclaimRisk = typeof record.overclaimRisk === "number" ? record.overclaimRisk : null;
+  const naturalness = typeof record.naturalness === "number" ? record.naturalness : null;
+  const issues = Array.isArray(record.issues)
+    ? record.issues.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => Boolean(entry))
+    : [];
+  if (!summary || specificity == null || evidenceStrength == null || overclaimRisk == null || naturalness == null) return null;
+  const diagnostics = normalizeDiagnostics(record.diagnostics);
+  const diagnosticSummary = normalizeDiagnosticSummary(record.diagnosticSummary);
+  return { summary, specificity, evidenceStrength, overclaimRisk, naturalness, issues, diagnostics, diagnosticSummary };
+}
+
+function normalizeEvidenceSelection(value: unknown): GhostwriterEvidenceSelectionSummary | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const leadModuleId = toNonEmptyString(record.leadModuleId);
+  const leadModuleLabel = toNonEmptyString(record.leadModuleLabel);
+  const allowedModuleIds = Array.isArray(record.allowedModuleIds)
+    ? record.allowedModuleIds.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => Boolean(entry))
+    : [];
+  const allowedModuleLabels = Array.isArray(record.allowedModuleLabels)
+    ? record.allowedModuleLabels.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => Boolean(entry))
+    : [];
+  const blockedClaims = Array.isArray(record.blockedClaims)
+    ? record.blockedClaims.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => Boolean(entry))
+    : [];
+  const requiredEvidenceSnippets = Array.isArray(record.requiredEvidenceSnippets)
+    ? record.requiredEvidenceSnippets.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => Boolean(entry))
+    : [];
+  const selectionRationale = Array.isArray(record.selectionRationale)
+    ? record.selectionRationale.map((entry) => toNonEmptyString(entry)).filter((entry): entry is string => Boolean(entry))
+    : [];
+  if (!leadModuleId && !allowedModuleIds.length && !blockedClaims.length && !requiredEvidenceSnippets.length) return null;
+  return { leadModuleId, leadModuleLabel, allowedModuleIds, allowedModuleLabels, blockedClaims, requiredEvidenceSnippets, selectionRationale };
+}
+
+function normalizeRuntimePlan(value: unknown): GhostwriterRuntimePlanSummary | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const role = toNonEmptyString(record.role);
+  const taskKind = toNonEmptyString(record.taskKind);
+  const deliverable = toNonEmptyString(record.deliverable);
+  const responseMode = toNonEmptyString(record.responseMode);
+  const executionNotes = Array.isArray(record.executionNotes)
+    ? record.executionNotes.map((item) => toNonEmptyString(item)).filter((item): item is string => Boolean(item))
+    : [];
+  const selectedTools = Array.isArray(record.selectedTools)
+    ? record.selectedTools.map((item) => toNonEmptyString(item)).filter((item): item is string => Boolean(item))
+    : [];
+  if (!role || !taskKind || !deliverable) return null;
+  if (responseMode !== "draft" && responseMode !== "brief" && responseMode !== "mixed" && responseMode !== "memory_update") {
+    return null;
+  }
+  return { role, taskKind, deliverable, responseMode, executionNotes, selectedTools };
+}
+
+function normalizeToolTrace(value: unknown): GhostwriterToolTraceEntry[] | null {
+  if (!Array.isArray(value)) return null;
+  const entries = value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const record = item as Record<string, unknown>;
+      const name = toNonEmptyString(record.name);
+      const purpose = toNonEmptyString(record.purpose);
+      const output = toNonEmptyString(record.output);
+      if (!name || !purpose || !output) return null;
+      return { name, purpose, output };
+    })
+    .filter((item): item is GhostwriterToolTraceEntry => Boolean(item));
+  return entries.length ? entries : null;
+}
+
+function normalizeExecutionTrace(value: unknown): GhostwriterExecutionStage[] | null {
+  if (!Array.isArray(value)) return null;
+  const entries = value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const record = item as Record<string, unknown>;
+      const stage = toNonEmptyString(record.stage);
+      const summary = toNonEmptyString(record.summary);
+      if (!stage || !summary) return null;
+      return { stage, summary };
+    })
+    .filter((item): item is GhostwriterExecutionStage => Boolean(item));
+  return entries.length ? entries : null;
+}
+
 export function normalizeGhostwriterAssistantPayload(
   input: unknown,
 ): GhostwriterAssistantPayload | null {
@@ -238,6 +562,13 @@ export function normalizeGhostwriterAssistantPayload(
           : null,
       coverLetterKind: parsed.data.coverLetterKind ?? null,
       resumePatch: normalizeResumePatch(parsed.data.resumePatch),
+      fitBrief: normalizeFitBrief(parsed.data.fitBrief),
+      claimPlan: normalizeClaimPlan(parsed.data.claimPlan),
+      evidenceSelection: normalizeEvidenceSelection(parsed.data.evidenceSelection),
+      review: normalizeReview(parsed.data.review),
+      runtimePlan: normalizeRuntimePlan(parsed.data.runtimePlan),
+      toolTrace: normalizeToolTrace(parsed.data.toolTrace),
+      executionTrace: normalizeExecutionTrace(parsed.data.executionTrace),
     };
   }
 
@@ -249,6 +580,13 @@ export function normalizeGhostwriterAssistantPayload(
           coverLetterDraft: null,
           coverLetterKind: null,
           resumePatch: null,
+          fitBrief: null,
+          claimPlan: null,
+          evidenceSelection: null,
+          review: null,
+          runtimePlan: null,
+          toolTrace: null,
+          executionTrace: null,
         }
       : null;
   }
@@ -283,6 +621,13 @@ export function normalizeGhostwriterAssistantPayload(
     resumePatch:
       normalizeLooseResumePatch(record.resumePatch) ??
       normalizeLooseResumePatch(record),
+    fitBrief: normalizeFitBrief(record.fitBrief),
+    claimPlan: normalizeClaimPlan(record.claimPlan),
+    evidenceSelection: normalizeEvidenceSelection(record.evidenceSelection),
+    review: normalizeReview(record.review),
+    runtimePlan: normalizeRuntimePlan(record.runtimePlan),
+    toolTrace: normalizeToolTrace(record.toolTrace),
+    executionTrace: normalizeExecutionTrace(record.executionTrace),
   };
 }
 
@@ -294,6 +639,13 @@ export function serializeGhostwriterAssistantPayload(
     coverLetterDraft: payload.coverLetterDraft,
     coverLetterKind: payload.coverLetterKind,
     resumePatch: payload.resumePatch,
+    fitBrief: payload.fitBrief ?? null,
+    claimPlan: payload.claimPlan ?? null,
+    evidenceSelection: payload.evidenceSelection ?? null,
+    review: payload.review ?? null,
+    runtimePlan: payload.runtimePlan ?? null,
+    toolTrace: payload.toolTrace ?? null,
+    executionTrace: payload.executionTrace ?? null,
   });
 }
 
@@ -307,6 +659,13 @@ export function parseGhostwriterAssistantContent(
       coverLetterDraft: null,
       coverLetterKind: null,
       resumePatch: null,
+      fitBrief: null,
+      claimPlan: null,
+      evidenceSelection: null,
+      review: null,
+      runtimePlan: null,
+      toolTrace: null,
+      executionTrace: null,
       isStructured: false,
     };
   }
@@ -328,6 +687,13 @@ export function parseGhostwriterAssistantContent(
     coverLetterDraft: null,
     coverLetterKind: null,
     resumePatch: null,
+    fitBrief: null,
+    claimPlan: null,
+    evidenceSelection: null,
+    review: null,
+    runtimePlan: null,
+    toolTrace: null,
+    executionTrace: null,
     isStructured: false,
   };
 }

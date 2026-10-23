@@ -18,6 +18,8 @@ import type {
   JobActionResponse,
   JobActionStreamEvent,
   JobChatMessage,
+  JobChatRun,
+  JobChatRunEvent,
   JobChatStreamEvent,
   JobChatThread,
   JobListItem,
@@ -29,6 +31,17 @@ import type {
   ManualJobDraft,
   ManualJobFetchResponse,
   ManualJobInferenceResponse,
+  PilotApplicationReview,
+  PilotApplicationWorkflowResponse,
+  PilotClaimCheck,
+  PilotFeedbackNote,
+  PilotFeedbackNoteType,
+  PilotFitLabel,
+  PilotOverviewResponse,
+  PilotPrivacyMode,
+  PilotUsageMode,
+  PilotUser,
+  PilotUserStatus,
   PipelineStatusResponse,
   PostApplicationAction,
   PostApplicationActionResponse,
@@ -774,6 +787,29 @@ export async function sendJobGhostwriterMessage(
     messages: data.messages,
     branches: data.branches,
   };
+}
+
+export async function listApplicationGhostwriterRuns(
+  applicationId: string,
+  options?: { limit?: number },
+): Promise<{ runs: JobChatRun[] }> {
+  const params = new URLSearchParams();
+  if (typeof options?.limit === "number") {
+    params.set("limit", String(options.limit));
+  }
+  const query = params.toString();
+  return fetchApi<{ runs: JobChatRun[] }>(
+    `/applications/${applicationId}/chat/runs${query ? `?${query}` : ""}`,
+  );
+}
+
+export async function getApplicationGhostwriterRunEvents(
+  applicationId: string,
+  runId: string,
+): Promise<{ events: JobChatRunEvent[] }> {
+  return fetchApi<{ events: JobChatRunEvent[] }>(
+    `/applications/${applicationId}/chat/runs/${encodeURIComponent(runId)}/events`,
+  );
 }
 
 export async function cancelJobChatRun(
@@ -1607,6 +1643,112 @@ export async function saveInternalProfile(
   return fetchApi<ResumeProfile>("/profile/internal", {
     method: "POST",
     body: JSON.stringify(profile),
+  });
+}
+
+export type PilotUserInput = {
+  displayName: string;
+  email?: string | null;
+  status?: PilotUserStatus;
+  usageMode?: PilotUsageMode;
+  privacyMode?: PilotPrivacyMode;
+  targetRoles?: string[];
+  notes?: string | null;
+};
+
+export type PilotProfileInput = {
+  headline?: string | null;
+  location?: string | null;
+  targetRoles?: string[];
+  coreSkills?: string[];
+  hardConstraints?: string[];
+  doNotClaim?: string[];
+  evidenceSummary?: string | null;
+  profileCompleteness?: number;
+};
+
+export type PilotFeedbackInput = {
+  userId?: string | null;
+  noteType?: PilotFeedbackNoteType;
+  summary: string;
+  actionTaken?: string | null;
+  isAnonymized?: boolean;
+};
+
+export type PilotApplicationReviewInput = {
+  userId?: string | null;
+  applicationId?: string | null;
+  company: string;
+  roleTitle: string;
+  fitLabel: PilotFitLabel;
+  rationale: string;
+  risks?: string[];
+  recommendedAction?: string | null;
+};
+
+export type PilotClaimCheckInput = {
+  userId?: string | null;
+  applicationId?: string | null;
+  sourceLabel: string;
+  checkedText: string;
+  doNotClaim?: string[];
+};
+
+export async function getPilotOverview(): Promise<PilotOverviewResponse> {
+  return fetchApi<PilotOverviewResponse>("/pilot/overview");
+}
+
+export async function createPilotUser(
+  input: PilotUserInput,
+): Promise<PilotUser> {
+  return fetchApi<PilotUser>("/pilot/users", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function savePilotUserProfile(
+  userId: string,
+  input: PilotProfileInput,
+): Promise<PilotUser["profile"]> {
+  return fetchApi<PilotUser["profile"]>(`/pilot/users/${userId}/profile`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function createPilotFeedbackNote(
+  input: PilotFeedbackInput,
+): Promise<PilotFeedbackNote> {
+  return fetchApi<PilotFeedbackNote>("/pilot/feedback", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getPilotApplicationWorkflow(
+  applicationId: string,
+): Promise<PilotApplicationWorkflowResponse> {
+  return fetchApi<PilotApplicationWorkflowResponse>(
+    `/pilot/applications/${applicationId}/workflow`,
+  );
+}
+
+export async function createPilotApplicationReview(
+  input: PilotApplicationReviewInput,
+): Promise<PilotApplicationReview> {
+  return fetchApi<PilotApplicationReview>("/pilot/application-reviews", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function createPilotClaimCheck(
+  input: PilotClaimCheckInput,
+): Promise<PilotClaimCheck> {
+  return fetchApi<PilotClaimCheck>("/pilot/claim-checks", {
+    method: "POST",
+    body: JSON.stringify(input),
   });
 }
 

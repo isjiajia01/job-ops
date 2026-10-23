@@ -2,15 +2,6 @@ import * as api from "@client/api";
 import { PageHeader } from "@client/components/layout";
 import { useUpdateSettingsMutation } from "@client/hooks/queries/useSettingsMutation";
 import { useTracerReadiness } from "@client/hooks/useTracerReadiness";
-import { BackupSettingsSection } from "@client/pages/settings/components/BackupSettingsSection";
-import { ChatSettingsSection } from "@client/pages/settings/components/ChatSettingsSection";
-import { DangerZoneSection } from "@client/pages/settings/components/DangerZoneSection";
-import { DisplaySettingsSection } from "@client/pages/settings/components/DisplaySettingsSection";
-import { EnvironmentSettingsSection } from "@client/pages/settings/components/EnvironmentSettingsSection";
-import { ModelSettingsSection } from "@client/pages/settings/components/ModelSettingsSection";
-import { ScoringSettingsSection } from "@client/pages/settings/components/ScoringSettingsSection";
-import { TracerLinksSettingsSection } from "@client/pages/settings/components/TracerLinksSettingsSection";
-import { WebhooksSection } from "@client/pages/settings/components/WebhooksSection";
 import {
   type LlmProviderId,
   normalizeLlmProvider,
@@ -33,7 +24,7 @@ import type {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Settings } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import {
   FormProvider,
   type Resolver,
@@ -59,6 +50,58 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+const ModelSettingsSection = lazy(() =>
+  import("@client/pages/settings/components/ModelSettingsSection").then(
+    (module) => ({ default: module.ModelSettingsSection }),
+  ),
+);
+const WebhooksSection = lazy(() =>
+  import("@client/pages/settings/components/WebhooksSection").then(
+    (module) => ({ default: module.WebhooksSection }),
+  ),
+);
+const TracerLinksSettingsSection = lazy(() =>
+  import("@client/pages/settings/components/TracerLinksSettingsSection").then(
+    (module) => ({ default: module.TracerLinksSettingsSection }),
+  ),
+);
+const DisplaySettingsSection = lazy(() =>
+  import("@client/pages/settings/components/DisplaySettingsSection").then(
+    (module) => ({ default: module.DisplaySettingsSection }),
+  ),
+);
+const ChatSettingsSection = lazy(() =>
+  import("@client/pages/settings/components/ChatSettingsSection").then(
+    (module) => ({ default: module.ChatSettingsSection }),
+  ),
+);
+const ScoringSettingsSection = lazy(() =>
+  import("@client/pages/settings/components/ScoringSettingsSection").then(
+    (module) => ({ default: module.ScoringSettingsSection }),
+  ),
+);
+const EnvironmentSettingsSection = lazy(() =>
+  import("@client/pages/settings/components/EnvironmentSettingsSection").then(
+    (module) => ({ default: module.EnvironmentSettingsSection }),
+  ),
+);
+const BackupSettingsSection = lazy(() =>
+  import("@client/pages/settings/components/BackupSettingsSection").then(
+    (module) => ({ default: module.BackupSettingsSection }),
+  ),
+);
+const DangerZoneSection = lazy(() =>
+  import("@client/pages/settings/components/DangerZoneSection").then(
+    (module) => ({ default: module.DangerZoneSection }),
+  ),
+);
+
+const SettingsSectionFallback: React.FC = () => (
+  <div className="rounded-lg border border-border/60 px-4 py-5 text-sm text-muted-foreground">
+    Loading settings section…
+  </div>
+);
 
 const DEFAULT_FORM_VALUES: UpdateSettingsInput = {
   model: "",
@@ -1363,18 +1406,22 @@ export const SettingsPage: React.FC = () => {
 
       <main className="container mx-auto max-w-3xl space-y-6 px-4 py-6 pb-12">
         <Accordion type="multiple" className="w-full space-y-4">
-          <ModelSettingsSection
-            values={model}
-            isLoading={isLoading}
-            isSaving={isSaving}
-          />
-          <WebhooksSection
-            pipelineWebhook={pipelineWebhook}
-            jobCompleteWebhook={jobCompleteWebhook}
-            webhookSecretHint={envSettings.private.webhookSecretHint}
-            isLoading={isLoading}
-            isSaving={isSaving}
-          />
+          <Suspense fallback={<SettingsSectionFallback />}>
+            <ModelSettingsSection
+              values={model}
+              isLoading={isLoading}
+              isSaving={isSaving}
+            />
+          </Suspense>
+          <Suspense fallback={<SettingsSectionFallback />}>
+            <WebhooksSection
+              pipelineWebhook={pipelineWebhook}
+              jobCompleteWebhook={jobCompleteWebhook}
+              webhookSecretHint={envSettings.private.webhookSecretHint}
+              isLoading={isLoading}
+              isSaving={isSaving}
+            />
+          </Suspense>
           <ReactiveResumeSection
             rxResumeBaseResumeIdDraft={rxResumeBaseResumeIdDraft}
             onRxresumeModeChange={(mode) => {
@@ -1401,52 +1448,66 @@ export const SettingsPage: React.FC = () => {
             isLoading={isLoading}
             isSaving={isSaving}
           />
-          <TracerLinksSettingsSection
-            readiness={tracerReadiness}
-            isLoading={isLoading || isTracerReadinessLoading}
-            isChecking={isTracerReadinessChecking}
-            onVerifyNow={handleVerifyTracerReadiness}
-          />
-          <DisplaySettingsSection
-            values={display}
-            isLoading={isLoading}
-            isSaving={isSaving}
-          />
-          <ChatSettingsSection
-            values={chat}
-            isLoading={isLoading}
-            isSaving={isSaving}
-          />
-          <ScoringSettingsSection
-            values={scoring}
-            isLoading={isLoading}
-            isSaving={isSaving}
-          />
-          <EnvironmentSettingsSection
-            values={envSettings}
-            isLoading={isLoading}
-            isSaving={isSaving}
-          />
-          <BackupSettingsSection
-            values={backup}
-            backups={backups}
-            nextScheduled={nextScheduled}
-            isLoading={isLoading || isLoadingBackups}
-            isSaving={isSaving}
-            onCreateBackup={handleCreateBackup}
-            onDeleteBackup={handleDeleteBackup}
-            isCreatingBackup={isCreatingBackup}
-            isDeletingBackup={isDeletingBackup}
-          />
-          <DangerZoneSection
-            statusesToClear={statusesToClear}
-            toggleStatusToClear={toggleStatusToClear}
-            handleClearByStatuses={handleClearByStatuses}
-            handleClearDatabase={handleClearDatabase}
-            handleClearByScore={handleClearByScore}
-            isLoading={isLoading}
-            isSaving={isSaving}
-          />
+          <Suspense fallback={<SettingsSectionFallback />}>
+            <TracerLinksSettingsSection
+              readiness={tracerReadiness}
+              isLoading={isLoading || isTracerReadinessLoading}
+              isChecking={isTracerReadinessChecking}
+              onVerifyNow={handleVerifyTracerReadiness}
+            />
+          </Suspense>
+          <Suspense fallback={<SettingsSectionFallback />}>
+            <DisplaySettingsSection
+              values={display}
+              isLoading={isLoading}
+              isSaving={isSaving}
+            />
+          </Suspense>
+          <Suspense fallback={<SettingsSectionFallback />}>
+            <ChatSettingsSection
+              values={chat}
+              isLoading={isLoading}
+              isSaving={isSaving}
+            />
+          </Suspense>
+          <Suspense fallback={<SettingsSectionFallback />}>
+            <ScoringSettingsSection
+              values={scoring}
+              isLoading={isLoading}
+              isSaving={isSaving}
+            />
+          </Suspense>
+          <Suspense fallback={<SettingsSectionFallback />}>
+            <EnvironmentSettingsSection
+              values={envSettings}
+              isLoading={isLoading}
+              isSaving={isSaving}
+            />
+          </Suspense>
+          <Suspense fallback={<SettingsSectionFallback />}>
+            <BackupSettingsSection
+              values={backup}
+              backups={backups}
+              nextScheduled={nextScheduled}
+              isLoading={isLoading || isLoadingBackups}
+              isSaving={isSaving}
+              onCreateBackup={handleCreateBackup}
+              onDeleteBackup={handleDeleteBackup}
+              isCreatingBackup={isCreatingBackup}
+              isDeletingBackup={isDeletingBackup}
+            />
+          </Suspense>
+          <Suspense fallback={<SettingsSectionFallback />}>
+            <DangerZoneSection
+              statusesToClear={statusesToClear}
+              toggleStatusToClear={toggleStatusToClear}
+              handleClearByStatuses={handleClearByStatuses}
+              handleClearDatabase={handleClearDatabase}
+              handleClearByScore={handleClearByScore}
+              isLoading={isLoading}
+              isSaving={isSaving}
+            />
+          </Suspense>
         </Accordion>
 
         <div className="flex flex-wrap gap-2">

@@ -99,6 +99,116 @@ export interface CompanyResearchNote {
   summary: string;
 }
 
+export type PilotUserStatus = "invited" | "active" | "paused" | "archived";
+export type PilotUsageMode = "local_deploy" | "guided_session" | "demo_only";
+export type PilotPrivacyMode =
+  | "local_only"
+  | "anonymized_notes"
+  | "shared_with_consent";
+export type PilotFeedbackNoteType =
+  | "feedback"
+  | "observation"
+  | "rejection_signal"
+  | "product_decision";
+export type PilotFitLabel =
+  | "strong_worth_applying"
+  | "moderate_stretch_worth_applying"
+  | "low_probability_usually_skip"
+  | "not_suitable_do_not_apply";
+export type PilotClaimSeverity = "pass" | "warning" | "blocker";
+
+export interface PilotUserProfile {
+  id: string;
+  userId: string;
+  headline: string | null;
+  location: string | null;
+  targetRoles: string[];
+  coreSkills: string[];
+  hardConstraints: string[];
+  doNotClaim: string[];
+  evidenceSummary: string | null;
+  profileCompleteness: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PilotUser {
+  id: string;
+  displayName: string;
+  email: string | null;
+  status: PilotUserStatus;
+  usageMode: PilotUsageMode;
+  privacyMode: PilotPrivacyMode;
+  targetRoles: string[];
+  notes: string | null;
+  invitedAt: number;
+  lastActiveAt: number | null;
+  createdAt: string;
+  updatedAt: string;
+  profile: PilotUserProfile | null;
+}
+
+export interface PilotFeedbackNote {
+  id: string;
+  userId: string | null;
+  noteType: PilotFeedbackNoteType;
+  summary: string;
+  actionTaken: string | null;
+  isAnonymized: boolean;
+  createdAt: string;
+}
+
+export interface PilotApplicationReview {
+  id: string;
+  userId: string | null;
+  applicationId: string | null;
+  company: string;
+  roleTitle: string;
+  fitLabel: PilotFitLabel;
+  rationale: string;
+  risks: string[];
+  recommendedAction: string | null;
+  createdAt: string;
+}
+
+export interface PilotClaimCheck {
+  id: string;
+  userId: string | null;
+  applicationId: string | null;
+  sourceLabel: string;
+  checkedText: string;
+  severity: PilotClaimSeverity;
+  summary: string;
+  flaggedClaims: string[];
+  createdAt: string;
+}
+
+export interface PilotApplicationWorkflowResponse {
+  reviews: PilotApplicationReview[];
+  claimChecks: PilotClaimCheck[];
+}
+
+export interface PilotOverviewResponse {
+  overview: {
+    positioning: string;
+    boundaries: string[];
+    metrics: {
+      totalUsers: number;
+      activeUsers: number;
+      localDeployments: number;
+      localOnlyUsers: number;
+      profilesComplete: number;
+      feedbackNotes: number;
+      applicationReviews: number;
+      claimChecks: number;
+    };
+  };
+  users: PilotUser[];
+  feedback: PilotFeedbackNote[];
+  reviews: PilotApplicationReview[];
+  claimChecks: PilotClaimCheck[];
+}
+
 export interface CandidateKnowledgeBase {
   personalFacts: CandidateKnowledgeFact[];
   projects: CandidateKnowledgeProject[];

@@ -64,7 +64,7 @@ describe("buildGhostwriterSystemPrompt", () => {
     );
 
     expect(prompt).toContain(
-      'Always return valid JSON with this exact shape: {"response":"...","coverLetterDraft":null,"coverLetterKind":null,"resumePatch":null}.',
+      'Always return valid JSON with this exact shape: {"response":"...","coverLetterDraft":null,"coverLetterKind":null,"resumePatch":null,"fitBrief":null}. Runtime metadata fields may be attached by the system layer after generation.',
     );
     expect(prompt).toContain("Task routing:");
     expect(prompt).toContain(

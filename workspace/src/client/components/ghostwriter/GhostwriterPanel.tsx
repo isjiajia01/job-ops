@@ -1,13 +1,6 @@
-import * as api from "@client/api";
-import type {
-  BranchInfo,
-  Job,
-  JobChatMessage,
-  JobChatStreamEvent,
-} from "@shared/types";
+import type { Job } from "@shared/types";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,25 +13,30 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
+import { useConversationActions } from "./useConversationActions";
 
 type GhostwriterPanelProps = {
   job: Job;
 };
 
 export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
-  const [messages, setMessages] = useState<JobChatMessage[]>([]);
-  const [branches, setBranches] = useState<BranchInfo[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(
-    null,
-  );
-  const [activeRunId, setActiveRunId] = useState<string | null>(null);
-
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
+  const [composerValue, setComposerValue] = useState("");
 
   const messageListRef = useRef<HTMLDivElement | null>(null);
-  const streamAbortRef = useRef<AbortController | null>(null);
+  const {
+    branches,
+    editMessage,
+    isLoading,
+    isStreaming,
+    messages,
+    regenerate,
+    resetConversation,
+    sendMessage,
+    stopStreaming,
+    streamingMessageId,
+    switchBranch,
+  } = useConversationActions({ job });
 
   useEffect(() => {
     const container = messageListRef.current;
@@ -50,328 +48,62 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
     }
   });
 
-  const loadMessages = useCallback(async () => {
-    const data = await api.listApplicationGhostwriterMessages(job.id, {
-      limit: 300,
-    });
-    setMessages(data.messages);
-    setBranches(data.branches);
-  }, [job.id]);
-
-  const load = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      await loadMessages();
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to load Ghostwriter";
-      toast.error(message);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [loadMessages]);
-
-  useEffect(() => {
-    void load();
-    return () => {
-      streamAbortRef.current?.abort();
-      streamAbortRef.current = null;
-    };
-  }, [load]);
-
-  const onStreamEvent = useCallback(
-    (event: JobChatStreamEvent) => {
-      if (event.type === "ready") {
-        setActiveRunId(event.runId);
-        setStreamingMessageId(event.messageId);
-        setMessages((current) => {
-          if (current.some((message) => message.id === event.messageId)) {
-            return current;
-          }
-          return [
-            ...current,
-            {
-              id: event.messageId,
-              threadId: event.threadId,
-              jobId: job.id,
-              role: "assistant",
-              content: "",
-              status: "partial",
-              tokensIn: null,
-              tokensOut: null,
-              version: 1,
-              replacesMessageId: null,
-              parentMessageId: null,
-              activeChildId: null,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            },
-          ];
-        });
-        return;
-      }
-
-      if (event.type === "delta") {
-        setMessages((current) =>
-          current.map((message) =>
-            message.id === event.messageId
-              ? {
-                  ...message,
-                  content: `${message.content}${event.delta}`,
-                  status: "partial",
-                  updatedAt: new Date().toISOString(),
-                }
-              : message,
-          ),
-        );
-        return;
-      }
-
-      if (event.type === "completed" || event.type === "cancelled") {
-        setMessages((current) => {
-          const next = current.filter(
-            (message) => message.id !== event.message.id,
-          );
-          return [...next, event.message].sort((a, b) =>
-            a.createdAt.localeCompare(b.createdAt),
-          );
-        });
-        setStreamingMessageId(null);
-        setActiveRunId(null);
-        setIsStreaming(false);
-        return;
-      }
-
-      if (event.type === "error") {
-        toast.error(event.message);
-        setStreamingMessageId(null);
-        setActiveRunId(null);
-        setIsStreaming(false);
-      }
-    },
-    [job.id],
-  );
-
-  const sendMessage = useCallback(
-    async (content: string) => {
-      if (isStreaming) return;
-
-      const optimisticUser: JobChatMessage = {
-        id: `tmp-user-${Date.now()}`,
-        threadId: messages[messages.length - 1]?.threadId || "pending-thread",
-        jobId: job.id,
-        role: "user",
-        content,
-        status: "complete",
-        tokensIn: null,
-        tokensOut: null,
-        version: 1,
-        replacesMessageId: null,
-        parentMessageId: null,
-        activeChildId: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      setMessages((current) => [...current, optimisticUser]);
-      setIsStreaming(true);
-
-      const controller = new AbortController();
-      streamAbortRef.current = controller;
-
-      try {
-        await api.streamApplicationGhostwriterMessage(
-          job.id,
-          { content, signal: controller.signal },
-          { onEvent: onStreamEvent },
-        );
-
-        await loadMessages();
-      } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") {
-          return;
-        }
-
-        const message =
-          error instanceof Error ? error.message : "Failed to send message";
-        toast.error(message);
-      } finally {
-        streamAbortRef.current = null;
-        setIsStreaming(false);
-      }
-    },
-    [isStreaming, job.id, loadMessages, messages, onStreamEvent],
-  );
-
-  const stopStreaming = useCallback(async () => {
-    if (!activeRunId) return;
-    try {
-      await api.cancelApplicationGhostwriterRun(job.id, activeRunId);
-      streamAbortRef.current?.abort();
-      streamAbortRef.current = null;
-      setIsStreaming(false);
-      setActiveRunId(null);
-      setStreamingMessageId(null);
-      await loadMessages();
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to stop run";
-      toast.error(message);
-    }
-  }, [activeRunId, job.id, loadMessages]);
-
-  const regenerate = useCallback(
-    async (assistantMessageId: string) => {
-      if (isStreaming) return;
-
-      // Remove messages below the branch point (everything after the regenerated message disappears)
-      setMessages((current) => {
-        const targetIndex = current.findIndex(
-          (m) => m.id === assistantMessageId,
-        );
-        if (targetIndex === -1) return current;
-        return current.slice(0, targetIndex);
-      });
-
-      setIsStreaming(true);
-      const controller = new AbortController();
-      streamAbortRef.current = controller;
-
-      try {
-        await api.streamRegenerateApplicationGhostwriterMessage(
-          job.id,
-          assistantMessageId,
-          { signal: controller.signal },
-          { onEvent: onStreamEvent },
-        );
-        await loadMessages();
-      } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") {
-          return;
-        }
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Failed to regenerate response";
-        toast.error(message);
-      } finally {
-        streamAbortRef.current = null;
-        setIsStreaming(false);
-      }
-    },
-    [isStreaming, job.id, loadMessages, onStreamEvent],
-  );
-
-  const editMessage = useCallback(
-    async (messageId: string, content: string) => {
-      if (isStreaming) return;
-
-      // Remove the edited message and everything below it (old branch disappears)
-      setMessages((current) => {
-        const targetIndex = current.findIndex((m) => m.id === messageId);
-        if (targetIndex === -1) return current;
-        // Keep everything before the edited message, add an optimistic new user message
-        const before = current.slice(0, targetIndex);
-        return [
-          ...before,
-          {
-            id: `tmp-edit-${Date.now()}`,
-            threadId: current[0]?.threadId || "pending-thread",
-            jobId: job.id,
-            role: "user" as const,
-            content,
-            status: "complete" as const,
-            tokensIn: null,
-            tokensOut: null,
-            version: 1,
-            replacesMessageId: null,
-            parentMessageId: null,
-            activeChildId: null,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ];
-      });
-
-      setIsStreaming(true);
-      const controller = new AbortController();
-      streamAbortRef.current = controller;
-
-      try {
-        await api.editApplicationGhostwriterMessage(
-          job.id,
-          messageId,
-          { content, signal: controller.signal },
-          { onEvent: onStreamEvent },
-        );
-        await loadMessages();
-      } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") {
-          return;
-        }
-        const message =
-          error instanceof Error ? error.message : "Failed to edit message";
-        toast.error(message);
-      } finally {
-        streamAbortRef.current = null;
-        setIsStreaming(false);
-      }
-    },
-    [isStreaming, job.id, loadMessages, onStreamEvent],
-  );
-
-  const switchBranch = useCallback(
-    async (messageId: string) => {
-      try {
-        const result = await api.switchApplicationGhostwriterBranch(
-          job.id,
-          messageId,
-        );
-        setMessages(result.messages);
-        setBranches(result.branches);
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Failed to switch branch";
-        toast.error(message);
-      }
-    },
-    [job.id],
-  );
-
   const canReset = useMemo(() => {
     return !isStreaming && messages.length > 0;
   }, [isStreaming, messages]);
 
-  const resetConversation = useCallback(async () => {
-    try {
-      await api.resetApplicationGhostwriterConversation(job.id);
-      setMessages([]);
-      setBranches([]);
-      toast.success("Conversation cleared");
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to reset conversation";
-      toast.error(message);
-    }
-  }, [job.id]);
+  const suggestionPrompts = [
+    "Score my fit for this role",
+    "Rewrite my strongest bullets for this JD",
+    "Draft a sharper cover letter opening",
+  ];
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-border/60 bg-background shadow-sm">
+      <div className="border-b border-border/60 bg-background/95 px-5 py-4 backdrop-blur">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-foreground">
+              Ghostwriter
+            </div>
+            <div className="truncate text-xs text-muted-foreground">
+              {job.title} · {job.employer}
+            </div>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {isStreaming
+              ? "Drafting…"
+              : messages.length
+                ? "Conversation loaded"
+                : "Ready"}
+          </div>
+        </div>
+      </div>
+
       <div
         ref={messageListRef}
-        className="min-h-0 flex-1 overflow-y-auto border-b border-border/50 pb-3 pr-1"
+        className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
       >
         {messages.length === 0 && !isLoading ? (
-          <div className="flex h-full min-h-[260px] justify-center px-3 flex-col text-left">
-            <h4 className="font-medium">
-              {job.title} at {job.employer}
-            </h4>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              Ghostwriter already has this job description, your resume, and
-              your writing preferences. Start with things like “score my fit for
-              this role”, “rewrite my strongest bullets for this JD”, or
-              “draft a sharper cover letter opening”.
-            </p>
+          <div className="flex min-h-[320px] flex-col justify-center rounded-2xl border border-dashed border-border/70 bg-muted/20 px-5 py-6 text-left">
+            <div className="max-w-2xl rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm">
+              <div className="text-sm font-medium text-foreground">Ghostwriter</div>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                I already have this job description and your saved profile context. Ask me to draft a cover letter, rewrite CV bullets, or assess fit for this role.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                {suggestionPrompts.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => setComposerValue(prompt)}
+                    className="rounded-full border border-border/60 bg-muted/40 px-3 py-1.5 transition-colors hover:bg-muted"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         ) : (
           <MessageList
@@ -386,11 +118,13 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
         )}
       </div>
 
-      <div className="mt-4">
+      <div className="border-t border-border/60 bg-background/95 px-4 py-4 backdrop-blur">
         <Composer
           disabled={isLoading || isStreaming}
           isStreaming={isStreaming}
           canReset={canReset}
+          value={composerValue}
+          onValueChange={setComposerValue}
           onStop={stopStreaming}
           onSend={sendMessage}
           onReset={() => setIsResetDialogOpen(true)}

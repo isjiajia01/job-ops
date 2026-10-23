@@ -39,6 +39,69 @@ function getJobId(req: Request): string {
   return jobId;
 }
 
+function createGhostwriterStreamHandlers(
+  res: Parameters<typeof writeSseData>[0],
+  input: { threadId?: string },
+) {
+  return {
+    onReady: ({ runId, threadId, messageId, requestId }: {
+      runId: string;
+      threadId?: string;
+      messageId: string;
+      requestId: string;
+    }) =>
+      writeSseData(res, {
+        type: "ready",
+        runId,
+        threadId: threadId ?? input.threadId ?? "",
+        messageId,
+        requestId,
+      }),
+    onTimeline: ({ runId, event }: { runId: string; event: unknown }) =>
+      writeSseData(res, {
+        type: "timeline",
+        runId,
+        event,
+      }),
+    onDelta: ({ runId, messageId, delta }: {
+      runId: string;
+      messageId: string;
+      delta: string;
+    }) =>
+      writeSseData(res, {
+        type: "delta",
+        runId,
+        messageId,
+        delta,
+      }),
+    onCompleted: ({ runId, message }: { runId: string; message: unknown }) =>
+      writeSseData(res, {
+        type: "completed",
+        runId,
+        message,
+      }),
+    onCancelled: ({ runId, message }: { runId: string; message: unknown }) =>
+      writeSseData(res, {
+        type: "cancelled",
+        runId,
+        message,
+      }),
+    onError: ({ runId, code, message, requestId }: {
+      runId?: string;
+      code: string;
+      message: string;
+      requestId: string;
+    }) =>
+      writeSseData(res, {
+        type: "error",
+        runId: runId ?? "unknown",
+        code,
+        message,
+        requestId,
+      }),
+  };
+}
+
 ghostwriterRouter.get(
   "/messages",
   asyncRoute(async (req, res) => {
@@ -86,43 +149,7 @@ ghostwriterRouter.post(
           await ghostwriterService.sendMessageForJob({
             jobId,
             content: parsed.data.content,
-            stream: {
-              onReady: ({ runId, threadId, messageId, requestId }) =>
-                writeSseData(res, {
-                  type: "ready",
-                  runId,
-                  threadId,
-                  messageId,
-                  requestId,
-                }),
-              onDelta: ({ runId, messageId, delta }) =>
-                writeSseData(res, {
-                  type: "delta",
-                  runId,
-                  messageId,
-                  delta,
-                }),
-              onCompleted: ({ runId, message }) =>
-                writeSseData(res, {
-                  type: "completed",
-                  runId,
-                  message,
-                }),
-              onCancelled: ({ runId, message }) =>
-                writeSseData(res, {
-                  type: "cancelled",
-                  runId,
-                  message,
-                }),
-              onError: ({ runId, code, message, requestId }) =>
-                writeSseData(res, {
-                  type: "error",
-                  runId,
-                  code,
-                  message,
-                  requestId,
-                }),
-            },
+            stream: createGhostwriterStreamHandlers(res, {}),
           });
         } catch (error) {
           const appError = toAppError(error);
@@ -149,6 +176,38 @@ ghostwriterRouter.post(
         assistantMessage: result.assistantMessage,
         runId: result.runId,
       });
+    });
+  }),
+);
+
+ghostwriterRouter.get(
+  "/runs",
+  asyncRoute(async (req, res) => {
+    const jobId = getJobId(req);
+    const limit = Number(req.query.limit ?? 10);
+
+    await runWithRequestContext({ jobId }, async () => {
+      const runs = await ghostwriterService.listRunsForJob({
+        jobId,
+        limit: Number.isFinite(limit) ? Math.max(1, Math.min(50, limit)) : 10,
+      });
+      ok(res, { runs });
+    });
+  }),
+);
+
+ghostwriterRouter.get(
+  "/runs/:runId/events",
+  asyncRoute(async (req, res) => {
+    const jobId = getJobId(req);
+    const runId = req.params.runId;
+    if (!runId) {
+      return fail(res, badRequest("Missing run id"));
+    }
+
+    await runWithRequestContext({ jobId }, async () => {
+      const events = await ghostwriterService.listRunEventsForJob({ jobId, runId });
+      ok(res, { events });
     });
   }),
 );
@@ -201,43 +260,7 @@ ghostwriterRouter.post(
           await ghostwriterService.regenerateMessageForJob({
             jobId,
             assistantMessageId,
-            stream: {
-              onReady: ({ runId, threadId, messageId, requestId }) =>
-                writeSseData(res, {
-                  type: "ready",
-                  runId,
-                  threadId,
-                  messageId,
-                  requestId,
-                }),
-              onDelta: ({ runId, messageId, delta }) =>
-                writeSseData(res, {
-                  type: "delta",
-                  runId,
-                  messageId,
-                  delta,
-                }),
-              onCompleted: ({ runId, message }) =>
-                writeSseData(res, {
-                  type: "completed",
-                  runId,
-                  message,
-                }),
-              onCancelled: ({ runId, message }) =>
-                writeSseData(res, {
-                  type: "cancelled",
-                  runId,
-                  message,
-                }),
-              onError: ({ runId, code, message, requestId }) =>
-                writeSseData(res, {
-                  type: "error",
-                  runId,
-                  code,
-                  message,
-                  requestId,
-                }),
-            },
+            stream: createGhostwriterStreamHandlers(res, {}),
           });
         } catch (error) {
           const appError = toAppError(error);
@@ -293,43 +316,7 @@ ghostwriterRouter.post(
             jobId,
             messageId,
             content: parsed.data.content,
-            stream: {
-              onReady: ({ runId, threadId, messageId, requestId }) =>
-                writeSseData(res, {
-                  type: "ready",
-                  runId,
-                  threadId,
-                  messageId,
-                  requestId,
-                }),
-              onDelta: ({ runId, messageId, delta }) =>
-                writeSseData(res, {
-                  type: "delta",
-                  runId,
-                  messageId,
-                  delta,
-                }),
-              onCompleted: ({ runId, message }) =>
-                writeSseData(res, {
-                  type: "completed",
-                  runId,
-                  message,
-                }),
-              onCancelled: ({ runId, message }) =>
-                writeSseData(res, {
-                  type: "cancelled",
-                  runId,
-                  message,
-                }),
-              onError: ({ runId, code, message, requestId }) =>
-                writeSseData(res, {
-                  type: "error",
-                  runId,
-                  code,
-                  message,
-                  requestId,
-                }),
-            },
+            stream: createGhostwriterStreamHandlers(res, {}),
           });
         } catch (error) {
           const appError = toAppError(error);
@@ -488,43 +475,7 @@ ghostwriterRouter.post(
             jobId,
             threadId,
             content: parsed.data.content,
-            stream: {
-              onReady: ({ runId, messageId, requestId }) =>
-                writeSseData(res, {
-                  type: "ready",
-                  runId,
-                  threadId,
-                  messageId,
-                  requestId,
-                }),
-              onDelta: ({ runId, messageId, delta }) =>
-                writeSseData(res, {
-                  type: "delta",
-                  runId,
-                  messageId,
-                  delta,
-                }),
-              onCompleted: ({ runId, message }) =>
-                writeSseData(res, {
-                  type: "completed",
-                  runId,
-                  message,
-                }),
-              onCancelled: ({ runId, message }) =>
-                writeSseData(res, {
-                  type: "cancelled",
-                  runId,
-                  message,
-                }),
-              onError: ({ runId, code, message, requestId }) =>
-                writeSseData(res, {
-                  type: "error",
-                  runId,
-                  code,
-                  message,
-                  requestId,
-                }),
-            },
+            stream: createGhostwriterStreamHandlers(res, { threadId }),
           });
         } catch (error) {
           const appError = toAppError(error);
@@ -610,43 +561,7 @@ ghostwriterRouter.post(
             jobId,
             threadId,
             assistantMessageId,
-            stream: {
-              onReady: ({ runId, messageId, requestId }) =>
-                writeSseData(res, {
-                  type: "ready",
-                  runId,
-                  threadId,
-                  messageId,
-                  requestId,
-                }),
-              onDelta: ({ runId, messageId, delta }) =>
-                writeSseData(res, {
-                  type: "delta",
-                  runId,
-                  messageId,
-                  delta,
-                }),
-              onCompleted: ({ runId, message }) =>
-                writeSseData(res, {
-                  type: "completed",
-                  runId,
-                  message,
-                }),
-              onCancelled: ({ runId, message }) =>
-                writeSseData(res, {
-                  type: "cancelled",
-                  runId,
-                  message,
-                }),
-              onError: ({ runId, code, message, requestId }) =>
-                writeSseData(res, {
-                  type: "error",
-                  runId,
-                  code,
-                  message,
-                  requestId,
-                }),
-            },
+            stream: createGhostwriterStreamHandlers(res, { threadId }),
           });
         } catch (error) {
           const appError = toAppError(error);
