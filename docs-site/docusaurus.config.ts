@@ -29,6 +29,9 @@ const normalizedBaseUrl = configuredBaseUrl.startsWith("/")
 const siteBaseUrl = normalizedBaseUrl.endsWith("/")
   ? normalizedBaseUrl
   : `${normalizedBaseUrl}/`;
+const versions: string[] = require("./versions.json");
+// CI validation build: skip frozen old versions and per-file git timestamps.
+const docsFastCheck = process.env.DOCS_FAST_CHECK === "true";
 const docsBuildDemoMode = process.env.DEMO_MODE === "true";
 
 const config: Config = {
@@ -97,7 +100,10 @@ const config: Config = {
           sidebarPath: "./sidebars.ts",
           editUrl: "https://github.com/DaKheera47/job-ops/tree/main/docs-site/",
           showLastUpdateAuthor: false,
-          showLastUpdateTime: true,
+          showLastUpdateTime: !docsFastCheck,
+          ...(docsFastCheck
+            ? { onlyIncludeVersions: ["current", versions[0]] }
+            : {}),
         },
         sitemap: {
           // Keep search engines focused on the current stable docs URLs.
