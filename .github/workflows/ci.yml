@@ -1,0 +1,156 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# PR: a new push cancels the older run. main: never cancel, every commit runs fully.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  NPM_FLAGS: --prefer-offline --no-audit --no-fund
+
+jobs:
+  # Job-level skipping (not workflow-level `paths:`) so required checks report
+  # "skipped = success" instead of staying pending on docs-only PRs.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ github.event_name == 'push' || steps.f.outputs.code == 'true' }}
+      docs: ${{ github.event_name == 'push' || steps.f.outputs.docs == 'true' }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: f
+        if: github.event_name == 'pull_request'
+        with:
+          filters: |
+            code:
+              - '**'
+              - '!**/*.md'
+              - '!docs/**'
+              - '!docs-site/**'
+              - '!LICENSE'
+              - '!.github/FUNDING.yml'
+              - '!.github/ISSUE_TEMPLATE/**'
+            docs:
+              - 'docs-site/**'
+              - 'package-lock.json'
+              - '.github/workflows/ci.yml'
+
+  lint:
+    name: Linting (Biome)
+    needs: changes
+    if: needs.changes.outputs.code == 'true' || needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: biomejs/setup-biome@v2
+        with:
+          version: 2.3.12
+      - run: biome ci .
+
+  tests:
+    name: Tests (${{ matrix.shard }}/3)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci $NPM_FLAGS --workspaces --include-workspace-root
+      - name: Run tests
+        run: npm --workspace workspace run test:run -- --shard=${{ matrix.shard }}/3
+
+  typecheck:
+    name: Type Check & Build
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci $NPM_FLAGS --workspaces --include-workspace-root
+      - name: Type check all projects + build client (parallel)
+        run: |
+          set -u
+          pids=(); names=()
+          run() { names+=("$1"); ( shift; "$@" ) > "/tmp/$1.log" 2>&1 & pids+=($!); }
+          # shared first-class: workspace depends on it
+          npm run check:types:shared
+          run workspace npm --workspace workspace run check:types
+          run build-client npm --workspace workspace run build:client
+          for p in adzuna hiringcafe gradcracker startupjobs ukvisajobs; do
+            run $p npm --workspace $p-extractor run check:types
+          done
+          rc=0
+          for i in "${!pids[@]}"; do
+            if wait "${pids[$i]}"; then echo "ok   ${names[$i]}"; else echo "FAIL ${names[$i]}"; cat "/tmp/${names[$i]}.log"; rc=1; fi
+          done
+          exit $rc
+
+  docs:
+    name: Documentation
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci $NPM_FLAGS --workspace docs-site
+      - name: Restore Docusaurus build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            docs-site/.docusaurus
+            docs-site/node_modules/.cache
+          key: docusaurus-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.run_id }}
+          restore-keys: |
+            docusaurus-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+      - name: Build documentation site (current + latest version only)
+        run: npm run check:docs
+        env:
+          DOCS_FAST_CHECK: "true"
+
+  # Single stable required check. Skipped jobs count as success.
+  ci-ok:
+    name: CI OK
+    if: always()
+    needs: [changes, lint, tests, typecheck, docs]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - run: |
+          echo '${{ toJSON(needs) }}' | grep -Eq '"result": "(failure|cancelled)"' && exit 1
+          exit 0
